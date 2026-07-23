@@ -1,0 +1,29 @@
+import { NextResponse } from 'next/server';
+import { auth } from '@/auth';
+import { createLongTail, listLongTail } from '@/lib/apps-script/longtail';
+import { errorResponse, unauthenticated } from '@/lib/api-response';
+
+export async function GET() {
+  const session = await auth();
+  if (!session?.user?.email) return unauthenticated();
+
+  try {
+    const data = await listLongTail(session.user.email);
+    return NextResponse.json({ ok: true, data });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}
+
+export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.user?.email) return unauthenticated();
+
+  const body = await request.json();
+  try {
+    const data = await createLongTail(session.user.email, body);
+    return NextResponse.json({ ok: true, data });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}

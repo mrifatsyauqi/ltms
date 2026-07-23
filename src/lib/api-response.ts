@@ -1,0 +1,28 @@
+import { NextResponse } from 'next/server';
+import { AppsScriptError } from '@/lib/apps-script/client';
+
+const STATUS_BY_CODE: Record<string, number> = {
+  UNAUTHENTICATED: 401,
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  CONFLICT: 409,
+  VERSION_CONFLICT: 409, // optimistic lock: data server sudah berubah (Bagian 9.4)
+  ALREADY_CLEAR_TTD: 409, // feedback dibekukan setelah Clear TTD (Bagian 9.0/9.1)
+  VALIDATION_ERROR: 422,
+  LOCK_TIMEOUT: 503,
+};
+
+export function unauthenticated() {
+  return NextResponse.json({ ok: false, error: 'UNAUTHENTICATED' }, { status: 401 });
+}
+
+export function errorResponse(err: unknown) {
+  if (err instanceof AppsScriptError) {
+    const status = STATUS_BY_CODE[err.code] ?? 400;
+    return NextResponse.json(
+      { ok: false, error: err.code, message: err.message, data: err.data },
+      { status },
+    );
+  }
+  return NextResponse.json({ ok: false, error: 'INTERNAL_ERROR' }, { status: 500 });
+}
