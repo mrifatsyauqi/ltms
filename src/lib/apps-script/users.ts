@@ -33,3 +33,7 @@ export function createUser(actorEmail: string, data: CreateUserInput) {
 export function updateUser(actorEmail: string, targetEmail: string, data: UpdateUserInput) {
   return callAppsScript<UserRow>('updateUser', { email: actorEmail, targetEmail, data });
 }
+
+export function deleteUser(actorEmail: string, targetEmail: string) {
+  return callAppsScript<{ email: string }>('deleteUser', { email: actorEmail, targetEmail });
+}

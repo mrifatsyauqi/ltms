@@ -1,11 +1,16 @@
-import { PlaceholderPage } from '@/components/layout/placeholder-page';
+import { auth } from '@/auth';
+import { PageHeader } from '@/components/layout/page-header';
+import { MasterFeedbackClient } from '@/components/master/master-feedback-client';
 
-export default function Page() {
-  return (
-    <PlaceholderPage
-      title="Master Feedback"
-      description="Daftar opsi feedback baku yang dipakai Admin DP."
-      fase="Fase 6 (Master Data)"
-    />
-  );
+export default async function Page() {
+  const session = await auth();
+  if (session?.user.role !== 'Admin Cabang') {
+    return (
+      <>
+        <PageHeader title="Master Feedback" description="Akses ditolak." />
+        <div className="text-muted-foreground p-6 text-sm">Halaman ini hanya untuk Admin Cabang.</div>
+      </>
+    );
+  }
+  return <MasterFeedbackClient />;
 }
