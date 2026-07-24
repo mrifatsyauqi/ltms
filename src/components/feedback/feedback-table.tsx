@@ -65,7 +65,14 @@ function ringkasanAging(rows: LongTailRow[]) {
   return acc;
 }
 
-export function FeedbackTable({ readOnly = false }: { readOnly?: boolean }) {
+export function FeedbackTable({
+  readOnly = false,
+  initialUmurFilter = '',
+}: {
+  readOnly?: boolean;
+  /** Preset filter umur dari URL, mis. dari alert Notifikasi Aging (?umur=3). */
+  initialUmurFilter?: string;
+}) {
   const { data, isLoading, error } = useLongTail();
   const options = useFeedbackOptions();
   const submit = useSubmitFeedback();
@@ -73,7 +80,7 @@ export function FeedbackTable({ readOnly = false }: { readOnly?: boolean }) {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'umur', desc: true }]); // umur tertua di atas (Bagian 9.1)
   const [globalFilter, setGlobalFilter] = useState('');
   const [dpFilter, setDpFilter] = useState('');
-  const [umurFilter, setUmurFilter] = useState('');
+  const [umurFilter, setUmurFilter] = useState(initialUmurFilter);
   const [sprinterFilter, setSprinterFilter] = useState('');
   const [onlyBelum, setOnlyBelum] = useState(false);
   const [historyRow, setHistoryRow] = useState<LongTailRow | null>(null);

@@ -15,6 +15,7 @@ import { ProgressGauge } from '@/components/charts/progress-gauge';
 import { PageHeader } from '@/components/layout/page-header';
 import { SectionCard } from '@/components/layout/section-card';
 import { PaketPrioritas } from '@/components/dashboard/paket-prioritas';
+import { AgingAlert } from '@/components/dashboard/aging-alert';
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/ui/stat-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -85,6 +86,10 @@ export function DashboardClient({ title, description }: { title: string; descrip
 
         {data && s && (
           <>
+            {/* Notifikasi Aging (Fase 7 / Bagian 9.3): tampil di paling atas
+                bila ada paket >= 3 hari belum Clear TTD. */}
+            <AgingAlert count={s.paketLebih3Hari} isCabang={!!isCabang} />
+
             {/* 5 summary card dalam satu baris. Kartu ke-5 menggabungkan dua
                 metrik urgensi (Paket > 3 Hari + Paket Tertua). Kartu "Sudah
                 Feedback" dipindah jadi progress arc di samping donut. */}

@@ -11,10 +11,10 @@ import { FeedbackTable } from '@/components/feedback/feedback-table';
 export default async function FeedbackPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; umur?: string }>;
 }) {
   const session = await auth();
-  const { view } = await searchParams;
+  const { view, umur } = await searchParams;
   const readOnly = view === 'data';
   const isCabang = session?.user.role === 'Admin Cabang';
 
@@ -33,7 +33,7 @@ export default async function FeedbackPage({
       {/* flex-col + min-h-0: area tabel mengisi sisa tinggi, pagination
           menempel di bawah tanpa perlu scroll halaman (poin 2c). */}
       <div className="flex min-h-0 flex-1 flex-col p-3">
-        <FeedbackTable readOnly={readOnly} />
+        <FeedbackTable readOnly={readOnly} initialUmurFilter={umur === '3' ? '3' : ''} />
       </div>
     </>
   );
