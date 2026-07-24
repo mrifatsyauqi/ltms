@@ -3,13 +3,11 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
-  CalendarClock,
   CheckCircle2,
   ClipboardCheck,
   Clock,
   Package,
   RefreshCw,
-  TrendingUp,
 } from 'lucide-react';
 import { AgingBarChart } from '@/components/charts/aging-bar-chart';
 import { FeedbackDonut } from '@/components/charts/feedback-donut';
@@ -20,7 +18,6 @@ import { PaketPrioritas } from '@/components/dashboard/paket-prioritas';
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/ui/stat-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
 import type { DashboardData } from '@/lib/apps-script/dashboard';
 
 async function fetchDashboard(): Promise<DashboardData> {
@@ -35,16 +32,16 @@ function pct(part: number, whole: number) {
 }
 
 /**
- * Grid kartu ringkasan. Memakai container query (@) supaya jumlah kolom
- * mengikuti lebar area konten, bukan viewport - lihat catatan di (app)/layout.
- * 7 kartu -> maksimal 2 baris saat kontainer >= 48rem.
+ * Grid kartu ringkasan: 5 kolom dalam SATU baris di layar lebar.
+ * Memakai container query (@) supaya jumlah kolom mengikuti lebar area konten,
+ * bukan viewport - lihat catatan di (app)/layout.
  */
-const STAT_GRID = 'grid grid-cols-1 gap-2 @sm:grid-cols-2 @3xl:grid-cols-4';
+const STAT_GRID = 'grid grid-cols-1 gap-2 @sm:grid-cols-2 @2xl:grid-cols-3 @4xl:grid-cols-5';
 
 function StatSkeleton() {
   return (
     <div className={STAT_GRID}>
-      {Array.from({ length: 7 }).map((_, i) => (
+      {Array.from({ length: 5 }).map((_, i) => (
         <div key={i} className="bg-muted h-[58px] animate-pulse rounded-lg" />
       ))}
     </div>
@@ -88,15 +85,23 @@ export function DashboardClient({ title, description }: { title: string; descrip
 
         {data && s && (
           <>
-            {/* 7 summary card (PRD Bagian 8), grid 4 kolom -> maks 2 baris.
-                Progress Feedback (%) jadi sub-teks kartu "Sudah Feedback". */}
+            {/* 5 summary card dalam satu baris. Kartu ke-5 menggabungkan dua
+                metrik urgensi (Paket > 3 Hari + Paket Tertua). Kartu "Sudah
+                Feedback" dipindah jadi progress arc di samping donut. */}
             <div className={STAT_GRID}>
               <StatCard label="Total Paket" value={s.total.toLocaleString('id-ID')} hint="Semua paket" icon={Package} accent="blue" />
               <StatCard
-                label="Sudah Feedback"
-                value={s.sudahFeedback.toLocaleString('id-ID')}
-                hint={`${s.progressFeedbackPct}% progress`}
-                icon={TrendingUp}
+                label="Belum Clear TTD"
+                value={s.belumClearTTD.toLocaleString('id-ID')}
+                hint={pct(s.belumClearTTD, s.total)}
+                icon={Clock}
+                accent="amber"
+              />
+              <StatCard
+                label="Sudah Clear TTD"
+                value={s.clearTTD.toLocaleString('id-ID')}
+                hint={pct(s.clearTTD, s.total)}
+                icon={CheckCircle2}
                 accent="green"
               />
               <StatCard
@@ -107,39 +112,24 @@ export function DashboardClient({ title, description }: { title: string; descrip
                 accent="violet"
               />
               <StatCard
-                label="Clear TTD"
-                value={s.clearTTD.toLocaleString('id-ID')}
-                hint={pct(s.clearTTD, s.total)}
-                icon={CheckCircle2}
-                accent="green"
-              />
-              <StatCard
-                label="Belum Clear TTD"
-                value={s.belumClearTTD.toLocaleString('id-ID')}
-                hint={pct(s.belumClearTTD, s.total)}
-                icon={Clock}
-                accent="amber"
-              />
-              <StatCard
                 label="Paket > 3 Hari"
                 value={s.paketLebih3Hari.toLocaleString('id-ID')}
-                hint="Perlu segera ditindaklanjuti"
+                hint={
+                  s.paketTertua
+                    ? `Tertua ${s.paketTertua} Hari${s.paketTertuaWaybill ? ` · ${s.paketTertuaWaybill}` : ''}`
+                    : 'Tidak ada paket tertunggak'
+                }
                 icon={AlertTriangle}
                 accent="red"
-              />
-              <StatCard
-                label="Paket Tertua"
-                value={s.paketTertua ? `${s.paketTertua} Hari` : '—'}
-                hint={s.paketTertuaWaybill ? `Waybill: ${s.paketTertuaWaybill}` : undefined}
-                icon={CalendarClock}
-                accent="rose"
-                valueClassName={s.paketTertua >= 3 ? 'text-aging-3-fg' : undefined}
+                valueClassName={s.paketLebih3Hari > 0 ? 'text-aging-3-fg' : undefined}
               />
             </div>
 
-            {/* Chart. "Progress Hari Ini" hanya untuk Admin DP (PRD Bagian 8);
-                Admin Cabang memakai Progress Feedback (%) di kartu. */}
-            <div className={cn('grid gap-2.5', isCabang ? '@3xl:grid-cols-2' : '@3xl:grid-cols-2 @6xl:grid-cols-3')}>
+            {/* Aging | Distribusi Feedback | Progress (arc) - 3 panel sejajar.
+                Arc menggantikan kartu "Sudah Feedback" yang dihapus, dan tetap
+                membawa angka progress feedback keseluruhan di baris bawahnya
+                supaya metrik PRD Bagian 8 tidak hilang. */}
+            <div className="grid gap-2.5 @2xl:grid-cols-2 @4xl:grid-cols-3">
               <SectionCard
                 title="Statistik Aging (Belum Clear TTD)"
                 description="Umur paket yang masih harus ditindaklanjuti."
@@ -151,11 +141,19 @@ export function DashboardClient({ title, description }: { title: string; descrip
                 <FeedbackDonut data={data.distribusiFeedback} />
               </SectionCard>
 
-              {!isCabang && (
-                <SectionCard title="Progress Hari Ini" description="Paket yang di-follow-up hari ini.">
-                  <ProgressGauge value={s.progressHariIni} total={s.total} />
-                </SectionCard>
-              )}
+              <SectionCard
+                title="Progress Hari Ini"
+                description="Paket yang di-follow-up hari ini."
+                // Saat layout jatuh ke 2 kolom (kontainer sempit), panel ke-3
+                // melebar penuh supaya tidak menggantung sendirian.
+                className="@2xl:col-span-2 @4xl:col-span-1"
+              >
+                <ProgressGauge
+                  value={s.progressHariIni}
+                  total={s.total}
+                  secondary={`Sudah feedback keseluruhan: ${s.sudahFeedback.toLocaleString('id-ID')} dari ${s.total.toLocaleString('id-ID')} (${s.progressFeedbackPct}%)`}
+                />
+              </SectionCard>
             </div>
 
             {/* Admin DP: preview paket paling mendesak (read-only). Admin Cabang

@@ -43,7 +43,7 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
         </div>
         {!collapsed && (
           <div className="min-w-0">
-            <div className="truncate text-base leading-tight font-semibold text-white">LTMS</div>
+            <div className="truncate text-base leading-tight font-semibold text-sidebar-accent-foreground">LTMS</div>
             <div className="truncate text-[11px] leading-tight opacity-70">LongTail System</div>
           </div>
         )}
@@ -55,14 +55,14 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
           <div className="text-[10px] tracking-wide uppercase opacity-60">
             {role === 'Admin Cabang' ? 'Cakupan' : 'DP Aktif'}
           </div>
-          <div className="truncate text-[13px] font-semibold text-white">
+          <div className="truncate text-[13px] font-semibold text-sidebar-accent-foreground">
             {role === 'Admin Cabang' ? 'Semua DP' : (dropPoint || '-')}
           </div>
         </div>
       )}
 
       {/* Navigasi */}
-      <nav className="flex-1 space-y-3 overflow-y-auto px-3 pb-3" aria-label="Navigasi utama">
+      <nav className="no-scrollbar flex-1 space-y-3 overflow-y-auto px-3 pb-3" aria-label="Navigasi utama">
         {groups.map((group, gi) => (
           <div key={group.label ?? `g-${gi}`}>
             {group.label && !collapsed && (
@@ -104,16 +104,16 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
       <div className="border-sidebar-border border-t p-3">
         {!collapsed ? (
           <div className="mb-2 flex items-center gap-2.5">
-            <div className="bg-sidebar-accent flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white">
+            <div className="bg-sidebar-accent flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-sidebar-accent-foreground">
               {(nama ?? '?').slice(0, 2).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-white">{nama ?? '-'}</div>
+              <div className="truncate text-sm font-medium text-sidebar-accent-foreground">{nama ?? '-'}</div>
               <div className="truncate text-[11px] opacity-60">{role ?? '-'}</div>
             </div>
           </div>
         ) : (
-          <div className="bg-sidebar-accent mx-auto mb-2 flex size-9 items-center justify-center rounded-full text-xs font-semibold text-white">
+          <div className="bg-sidebar-accent mx-auto mb-2 flex size-9 items-center justify-center rounded-full text-xs font-semibold text-sidebar-accent-foreground">
             {(nama ?? '?').slice(0, 2).toUpperCase()}
           </div>
         )}

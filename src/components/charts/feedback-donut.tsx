@@ -28,7 +28,8 @@ export function FeedbackDonut({ data }: { data: Item[] }) {
   }
 
   return (
-    <div className="flex items-center gap-3">
+    // Panel sempit -> donut di atas, legend di bawah. Panel lebar -> sejajar.
+    <div className="flex flex-col items-center gap-2 @[17rem]:flex-row @[17rem]:gap-3">
       <div className="relative h-[176px] w-[150px] shrink-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>

@@ -30,7 +30,9 @@ export default async function FeedbackPage({
             : `${scope}. Urut umur tertua di atas.`
         }
       />
-      <div className="p-3">
+      {/* flex-col + min-h-0: area tabel mengisi sisa tinggi, pagination
+          menempel di bawah tanpa perlu scroll halaman (poin 2c). */}
+      <div className="flex min-h-0 flex-1 flex-col p-3">
         <FeedbackTable readOnly={readOnly} />
       </div>
     </>

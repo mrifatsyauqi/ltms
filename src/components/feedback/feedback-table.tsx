@@ -12,13 +12,19 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { toast } from 'sonner';
-import { Search } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { History, Search } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SelectFilter } from '@/components/ui/select-filter';
-import { AGING_ROW_CLASS, AgingBadge, agingLevel } from '@/components/ui/aging-badge';
+import { TablePager } from '@/components/ui/table-pager';
+import { AGING_ROW_CLASS, AGING_STICKY_BG, AgingBadge, agingLevel } from '@/components/ui/aging-badge';
 import { cn } from '@/lib/utils';
 import type { LongTailRow } from '@/lib/apps-script/longtail';
 import { formatWaktuSampai, umurValue } from '@/lib/feedback-format';
@@ -32,7 +38,20 @@ import { FeedbackCell } from './feedback-cell';
 
 const OPTIONS_LIST_ID = 'feedback-options';
 
-/** Ringkasan jumlah paket belum Clear TTD per tingkat aging. */
+/** Kolom mana yang di-pin & ke sisi mana (offset kanan disetel via kelas). */
+const STICKY_POS: Record<string, string> = {
+  waybill: 'sticky left-0 z-10',
+  feedback: 'sticky right-12 z-10',
+  aksi: 'sticky right-0 z-10',
+};
+
+function logLines(row: LongTailRow): string[] {
+  return String(row['Log Feedback'] ?? '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
 function ringkasanAging(rows: LongTailRow[]) {
   const acc = { 1: 0, 2: 0, 3: 0, total: 0 };
   for (const r of rows) {
@@ -57,6 +76,7 @@ export function FeedbackTable({ readOnly = false }: { readOnly?: boolean }) {
   const [umurFilter, setUmurFilter] = useState('');
   const [sprinterFilter, setSprinterFilter] = useState('');
   const [onlyBelum, setOnlyBelum] = useState(false);
+  const [historyRow, setHistoryRow] = useState<LongTailRow | null>(null);
 
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   const [activeWaybill, setActiveWaybill] = useState<string | null>(null);
@@ -128,14 +148,27 @@ export function FeedbackTable({ readOnly = false }: { readOnly?: boolean }) {
   }
 
   const columns = useMemo<ColumnDef<LongTailRow>[]>(() => {
-    const base: ColumnDef<LongTailRow>[] = [
+    return [
       {
         id: 'waybill',
         header: 'No. Waybill',
-        // accessorFn, bukan accessorKey: TanStack menafsirkan titik di
-        // 'No. Waybill' sebagai deep path (row['No'][' Waybill']) -> undefined.
+        // accessorFn, bukan accessorKey: titik di 'No. Waybill' ditafsirkan
+        // TanStack sbg deep path -> undefined.
         accessorFn: (r) => r['No. Waybill'],
-        cell: (c) => <span className="font-mono text-[11px]">{c.getValue<string>()}</span>,
+        cell: (c) => {
+          const r = c.row.original;
+          const perluReview = String(r['Perlu Review'] ?? '').trim();
+          return (
+            <div className="min-w-0">
+              <span className="font-mono text-[11px]">{c.getValue<string>()}</span>
+              {perluReview && (
+                <Badge variant="destructive" className="mt-0.5 block w-fit text-[9px]">
+                  Perlu Review
+                </Badge>
+              )}
+            </div>
+          );
+        },
       },
       {
         id: 'umur',
@@ -157,45 +190,67 @@ export function FeedbackTable({ readOnly = false }: { readOnly?: boolean }) {
       {
         id: 'feedback',
         header: 'Feedback',
-        cell: (c) =>
-          readOnly ? (
-            c.row.original.Feedback ? (
-              <span>{c.row.original.Feedback}</span>
-            ) : (
-              <span className="text-muted-foreground italic">Belum ada</span>
-            )
-          ) : (
-            <FeedbackCell
-              row={c.row.original}
-              optionsListId={OPTIONS_LIST_ID}
-              saving={submit.isPending && submit.variables?.waybill === c.row.original['No. Waybill']}
-              onCommit={handleCommit}
-              registerRef={registerRef}
-              onEnterNext={focusNext}
-            />
-          ),
+        cell: (c) => {
+          const r = c.row.original;
+          const n = logLines(r).length;
+          return (
+            <div className="flex items-center gap-1.5">
+              <div className="min-w-0 flex-1">
+                {readOnly ? (
+                  r.Feedback ? (
+                    <span className="line-clamp-1">{r.Feedback}</span>
+                  ) : (
+                    <span className="text-muted-foreground italic">Belum ada</span>
+                  )
+                ) : (
+                  <FeedbackCell
+                    row={r}
+                    optionsListId={OPTIONS_LIST_ID}
+                    saving={submit.isPending && submit.variables?.waybill === r['No. Waybill']}
+                    onCommit={handleCommit}
+                    registerRef={registerRef}
+                    onEnterNext={focusNext}
+                  />
+                )}
+              </div>
+              {n > 1 && (
+                <span
+                  className="bg-brand-muted text-brand shrink-0 rounded px-1 text-[10px] font-semibold tabular-nums"
+                  title={`${n} kali feedback`}
+                >
+                  {n}×
+                </span>
+              )}
+            </div>
+          );
+        },
       },
       {
-        accessorKey: 'Log Feedback',
-        header: 'Log Feedback',
-        cell: (c) => (
-          <pre className="text-muted-foreground max-w-48 text-[11px] leading-tight whitespace-pre-wrap">
-            {c.getValue<string>()}
-          </pre>
-        ),
-      },
-      {
-        id: 'review',
-        header: 'Review',
-        cell: (c) =>
-          String(c.row.original['Perlu Review'] ?? '').trim() ? (
-            <Badge variant="destructive" className="text-[10px]">
-              Perlu Review
-            </Badge>
-          ) : null,
+        id: 'aksi',
+        header: 'Aksi',
+        cell: (c) => {
+          const r = c.row.original;
+          const n = logLines(r).length;
+          return (
+            <button
+              type="button"
+              onClick={() => setHistoryRow(r)}
+              disabled={n === 0}
+              title={n === 0 ? 'Belum ada riwayat feedback' : 'Lihat riwayat feedback'}
+              aria-label="Lihat riwayat feedback"
+              className="hover:bg-muted focus-visible:ring-ring relative inline-flex size-8 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
+            >
+              <History className="size-4" aria-hidden />
+              {n > 0 && (
+                <span className="bg-primary text-primary-foreground absolute -top-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full text-[8px] font-bold tabular-nums">
+                  {n}
+                </span>
+              )}
+            </button>
+          );
+        },
       },
     ];
-    return base;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [submit.isPending, submit.variables, readOnly]);
 
@@ -210,7 +265,7 @@ export function FeedbackTable({ readOnly = false }: { readOnly?: boolean }) {
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    initialState: { pagination: { pageSize: 25 } },
+    initialState: { pagination: { pageSize: 20 } },
   });
 
   if (isLoading) {
@@ -232,7 +287,7 @@ export function FeedbackTable({ readOnly = false }: { readOnly?: boolean }) {
   }
 
   return (
-    <div className="space-y-2.5">
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5">
       {/* Filter */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
@@ -276,9 +331,6 @@ export function FeedbackTable({ readOnly = false }: { readOnly?: boolean }) {
           <input type="checkbox" checked={onlyBelum} onChange={(e) => setOnlyBelum(e.target.checked)} />
           Belum feedback saja
         </label>
-        <span className="text-muted-foreground ml-auto text-xs tabular-nums">
-          {table.getFilteredRowModel().rows.length} baris
-        </span>
       </div>
 
       {/* Ringkasan aging - warna konsisten dgn badge & chart */}
@@ -307,79 +359,115 @@ export function FeedbackTable({ readOnly = false }: { readOnly?: boolean }) {
         </datalist>
       )}
 
-      <div className="max-h-[calc(100dvh-320px)] overflow-auto rounded-lg border">
-        <Table className="text-xs">
-          <TableHeader className="bg-muted/60 sticky top-0 z-10">
+      {/* Area tabel scroll (flex-1) -> pagination di bawah selalu terlihat */}
+      <div className="min-h-0 flex-1 overflow-auto rounded-lg border">
+        <table className="w-full border-collapse text-xs">
+          <thead className="sticky top-0 z-20">
             {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id}>
-                {hg.headers.map((h) => (
-                  <TableHead
-                    key={h.id}
-                    className={cn(
-                      'h-8 px-2 whitespace-nowrap',
-                      h.column.getCanSort() && 'cursor-pointer select-none',
-                    )}
-                    onClick={h.column.getToggleSortingHandler()}
-                  >
-                    {flexRender(h.column.columnDef.header, h.getContext())}
-                    {{ asc: ' ↑', desc: ' ↓' }[h.column.getIsSorted() as string] ?? ''}
-                  </TableHead>
-                ))}
-              </TableRow>
+              <tr key={hg.id}>
+                {hg.headers.map((h) => {
+                  const sticky = STICKY_POS[h.column.id];
+                  return (
+                    <th
+                      key={h.id}
+                      className={cn(
+                        'bg-muted text-muted-foreground h-8 border-b px-2 text-left font-medium whitespace-nowrap',
+                        h.column.getCanSort() && 'cursor-pointer select-none',
+                        sticky && `${sticky} !z-30`,
+                      )}
+                      onClick={h.column.getToggleSortingHandler()}
+                    >
+                      {flexRender(h.column.columnDef.header, h.getContext())}
+                      {{ asc: ' ↑', desc: ' ↓' }[h.column.getIsSorted() as string] ?? ''}
+                    </th>
+                  );
+                })}
+              </tr>
             ))}
-          </TableHeader>
-          <TableBody>
+          </thead>
+          <tbody>
             {table.getRowModel().rows.map((r) => {
               const row = r.original;
               const level = agingLevel(umurValue(row), row.__isClearTTD);
               const active = activeWaybill === row['No. Waybill'];
+              const stickyBg = AGING_STICKY_BG[level];
               return (
-                <TableRow
+                <tr
                   key={row['No. Waybill']}
                   data-active={active || undefined}
-                  className={cn(AGING_ROW_CLASS[level], 'data-[active=true]:ring-ring/60 data-[active=true]:ring-1')}
+                  className={cn(
+                    'border-b',
+                    AGING_ROW_CLASS[level],
+                    'data-[active=true]:ring-ring/60 data-[active=true]:ring-1',
+                  )}
                 >
-                  {r.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="px-2 py-1 align-middle">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
+                  {r.getVisibleCells().map((cell) => {
+                    const sticky = STICKY_POS[cell.column.id];
+                    return (
+                      <td
+                        key={cell.id}
+                        className={cn(
+                          'px-2 py-1 align-middle',
+                          // Sel sticky butuh latar solid supaya kolom lain tidak
+                          // tembus di baliknya saat scroll horizontal.
+                          sticky && `${sticky} ${stickyBg}`,
+                        )}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    );
+                  })}
+                </tr>
               );
             })}
             {table.getRowModel().rows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="text-muted-foreground py-10 text-center">
+              <tr>
+                <td colSpan={columns.length} className="text-muted-foreground py-10 text-center">
                   Tidak ada paket yang cocok dengan filter.
-                </TableCell>
-              </TableRow>
+                </td>
+              </tr>
             )}
-          </TableBody>
-        </Table>
+          </tbody>
+        </table>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {!readOnly ? (
-          <p className="text-muted-foreground text-[11px]">
-            Tips: <kbd className="bg-muted rounded px-1">Enter</kbd> simpan &amp; pindah ke baris berikutnya.
-          </p>
-        ) : (
-          <p className="text-muted-foreground text-[11px]">
-            Mode lihat data — pengisian feedback ada di menu Feedback Long Tail.
-          </p>
-        )}
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-            Sebelumnya
-          </Button>
-          <span className="text-xs tabular-nums">
-            Hal {table.getState().pagination.pageIndex + 1} / {table.getPageCount() || 1}
-          </span>
-          <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-            Berikutnya
-          </Button>
-        </div>
-      </div>
+      {/* Pagination - shrink-0 di bawah area scroll, selalu terlihat */}
+      <TablePager
+        pageIndex={table.getState().pagination.pageIndex}
+        pageCount={table.getPageCount()}
+        onGoto={(i) => table.setPageIndex(i)}
+        canPrev={table.getCanPreviousPage()}
+        canNext={table.getCanNextPage()}
+        totalRows={table.getFilteredRowModel().rows.length}
+        pageSize={table.getState().pagination.pageSize}
+        onPageSizeChange={(n) => table.setPageSize(n)}
+      />
+
+      {/* Popup riwayat feedback (gantikan kolom Log Feedback yg bikin baris tinggi) */}
+      <Dialog open={!!historyRow} onOpenChange={(o) => !o && setHistoryRow(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-sm">{historyRow?.['No. Waybill']}</DialogTitle>
+            <DialogDescription>Riwayat feedback (Log Feedback) untuk waybill ini.</DialogDescription>
+          </DialogHeader>
+          <ol className="max-h-80 space-y-1.5 overflow-auto">
+            {historyRow &&
+              logLines(historyRow).map((line, i) => {
+                const [tgl, ...rest] = line.split(' : ');
+                const isi = rest.join(' : ');
+                return (
+                  <li key={i} className="border-border flex gap-2 border-b pb-1.5 text-xs last:border-0">
+                    <span className="text-muted-foreground shrink-0 tabular-nums">{isi ? tgl : ''}</span>
+                    <span>{isi || tgl}</span>
+                  </li>
+                );
+              })}
+            {historyRow && logLines(historyRow).length === 0 && (
+              <li className="text-muted-foreground text-xs">Belum ada riwayat.</li>
+            )}
+          </ol>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

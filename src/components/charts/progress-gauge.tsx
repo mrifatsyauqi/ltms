@@ -5,7 +5,18 @@
  * Penyebut = Total Paket (keputusan user), pembilang = waybill unik yg dapat
  * feedback hari ini. Pakai SVG murni (tanpa lib) supaya ringan & mudah diaudit.
  */
-export function ProgressGauge({ value, total, caption }: { value: number; total: number; caption?: string }) {
+export function ProgressGauge({
+  value,
+  total,
+  caption,
+  secondary,
+}: {
+  value: number;
+  total: number;
+  caption?: string;
+  /** Baris tambahan di bawah, mis. progress feedback keseluruhan. */
+  secondary?: string;
+}) {
   const pct = total > 0 ? (value / total) * 100 : 0;
   const r = 70;
   const circumference = Math.PI * r; // setengah lingkaran
@@ -18,7 +29,7 @@ export function ProgressGauge({ value, total, caption }: { value: number; total:
         <path
           d="M 20 90 A 70 70 0 0 1 160 90"
           fill="none"
-          stroke="var(--accent-violet)"
+          stroke="var(--brand)"
           strokeWidth={16}
           strokeLinecap="round"
           strokeDasharray={`${dash} ${circumference}`}
@@ -31,6 +42,11 @@ export function ProgressGauge({ value, total, caption }: { value: number; total:
         <span className="text-foreground font-medium tabular-nums">{value.toLocaleString('id-ID')}</span> dari{' '}
         <span className="tabular-nums">{total.toLocaleString('id-ID')}</span> {caption ?? 'paket sudah di-follow-up hari ini'}
       </p>
+      {secondary && (
+        <p className="text-muted-foreground border-border mt-2 w-full border-t pt-2 text-center text-[11px]">
+          {secondary}
+        </p>
+      )}
     </div>
   );
 }

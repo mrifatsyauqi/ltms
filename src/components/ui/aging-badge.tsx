@@ -27,6 +27,19 @@ export const AGING_ROW_CLASS: Record<0 | 1 | 2 | 3, string> = {
   3: 'bg-aging-3/25',
 };
 
+/**
+ * Versi OPAQUE dari warna baris aging (tint dicampur ke atas --card via
+ * color-mix). Dipakai pada sel STICKY: sel sticky harus punya latar solid,
+ * kalau transparan konten kolom lain akan tembus di baliknya saat scroll
+ * horizontal. Warnanya dibuat setara AGING_ROW_CLASS (~22%) supaya mulus.
+ */
+export const AGING_STICKY_BG: Record<0 | 1 | 2 | 3, string> = {
+  0: 'bg-card',
+  1: 'bg-[color-mix(in_srgb,var(--aging-1)_22%,var(--card))]',
+  2: 'bg-[color-mix(in_srgb,var(--aging-2)_22%,var(--card))]',
+  3: 'bg-[color-mix(in_srgb,var(--aging-3)_22%,var(--card))]',
+};
+
 type AgingBadgeProps = {
   umur: number | null | undefined;
   /** true jika Clear TTD - umur dibekukan, tidak lagi dihitung sbg urgensi. */

@@ -28,7 +28,9 @@ export function SectionCard({
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>
-      <div className={cn('px-3 pt-1 pb-2.5', bodyClassName)}>{children}</div>
+      {/* @container: isi panel bisa menyesuaikan lebar PANEL-nya sendiri
+          (mis. legend donut turun ke bawah saat panel sempit). */}
+      <div className={cn('@container px-3 pt-1 pb-2.5', bodyClassName)}>{children}</div>
     </section>
   );
 }

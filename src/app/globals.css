@@ -50,7 +50,9 @@
   /* Brand (aksen utama aplikasi) */
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+  --color-brand-strong: var(--brand-strong);
   --color-brand-muted: var(--brand-muted);
+  --color-brand-softer: var(--brand-softer);
 
   /* Aging (Bagian 9.1 PRD): 1 hari hijau, 2 hari kuning, >=3 hari merah.
      Dipakai lewat komponen <AgingBadge> supaya konsisten di semua tabel. */
@@ -77,8 +79,9 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  /* primary = brand J&T, jadi Button/checkbox/ring shadcn otomatis ikut merah. */
+  --primary: #e4032d;
+  --primary-foreground: #ffffff;
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -88,13 +91,18 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: #e4032d;
   --radius: 0.625rem;
 
-  /* Brand */
-  --brand: oklch(0.55 0.21 27);
-  --brand-foreground: oklch(0.99 0 0);
-  --brand-muted: oklch(0.95 0.03 27);
+  /* Brand J&T Express - #E4032D. Kontras 4.83:1 thd putih (lolos WCAG AA
+     teks kecil), jadi teks putih di atas merah ini aman.
+     SEMUA warna merah aplikasi mengacu ke sini - jangan hardcode hex
+     di komponen, supaya ganti warna cukup di satu tempat. */
+  --brand: #e4032d;
+  --brand-foreground: #ffffff;
+  --brand-strong: #c00326; /* hover/pressed - kontras 6.43:1 thd putih */
+  --brand-muted: #fdedf0; /* latar lembut */
+  --brand-softer: #fbdce2; /* border/aksen lembut */
 
   /* Aging: pasangan bg + foreground (kontras >= 4.5:1 utk teks kecil) */
   --aging-1: oklch(0.94 0.06 150);
@@ -121,15 +129,15 @@
   --chart-6: oklch(0.65 0.02 260); /* abu    - Lainnya */
   --chart-7: oklch(0.85 0.01 260); /* abu terang - Belum Feedback */
 
-  /* Sidebar SELALU gelap (mengikuti referensi desain), tidak ikut theme terang */
-  --sidebar: oklch(0.21 0.02 275);
-  --sidebar-foreground: oklch(0.87 0.01 275);
-  --sidebar-primary: oklch(0.55 0.21 27);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.28 0.02 275);
-  --sidebar-accent-foreground: oklch(0.98 0 0);
-  --sidebar-border: oklch(0.3 0.02 275);
-  --sidebar-ring: oklch(0.55 0.21 27);
+  /* Sidebar TERANG (tema J&T Express) - putih dgn item aktif merah brand. */
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.42 0.01 260);
+  --sidebar-primary: #e4032d;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: oklch(0.965 0.004 260);
+  --sidebar-accent-foreground: oklch(0.22 0.01 260);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: #e4032d;
 }
 
 .dark {
@@ -159,6 +167,17 @@
   --aging-3: oklch(0.31 0.1 27);
   --aging-3-fg: oklch(0.85 0.13 25);
   --brand-muted: oklch(0.3 0.08 27);
+}
+
+@utility no-scrollbar {
+  /* Sembunyikan TRACK scrollbar saja - elemen tetap bisa di-scroll
+     (wheel/trackpad/keyboard). Bukan overflow:hidden. */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge lama */
+  &::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
 }
 
 @layer base {
