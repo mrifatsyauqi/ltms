@@ -16,7 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex h-dvh overflow-hidden">
       {/* Sidebar pakai useSearchParams -> perlu Suspense boundary. */}
-      <Suspense fallback={<div className="bg-sidebar w-56 shrink-0" />}>
+      <Suspense fallback={<div className="bg-sidebar w-[200px] shrink-0" />}>
         <Sidebar role={user.role} nama={user.nama ?? user.name ?? undefined} dropPoint={user.dropPoint} />
       </Suspense>
       {/*

@@ -33,7 +33,7 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
     <aside
       className={cn(
         'bg-sidebar text-sidebar-foreground flex shrink-0 flex-col border-r border-sidebar-border transition-[width] duration-200',
-        collapsed ? 'w-[68px]' : 'w-56',
+        collapsed ? 'w-[68px]' : 'w-[200px]',
       )}
     >
       {/* Logo */}
