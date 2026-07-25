@@ -65,11 +65,15 @@ export function DashboardClient({ title, description }: { title: string; descrip
   const isCabang = data?.role === 'Admin Cabang';
   const s = data?.summary;
 
+  // Mode DP Spesifik = Admin Cabang memfilter ke 1 DP lewat CAKUPAN.
+  const dpFilter = isCabang && scope !== ALL_SCOPE ? scope : undefined;
+  const effectiveDescription = dpFilter ? `Ringkasan Drop Point ${dpFilter}.` : description;
+
   return (
     <>
       <PageHeader
         title={title}
-        description={description}
+        description={effectiveDescription}
         actions={
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={isFetching ? 'animate-spin' : undefined} aria-hidden />
@@ -95,7 +99,7 @@ export function DashboardClient({ title, description }: { title: string; descrip
           <>
             {/* Notifikasi Aging (Fase 7 / Bagian 9.3): tampil di paling atas
                 bila ada paket >= 3 hari belum Clear TTD. */}
-            <AgingAlert count={s.paketLebih3Hari} isCabang={!!isCabang} />
+            <AgingAlert count={s.paketLebih3Hari} isCabang={!!isCabang} dpLabel={dpFilter} />
 
             {/* 5 summary card dalam satu baris. Kartu ke-5 menggabungkan dua
                 metrik urgensi (Paket > 3 Hari + Paket Tertua). Kartu "Sudah
@@ -229,7 +233,7 @@ export function DashboardClient({ title, description }: { title: string; descrip
                 </SectionCard>
 
                 <SectionCard
-                  title="Presentase Paket >3 Hari"
+                  title="Persentase Paket >3 Hari"
                   description="Per Drop Point. Klik satu DP untuk memfilter dashboard ke DP itu."
                   bodyClassName="px-0 pb-0"
                 >

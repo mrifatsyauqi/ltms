@@ -1178,6 +1178,10 @@ const ROUTES_ = {
     if (!isCabang) {
       var mine = String(actor.dropPoint).trim().toLowerCase();
       rows = rows.filter(function (r) { return String(r['DP Sampai']).trim().toLowerCase() === mine; });
+    } else if (params.dp && String(params.dp) !== 'ALL') {
+      // Admin Cabang memilih 1 DP di filter CAKUPAN -> filter sama spt Admin DP.
+      var pick = String(params.dp).trim().toLowerCase();
+      rows = rows.filter(function (r) { return String(r['DP Sampai']).trim().toLowerCase() === pick; });
     }
 
     // --- Ringkasan + distribusi + aging (snapshot dari LongTail) ---
