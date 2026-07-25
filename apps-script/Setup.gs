@@ -15,7 +15,7 @@ function setupSheets() {
   const sheetDefs = [
     {
       name: 'Users',
-      headers: ['Nama', 'Email', 'Role', 'Drop Point', 'Status Aktif'],
+      headers: ['Nama', 'Email', 'Role', 'Drop Point', 'Status Aktif', 'Password Hash'],
     },
     {
       name: 'LongTail',

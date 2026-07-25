@@ -446,7 +446,12 @@ const ROUTES_ = {
   // ---- Users (Admin Cabang only; Bagian 12 PRD - hanya tambah/update, tidak hard-delete) ----
   listUsers: function (params) {
     requireRole_(requireActor_(params), ['Admin Cabang']);
-    return readTable_('Users').rows.map(stripRow_);
+    // Password Hash sengaja tidak pernah dikirim ke client (dipakai internal saja).
+    return readTable_('Users').rows.map(function (row) {
+      const clean = stripRow_(row);
+      delete clean['Password Hash'];
+      return clean;
+    });
   },
 
   createUser: function (params) {
@@ -516,6 +521,45 @@ const ROUTES_ = {
       deleteRowByKey_('Users', 'Email', targetEmail);
       return { email: targetEmail };
     });
+  },
+
+  // Set/reset password login manual (Admin Cabang saja). Hash dihitung di
+  // Next.js (scrypt) - Code.gs cuma menyimpan string hash apa adanya, tidak
+  // pernah menerima/menyimpan password plaintext.
+  setUserPassword: function (params) {
+    requireRole_(requireActor_(params), ['Admin Cabang']);
+    const targetEmail = params.targetEmail;
+    const passwordHash = params.passwordHash;
+    if (!targetEmail || !passwordHash) {
+      throw { code: 'VALIDATION_ERROR', message: 'targetEmail dan passwordHash wajib diisi' };
+    }
+    return withLock_(function () {
+      updateRowByKey_('Users', 'Email', targetEmail, { 'Password Hash': passwordHash });
+      return { email: targetEmail };
+    });
+  },
+
+  // Ambil hash password untuk verifikasi login manual. Dipanggil NextAuth
+  // Credentials provider SEBELUM ada sesi, jadi sengaja tidak pakai
+  // requireActor_ - perlindungan satu-satunya adalah SHARED_SECRET di
+  // isAuthorized_ (sama seperti getUserByEmail di doGet untuk login Google).
+  getPasswordHash: function (params) {
+    const email = String(params.email || '').trim().toLowerCase();
+    if (!email) throw { code: 'VALIDATION_ERROR', message: 'email wajib diisi' };
+    const table = readTable_('Users');
+    const row = table.rows.find(function (r) {
+      return String(r['Email']).trim().toLowerCase() === email;
+    });
+    if (!row) return { found: false };
+    return {
+      found: true,
+      passwordHash: row['Password Hash'] || '',
+      nama: row['Nama'],
+      email: row['Email'],
+      role: row['Role'],
+      dropPoint: row['Drop Point'],
+      statusAktif: isActive_(row['Status Aktif']),
+    };
   },
 
   // ---- Master Drop Point ----

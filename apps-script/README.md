@@ -72,6 +72,24 @@ APPS_SCRIPT_URL=https://script.google.com/macros/s/XXXXX/exec
 APPS_SCRIPT_SHARED_SECRET=<nilai SHARED_SECRET yang sama seperti di atas>
 ```
 
+## Catatan: login manual (username/password)
+
+`Code.gs` sekarang juga mendukung login manual (email + password) selain
+Google, lewat kolom baru `Password Hash` di sheet `Users` (hash dihitung di
+Next.js dengan `scrypt` — sheet cuma menyimpan hash-nya, tidak pernah
+password asli). Kalau sheet `Users` Anda dibuat **sebelum** perubahan ini:
+
+1. Buka sheet `Users` di Google Sheets, tambahkan kolom baru di paling kanan
+   dengan header persis `Password Hash` (boleh kosong untuk semua user —
+   user yang belum punya password cuma bisa login lewat Google sampai
+   Admin Cabang set password-nya lewat User Management).
+2. Redeploy Web App Apps Script (**Deploy → Manage deployments → Edit →
+   New version**) supaya route `setUserPassword` dan `getPasswordHash` yang
+   baru di `Code.gs` aktif.
+
+Sheet yang dibuat lewat `setupSheets()` versi baru sudah otomatis punya
+kolom ini.
+
 ## Catatan untuk Fase 2
 
 `Code.gs` saat ini **hanya** berisi endpoint `getUserByEmail` (dipakai NextAuth
