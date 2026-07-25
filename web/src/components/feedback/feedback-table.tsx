@@ -68,10 +68,13 @@ function ringkasanAging(rows: LongTailRow[]) {
 export function FeedbackTable({
   readOnly = false,
   initialUmurFilter = '',
+  initialDpFilter = '',
 }: {
   readOnly?: boolean;
   /** Preset filter umur dari URL, mis. dari alert Notifikasi Aging (?umur=3). */
   initialUmurFilter?: string;
+  /** Preset filter DP dari URL, mis. dari 'Lihat semua' Aging Prioritas (?dp=). */
+  initialDpFilter?: string;
 }) {
   const { data, isLoading, error } = useLongTail();
   const options = useFeedbackOptions();
@@ -79,7 +82,7 @@ export function FeedbackTable({
 
   const [sorting, setSorting] = useState<SortingState>([{ id: 'umur', desc: true }]); // umur tertua di atas (Bagian 9.1)
   const [globalFilter, setGlobalFilter] = useState('');
-  const [dpFilter, setDpFilter] = useState('');
+  const [dpFilter, setDpFilter] = useState(initialDpFilter);
   const [umurFilter, setUmurFilter] = useState(initialUmurFilter);
   const [sprinterFilter, setSprinterFilter] = useState('');
   const [onlyBelum, setOnlyBelum] = useState(false);
