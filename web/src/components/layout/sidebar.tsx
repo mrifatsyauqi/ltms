@@ -134,7 +134,7 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
           className="hover:bg-sidebar-accent focus-visible:ring-sidebar-ring flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] opacity-70 transition-colors focus-visible:ring-2 focus-visible:outline-none"
         >
           <ChevronLeft className={cn('size-4 shrink-0 transition-transform', collapsed && 'rotate-180')} aria-hidden />
-          {!collapsed && <span>Collapse</span>}
+          {!collapsed && <span>Sembunyikan</span>}
         </button>
       </div>
     </aside>
