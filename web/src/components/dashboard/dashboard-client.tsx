@@ -12,6 +12,7 @@ import {
 import { AgingBarChart } from '@/components/charts/aging-bar-chart';
 import { FeedbackDonut } from '@/components/charts/feedback-donut';
 import { ProgressGauge } from '@/components/charts/progress-gauge';
+import { Pkt3HariChart } from '@/components/charts/pkt3hari-chart';
 import { PageHeader } from '@/components/layout/page-header';
 import { SectionCard } from '@/components/layout/section-card';
 import { PaketPrioritas } from '@/components/dashboard/paket-prioritas';
@@ -53,7 +54,7 @@ function StatSkeleton() {
 }
 
 export function DashboardClient({ title, description }: { title: string; description: string }) {
-  const { scope } = useDashboardScope();
+  const { scope, setScope } = useDashboardScope();
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     // scope masuk queryKey: ganti filter -> refetch otomatis; Refresh tetap
     // menyegarkan scope yang sedang aktif.
@@ -227,47 +228,12 @@ export function DashboardClient({ title, description }: { title: string; descrip
                   </div>
                 </SectionCard>
 
-                <SectionCard title="Progress per Sprinter Delivery" bodyClassName="px-0 pb-0">
-                  <div className="max-h-[210px] overflow-auto">
-                    <Table className="text-xs">
-                      <TableHeader className="bg-muted/60 sticky top-0 z-10">
-                        <TableRow>
-                          <TableHead className="h-8 px-3">Sprinter</TableHead>
-                          <TableHead className="h-8 px-2 text-right">Total</TableHead>
-                          <TableHead className="h-8 px-2 text-right">Sudah</TableHead>
-                          <TableHead className="h-8 w-28 px-2">Progress</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {data.progressPerSprinter.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={4} className="text-muted-foreground py-6 text-center">
-                              Belum ada data Sprinter.
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          data.progressPerSprinter.map((p) => (
-                            <TableRow key={p.sprinter}>
-                              <TableCell className="px-3 py-1.5 font-medium">{p.sprinter}</TableCell>
-                              <TableCell className="px-2 py-1.5 text-right tabular-nums">{p.total}</TableCell>
-                              <TableCell className="px-2 py-1.5 text-right tabular-nums">{p.sudah}</TableCell>
-                              <TableCell className="px-2 py-1.5">
-                                <div className="flex items-center gap-1.5">
-                                  <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
-                                    <div
-                                      className="bg-accent-blue h-full rounded-full"
-                                      style={{ width: `${p.progressPct}%` }}
-                                    />
-                                  </div>
-                                  <span className="shrink-0 font-medium tabular-nums">{p.progressPct}%</span>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
+                <SectionCard
+                  title="% Paket > 3 Hari"
+                  description="Per Drop Point. Klik satu DP untuk memfilter dashboard ke DP itu."
+                  bodyClassName="px-0 pb-0"
+                >
+                  <Pkt3HariChart data={data.monitoringDp} onSelectDp={setScope} />
                 </SectionCard>
               </div>
             )}
