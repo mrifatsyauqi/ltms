@@ -7,6 +7,7 @@ import { ChevronLeft, LogOut, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { navForRole } from '@/lib/nav';
 import { signOutAction } from '@/app/actions/auth';
+import { ScopeFilter } from '@/components/dashboard/scope-filter';
 
 type SidebarProps = {
   role?: string;
@@ -33,7 +34,7 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
     <aside
       className={cn(
         'bg-sidebar text-sidebar-foreground flex shrink-0 flex-col border-r border-sidebar-border transition-[width] duration-200',
-        collapsed ? 'w-[68px]' : 'w-64',
+        collapsed ? 'w-[68px]' : 'w-[200px]',
       )}
     >
       {/* Logo */}
@@ -49,15 +50,20 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
         )}
       </div>
 
-      {/* Konteks DP aktif (Admin DP terikat 1 DP; Admin Cabang lihat semua) */}
+      {/* Konteks DP aktif. Admin Cabang: dropdown filter CAKUPAN (memfilter
+          seluruh Dashboard). Admin DP: label statis DP miliknya. */}
       {!collapsed && (
         <div className="border-sidebar-border bg-sidebar-accent/50 mx-3 mb-2 rounded-lg border px-2.5 py-1.5">
           <div className="text-[10px] tracking-wide uppercase opacity-60">
             {role === 'Admin Cabang' ? 'Cakupan' : 'DP Aktif'}
           </div>
-          <div className="truncate text-[13px] font-semibold text-sidebar-accent-foreground">
-            {role === 'Admin Cabang' ? 'Semua DP' : (dropPoint || '-')}
-          </div>
+          {role === 'Admin Cabang' ? (
+            <ScopeFilter />
+          ) : (
+            <div className="truncate text-[13px] font-semibold text-sidebar-accent-foreground">
+              {dropPoint || '-'}
+            </div>
+          )}
         </div>
       )}
 
@@ -134,7 +140,7 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
           className="hover:bg-sidebar-accent focus-visible:ring-sidebar-ring flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] opacity-70 transition-colors focus-visible:ring-2 focus-visible:outline-none"
         >
           <ChevronLeft className={cn('size-4 shrink-0 transition-transform', collapsed && 'rotate-180')} aria-hidden />
-          {!collapsed && <span>Collapse</span>}
+          {!collapsed && <span>Sembunyikan</span>}
         </button>
       </div>
     </aside>

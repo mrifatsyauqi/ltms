@@ -136,6 +136,21 @@ function getSheet_(name) {
   return sheet;
 }
 
+/** Jumlah baris data (tanpa header) di sebuah sheet. */
+function countSheetData_(sheetName) {
+  var lastRow = getSheet_(sheetName).getLastRow();
+  return lastRow > 1 ? lastRow - 1 : 0;
+}
+
+/** Hapus semua baris data (baris 2..bawah), header baris 1 tetap. Kembalikan jumlah yang dihapus. */
+function clearSheetData_(sheetName) {
+  var sheet = getSheet_(sheetName);
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return 0;
+  sheet.deleteRows(2, lastRow - 1);
+  return lastRow - 1;
+}
+
 /** Reads a sheet into {sheet, headers, rows}; each row is an object keyed by header, plus __row (1-based sheet row number). Blank rows are skipped. */
 function readTable_(sheetName) {
   const sheet = getSheet_(sheetName);
@@ -446,7 +461,12 @@ const ROUTES_ = {
   // ---- Users (Admin Cabang only; Bagian 12 PRD - hanya tambah/update, tidak hard-delete) ----
   listUsers: function (params) {
     requireRole_(requireActor_(params), ['Admin Cabang']);
-    return readTable_('Users').rows.map(stripRow_);
+    // Password Hash sengaja tidak pernah dikirim ke client (dipakai internal saja).
+    return readTable_('Users').rows.map(function (row) {
+      const clean = stripRow_(row);
+      delete clean['Password Hash'];
+      return clean;
+    });
   },
 
   createUser: function (params) {
@@ -516,6 +536,45 @@ const ROUTES_ = {
       deleteRowByKey_('Users', 'Email', targetEmail);
       return { email: targetEmail };
     });
+  },
+
+  // Set/reset password login manual (Admin Cabang saja). Hash dihitung di
+  // Next.js (scrypt) - Code.gs cuma menyimpan string hash apa adanya, tidak
+  // pernah menerima/menyimpan password plaintext.
+  setUserPassword: function (params) {
+    requireRole_(requireActor_(params), ['Admin Cabang']);
+    const targetEmail = params.targetEmail;
+    const passwordHash = params.passwordHash;
+    if (!targetEmail || !passwordHash) {
+      throw { code: 'VALIDATION_ERROR', message: 'targetEmail dan passwordHash wajib diisi' };
+    }
+    return withLock_(function () {
+      updateRowByKey_('Users', 'Email', targetEmail, { 'Password Hash': passwordHash });
+      return { email: targetEmail };
+    });
+  },
+
+  // Ambil hash password untuk verifikasi login manual. Dipanggil NextAuth
+  // Credentials provider SEBELUM ada sesi, jadi sengaja tidak pakai
+  // requireActor_ - perlindungan satu-satunya adalah SHARED_SECRET di
+  // isAuthorized_ (sama seperti getUserByEmail di doGet untuk login Google).
+  getPasswordHash: function (params) {
+    const email = String(params.email || '').trim().toLowerCase();
+    if (!email) throw { code: 'VALIDATION_ERROR', message: 'email wajib diisi' };
+    const table = readTable_('Users');
+    const row = table.rows.find(function (r) {
+      return String(r['Email']).trim().toLowerCase() === email;
+    });
+    if (!row) return { found: false };
+    return {
+      found: true,
+      passwordHash: row['Password Hash'] || '',
+      nama: row['Nama'],
+      email: row['Email'],
+      role: row['Role'],
+      dropPoint: row['Drop Point'],
+      statusAktif: isActive_(row['Status Aktif']),
+    };
   },
 
   // ---- Master Drop Point ----
@@ -796,6 +855,26 @@ const ROUTES_ = {
         lt.sheet.deleteRow(r.__row);
       });
       return { archived: eligible.length, thresholdDays: thresholdDays };
+    });
+  },
+
+  // ---- Reset Data Long Tail (bersihkan data transaksi untuk go-live) ----
+  // Kosongkan HANYA sheet transaksi; master data (Users, Master Drop Point,
+  // Master/Favorite Feedback, Import Mapping) tidak disentuh. Admin Cabang saja.
+  // dryRun=true -> hanya menghitung berapa yang akan dihapus (untuk konfirmasi UI).
+  // Tindakan ini PERMANEN dan tidak bisa dibatalkan.
+  resetLongTailData: function (params) {
+    requireRole_(requireActor_(params), ['Admin Cabang']);
+    var targets = ['LongTail', 'LongTail_Archive', 'Activity_Log', 'Import Batch'];
+    if (params.dryRun) {
+      var counts = {};
+      targets.forEach(function (name) { counts[name] = countSheetData_(name); });
+      return { dryRun: true, counts: counts };
+    }
+    return withLock_(function () {
+      var cleared = {};
+      targets.forEach(function (name) { cleared[name] = clearSheetData_(name); });
+      return { cleared: cleared };
     });
   },
 
@@ -1126,6 +1205,25 @@ const ROUTES_ = {
   // Semua angka dihitung server-side dari LongTail + Activity_Log (BUKAN parsing
   // teks Log Feedback). Di-scope per role: Admin DP hanya DP miliknya. Read-only,
   // jadi tidak pakai lock.
+  // Waktu data terakhir berubah (import atau feedback) = entri terakhir di
+  // Activity_Log. Admin DP di-scope ke DP-nya; Admin Cabang global.
+  getLastUpdate: function (params) {
+    var actor = requireActor_(params);
+    var isCabang = actor.role === 'Admin Cabang';
+    var mine = String(actor.dropPoint).trim().toLowerCase();
+    var rows = readTable_('Activity_Log').rows;
+    for (var i = rows.length - 1; i >= 0; i--) {
+      var r = rows[i];
+      if (!isCabang && String(r['DP'] || '').trim().toLowerCase() !== mine) continue;
+      var t = r['Tanggal'];
+      var tanggal = (t instanceof Date)
+        ? Utilities.formatDate(t, Session.getScriptTimeZone(), 'dd/MM/yy')
+        : String(t == null ? '' : t).trim();
+      return { hasUpdate: true, tanggal: tanggal, jam: formatJam_(r['Jam']), sumber: String(r['Sumber Perubahan'] || '') };
+    }
+    return { hasUpdate: false };
+  },
+
   getDashboard: function (params) {
     const actor = requireActor_(params);
     const isCabang = actor.role === 'Admin Cabang';
@@ -1134,6 +1232,10 @@ const ROUTES_ = {
     if (!isCabang) {
       var mine = String(actor.dropPoint).trim().toLowerCase();
       rows = rows.filter(function (r) { return String(r['DP Sampai']).trim().toLowerCase() === mine; });
+    } else if (params.dp && String(params.dp) !== 'ALL') {
+      // Admin Cabang memilih 1 DP di filter CAKUPAN -> filter sama spt Admin DP.
+      var pick = String(params.dp).trim().toLowerCase();
+      rows = rows.filter(function (r) { return String(r['DP Sampai']).trim().toLowerCase() === pick; });
     }
 
     // --- Ringkasan + distribusi + aging (snapshot dari LongTail) ---

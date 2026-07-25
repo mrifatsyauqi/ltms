@@ -1,6 +1,7 @@
 'use client';
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type TablePagerProps = {
@@ -44,6 +45,18 @@ export function TablePager({
   const from = totalRows === 0 ? 0 : pageIndex * pageSize + 1;
   const to = Math.min(totalRows, (pageIndex + 1) * pageSize);
 
+  // Dropdown "jumlah/laman" yang membuka ke ATAS (pager ada di bawah halaman).
+  const [sizeOpen, setSizeOpen] = useState(false);
+  const sizeRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!sizeOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (sizeRef.current && !sizeRef.current.contains(e.target as Node)) setSizeOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [sizeOpen]);
+
   const btn =
     'inline-flex h-8 min-w-8 items-center justify-center rounded-lg border px-2 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
 
@@ -56,25 +69,44 @@ export function TablePager({
       </p>
 
       <div className="flex items-center gap-2">
-        {/* Jumlah per halaman (poin e): 20/60/80/100 */}
-        <div className="flex items-center gap-1">
-          {pageSizeOptions.map((n) => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => onPageSizeChange(n)}
-              aria-pressed={pageSize === n}
-              className={cn(
-                btn,
-                pageSize === n
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'border-input hover:bg-muted',
-              )}
+        {/* Jumlah per laman: dropdown membuka ke atas */}
+        <div ref={sizeRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setSizeOpen((v) => !v)}
+            aria-haspopup="listbox"
+            aria-expanded={sizeOpen}
+            className={cn(btn, 'border-input hover:bg-muted gap-1 tabular-nums')}
+          >
+            {pageSize}/laman
+            <ChevronUp className={cn('size-3.5 transition-transform', sizeOpen && 'rotate-180')} aria-hidden />
+          </button>
+          {sizeOpen && (
+            <ul
+              role="listbox"
+              className="border-border bg-card absolute right-0 bottom-full z-30 mb-1 min-w-[7.5rem] overflow-hidden rounded-lg border py-1 shadow-lg"
             >
-              {n}
-            </button>
-          ))}
-          <span className="text-muted-foreground ml-0.5 text-xs">/ hal</span>
+              {pageSizeOptions.map((n) => (
+                <li key={n}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={pageSize === n}
+                    onClick={() => {
+                      onPageSizeChange(n);
+                      setSizeOpen(false);
+                    }}
+                    className={cn(
+                      'hover:bg-muted block w-full px-3 py-1.5 text-left text-xs tabular-nums',
+                      pageSize === n ? 'text-primary font-semibold' : 'text-foreground',
+                    )}
+                  >
+                    {n}/laman
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* Navigasi halaman */}

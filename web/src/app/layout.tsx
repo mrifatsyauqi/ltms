@@ -1,13 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Font utama seluruh UI. Dipetakan ke --font-sans (dipakai font-sans &
+// font-heading di globals.css), jadi semua teks memakai Inter.
+const inter = Inter({
+  variable: "--font-sans",
   subsets: ["latin"],
 });
 
+// Monospace tetap dipertahankan untuk kolom No. Waybill (butuh lebar karakter
+// seragam agar rapi/mudah dibaca).
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
@@ -26,7 +30,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <Providers>{children}</Providers>

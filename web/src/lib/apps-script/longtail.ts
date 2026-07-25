@@ -78,3 +78,19 @@ export function submitFeedback(actorEmail: string, waybill: string, feedback: st
 export function deleteLongTail(actorEmail: string, waybill: string) {
   return callAppsScript<{ waybill: string }>('deleteLongTail', { email: actorEmail, waybill });
 }
+
+export type ResetPreview = { dryRun: true; counts: Record<string, number> };
+export type ResetResult = { cleared: Record<string, number> };
+
+/** Hitung (dry-run) berapa baris data transaksi yang akan dihapus saat reset. */
+export function previewResetLongTail(actorEmail: string) {
+  return callAppsScript<ResetPreview>('resetLongTailData', { email: actorEmail, dryRun: true });
+}
+
+/**
+ * Kosongkan semua data transaksi Long Tail (LongTail, LongTail_Archive,
+ * Activity_Log, Import Batch). PERMANEN. Master data tidak disentuh.
+ */
+export function resetLongTailData(actorEmail: string) {
+  return callAppsScript<ResetResult>('resetLongTailData', { email: actorEmail });
+}

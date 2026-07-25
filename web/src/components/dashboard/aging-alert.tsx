@@ -7,8 +7,19 @@ import { AlertTriangle, ArrowRight } from 'lucide-react';
  * user) — alert kontekstual di Dashboard, dgn tautan langsung ke daftar paket
  * mendesak (Feedback difilter umur >= 3).
  */
-export function AgingAlert({ count, isCabang }: { count: number; isCabang: boolean }) {
+export function AgingAlert({
+  count,
+  isCabang,
+  dpLabel,
+}: {
+  count: number;
+  isCabang: boolean;
+  /** Diisi saat Admin Cabang memfilter ke 1 DP -> teks & tautan menyesuaikan. */
+  dpLabel?: string;
+}) {
   if (count <= 0) return null;
+
+  const href = dpLabel ? `/feedback?umur=3&dp=${encodeURIComponent(dpLabel)}` : '/feedback?umur=3';
 
   return (
     <div
@@ -24,12 +35,12 @@ export function AgingAlert({ count, isCabang }: { count: number; isCabang: boole
           Clear TTD
         </p>
         <p className="text-muted-foreground text-xs">
-          {isCabang ? 'Tersebar di beberapa Drop Point. ' : 'Di Drop Point Anda. '}
+          {dpLabel ? `Di DP ${dpLabel}. ` : isCabang ? 'Tersebar di beberapa Drop Point. ' : 'Di Drop Point Anda. '}
           Perlu segera ditindaklanjuti.
         </p>
       </div>
       <Link
-        href="/feedback?umur=3"
+        href={href}
         className="bg-brand text-brand-foreground hover:bg-brand-strong inline-flex shrink-0 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
       >
         Lihat paket

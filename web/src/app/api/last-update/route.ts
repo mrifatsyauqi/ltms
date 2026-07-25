@@ -1,17 +1,13 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { getDashboard } from '@/lib/apps-script/dashboard';
+import { getLastUpdate } from '@/lib/apps-script/meta';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
-export async function GET(request: Request) {
+export async function GET() {
   const session = await auth();
   if (!session?.user?.email) return unauthenticated();
-
-  // Filter CAKUPAN (Admin Cabang). Kosong = agregat semua DP seperti biasa.
-  const dp = new URL(request.url).searchParams.get('dp') ?? undefined;
-
   try {
-    const data = await getDashboard(session.user.email, dp);
+    const data = await getLastUpdate(session.user.email);
     return NextResponse.json({ ok: true, data });
   } catch (err) {
     return errorResponse(err);

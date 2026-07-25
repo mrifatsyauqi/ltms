@@ -12,17 +12,24 @@ import {
 import { AgingBarChart } from '@/components/charts/aging-bar-chart';
 import { FeedbackDonut } from '@/components/charts/feedback-donut';
 import { ProgressGauge } from '@/components/charts/progress-gauge';
+import { Pkt3HariChart, Pkt3HariSummary } from '@/components/charts/pkt3hari-chart';
 import { PageHeader } from '@/components/layout/page-header';
+import { DataFreshness } from '@/components/layout/data-freshness';
 import { SectionCard } from '@/components/layout/section-card';
 import { PaketPrioritas } from '@/components/dashboard/paket-prioritas';
 import { AgingAlert } from '@/components/dashboard/aging-alert';
+import { BreakdownAlasan } from '@/components/dashboard/breakdown-alasan';
+import { AgingPrioritas } from '@/components/dashboard/aging-prioritas';
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/ui/stat-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ALL_SCOPE, useDashboardScope } from '@/components/dashboard/scope-context';
 import type { DashboardData } from '@/lib/apps-script/dashboard';
 
-async function fetchDashboard(): Promise<DashboardData> {
-  const res = await fetch('/api/dashboard');
+async function fetchDashboard(scope: string): Promise<DashboardData> {
+  // Mode "Semua DP" memanggil endpoint tanpa query -> identik dgn perilaku lama.
+  const url = scope && scope !== ALL_SCOPE ? `/api/dashboard?dp=${encodeURIComponent(scope)}` : '/api/dashboard';
+  const res = await fetch(url);
   const body = await res.json();
   if (!body.ok) throw new Error(body.message || body.error);
   return body.data;
@@ -50,19 +57,26 @@ function StatSkeleton() {
 }
 
 export function DashboardClient({ title, description }: { title: string; description: string }) {
+  const { scope, setScope } = useDashboardScope();
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: fetchDashboard,
+    // scope masuk queryKey: ganti filter -> refetch otomatis; Refresh tetap
+    // menyegarkan scope yang sedang aktif.
+    queryKey: ['dashboard', scope],
+    queryFn: () => fetchDashboard(scope),
   });
 
   const isCabang = data?.role === 'Admin Cabang';
   const s = data?.summary;
 
+  // Mode DP Spesifik = Admin Cabang memfilter ke 1 DP lewat CAKUPAN.
+  const dpFilter = isCabang && scope !== ALL_SCOPE ? scope : undefined;
+  const effectiveDescription = dpFilter ? `Ringkasan Drop Point ${dpFilter}.` : description;
+
   return (
     <>
       <PageHeader
         title={title}
-        description={description}
+        description={effectiveDescription}
         actions={
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={isFetching ? 'animate-spin' : undefined} aria-hidden />
@@ -70,6 +84,7 @@ export function DashboardClient({ title, description }: { title: string; descrip
           </Button>
         }
       />
+      <DataFreshness />
 
       <div className="space-y-2.5 p-3" aria-busy={isLoading}>
         {isLoading && <StatSkeleton />}
@@ -88,7 +103,7 @@ export function DashboardClient({ title, description }: { title: string; descrip
           <>
             {/* Notifikasi Aging (Fase 7 / Bagian 9.3): tampil di paling atas
                 bila ada paket >= 3 hari belum Clear TTD. */}
-            <AgingAlert count={s.paketLebih3Hari} isCabang={!!isCabang} />
+            <AgingAlert count={s.paketLebih3Hari} isCabang={!!isCabang} dpLabel={dpFilter} />
 
             {/* 5 summary card dalam satu baris. Kartu ke-5 menggabungkan dua
                 metrik urgensi (Paket > 3 Hari + Paket Tertua). Kartu "Sudah
@@ -165,8 +180,17 @@ export function DashboardClient({ title, description }: { title: string; descrip
                 memakai tabel Progress per DP/Sprinter di bawah. */}
             {!isCabang && <PaketPrioritas />}
 
-            {/* Progress per DP & per Sprinter - Admin Cabang saja */}
-            {isCabang && (
+            {/* Admin Cabang. Mode DP Spesifik: swap ke Breakdown Alasan +
+                Aging Prioritas (khusus DP terpilih). Mode Semua DP: tabel
+                Progress per DP + chart Persentase Paket >3 Hari. */}
+            {isCabang && dpFilter && (
+              <div className="grid gap-2.5 @3xl:grid-cols-2">
+                <BreakdownAlasan dp={dpFilter} />
+                <AgingPrioritas dp={dpFilter} />
+              </div>
+            )}
+
+            {isCabang && !dpFilter && (
               <div className="grid gap-2.5 @3xl:grid-cols-2">
                 <SectionCard title="Progress per Drop Point" bodyClassName="px-0 pb-0">
                   <div className="max-h-[210px] overflow-auto">
@@ -221,47 +245,13 @@ export function DashboardClient({ title, description }: { title: string; descrip
                   </div>
                 </SectionCard>
 
-                <SectionCard title="Progress per Sprinter Delivery" bodyClassName="px-0 pb-0">
-                  <div className="max-h-[210px] overflow-auto">
-                    <Table className="text-xs">
-                      <TableHeader className="bg-muted/60 sticky top-0 z-10">
-                        <TableRow>
-                          <TableHead className="h-8 px-3">Sprinter</TableHead>
-                          <TableHead className="h-8 px-2 text-right">Total</TableHead>
-                          <TableHead className="h-8 px-2 text-right">Sudah</TableHead>
-                          <TableHead className="h-8 w-28 px-2">Progress</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {data.progressPerSprinter.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={4} className="text-muted-foreground py-6 text-center">
-                              Belum ada data Sprinter.
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          data.progressPerSprinter.map((p) => (
-                            <TableRow key={p.sprinter}>
-                              <TableCell className="px-3 py-1.5 font-medium">{p.sprinter}</TableCell>
-                              <TableCell className="px-2 py-1.5 text-right tabular-nums">{p.total}</TableCell>
-                              <TableCell className="px-2 py-1.5 text-right tabular-nums">{p.sudah}</TableCell>
-                              <TableCell className="px-2 py-1.5">
-                                <div className="flex items-center gap-1.5">
-                                  <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
-                                    <div
-                                      className="bg-accent-blue h-full rounded-full"
-                                      style={{ width: `${p.progressPct}%` }}
-                                    />
-                                  </div>
-                                  <span className="shrink-0 font-medium tabular-nums">{p.progressPct}%</span>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
+                <SectionCard
+                  title="Persentase Paket >3 Hari"
+                  description="Per Drop Point. Klik satu DP untuk memfilter dashboard ke DP itu."
+                  bodyClassName="px-0 pb-0"
+                >
+                  <Pkt3HariSummary total={s.total} lebih3={s.paketLebih3Hari} />
+                  <Pkt3HariChart data={data.monitoringDp} onSelectDp={setScope} />
                 </SectionCard>
               </div>
             )}

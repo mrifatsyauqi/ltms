@@ -24,6 +24,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { SelectFilter } from '@/components/ui/select-filter';
 import { TablePager } from '@/components/ui/table-pager';
+import { TruncatedText } from '@/components/ui/truncated-text';
+import { CopyButton } from '@/components/ui/copy-button';
 import { AGING_ROW_CLASS, AGING_STICKY_BG, AgingBadge, agingLevel } from '@/components/ui/aging-badge';
 import { cn } from '@/lib/utils';
 import type { LongTailRow } from '@/lib/apps-script/longtail';
@@ -35,8 +37,6 @@ import {
   type SubmitFeedbackError,
 } from './feedback-hooks';
 import { FeedbackCell } from './feedback-cell';
-
-const OPTIONS_LIST_ID = 'feedback-options';
 
 /** Kolom mana yang di-pin & ke sisi mana (offset kanan disetel via kelas). */
 const STICKY_POS: Record<string, string> = {
@@ -68,10 +68,13 @@ function ringkasanAging(rows: LongTailRow[]) {
 export function FeedbackTable({
   readOnly = false,
   initialUmurFilter = '',
+  initialDpFilter = '',
 }: {
   readOnly?: boolean;
   /** Preset filter umur dari URL, mis. dari alert Notifikasi Aging (?umur=3). */
   initialUmurFilter?: string;
+  /** Preset filter DP dari URL, mis. dari 'Lihat semua' Aging Prioritas (?dp=). */
+  initialDpFilter?: string;
 }) {
   const { data, isLoading, error } = useLongTail();
   const options = useFeedbackOptions();
@@ -79,8 +82,9 @@ export function FeedbackTable({
 
   const [sorting, setSorting] = useState<SortingState>([{ id: 'umur', desc: true }]); // umur tertua di atas (Bagian 9.1)
   const [globalFilter, setGlobalFilter] = useState('');
-  const [dpFilter, setDpFilter] = useState('');
+  const [dpFilter, setDpFilter] = useState(initialDpFilter);
   const [umurFilter, setUmurFilter] = useState(initialUmurFilter);
+  const [alasanFilter, setAlasanFilter] = useState('');
   const [sprinterFilter, setSprinterFilter] = useState('');
   const [onlyBelum, setOnlyBelum] = useState(false);
   const [historyRow, setHistoryRow] = useState<LongTailRow | null>(null);
@@ -90,18 +94,21 @@ export function FeedbackTable({
 
   const rows = useMemo(() => data ?? [], [data]);
 
-  const dpOptions = useMemo(
-    () => Array.from(new Set(rows.map((r) => String(r['DP Sampai']).trim()).filter(Boolean))).sort(),
-    [rows],
-  );
   const sprinterOptions = useMemo(
     () => Array.from(new Set(rows.map((r) => String(r['Sprinter Delivery']).trim()).filter(Boolean))).sort(),
+    [rows],
+  );
+  const alasanOptions = useMemo(
+    () => Array.from(new Set(rows.map((r) => String(r['Alasan Paket Bermasalah']).trim()).filter(Boolean))).sort(),
     [rows],
   );
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
+      // dpFilter tetap didukung untuk drill-down dari Dashboard (?dp=), tapi
+      // dropdown-nya kini diganti filter Alasan Bermasalah (lihat chip di UI).
       if (dpFilter && String(r['DP Sampai']).trim() !== dpFilter) return false;
+      if (alasanFilter && String(r['Alasan Paket Bermasalah']).trim() !== alasanFilter) return false;
       if (sprinterFilter && String(r['Sprinter Delivery']).trim() !== sprinterFilter) return false;
       if (onlyBelum && String(r.Feedback ?? '').trim() !== '') return false;
       if (umurFilter) {
@@ -111,7 +118,7 @@ export function FeedbackTable({
       }
       return true;
     });
-  }, [rows, dpFilter, sprinterFilter, onlyBelum, umurFilter]);
+  }, [rows, dpFilter, alasanFilter, sprinterFilter, onlyBelum, umurFilter]);
 
   const aging = useMemo(() => ringkasanAging(rows), [rows]);
 
@@ -158,16 +165,43 @@ export function FeedbackTable({
     return [
       {
         id: 'waybill',
-        header: 'No. Waybill',
+        // Header + tombol salin SEMUA No. Waybill di halaman ini (mengikuti
+        // jumlah /laman & halaman aktif). stopPropagation di CopyButton mencegah
+        // klik ikut men-toggle sort kolom.
+        header: ({ table: t }) => {
+          const list = t.getRowModel().rows.map((rr) => rr.original['No. Waybill']).filter(Boolean);
+          return (
+            <span className="inline-flex items-center gap-1">
+              No. Waybill
+              <CopyButton
+                text={list.join('\n')}
+                title={`Salin ${list.length} No. Waybill di halaman ini`}
+                successMessage={`${list.length} No. Waybill disalin`}
+                className="size-5"
+              />
+            </span>
+          );
+        },
         // accessorFn, bukan accessorKey: titik di 'No. Waybill' ditafsirkan
         // TanStack sbg deep path -> undefined.
         accessorFn: (r) => r['No. Waybill'],
         cell: (c) => {
           const r = c.row.original;
+          const wb = c.getValue<string>();
           const perluReview = String(r['Perlu Review'] ?? '').trim();
           return (
             <div className="min-w-0">
-              <span className="font-mono text-[11px]">{c.getValue<string>()}</span>
+              {/* justify-between: nomor di kiri, ikon salin rata kanan (seragam). */}
+              <span className="flex w-full items-center justify-between gap-2">
+                <span className="text-[11px] tabular-nums">{wb}</span>
+                <CopyButton
+                  text={wb}
+                  title={`Salin ${wb}`}
+                  successMessage="No. Waybill disalin"
+                  className="size-4"
+                  iconClassName="size-3"
+                />
+              </span>
               {perluReview && (
                 <Badge variant="destructive" className="mt-0.5 block w-fit text-[9px]">
                   Perlu Review
@@ -183,15 +217,27 @@ export function FeedbackTable({
         accessorFn: (r) => umurValue(r),
         cell: (c) => <AgingBadge umur={umurValue(c.row.original)} frozen={c.row.original.__isClearTTD} />,
       },
-      { accessorKey: 'Status Terakhir', header: 'Status Terakhir' },
-      { accessorKey: 'Alasan Paket Bermasalah', header: 'Alasan Bermasalah', cell: (c) => c.getValue<string>() || '—' },
+      {
+        accessorKey: 'Status Terakhir',
+        header: 'Status Terakhir',
+        cell: (c) => <TruncatedText text={c.getValue<string>()} />,
+      },
+      {
+        accessorKey: 'Alasan Paket Bermasalah',
+        header: 'Alasan Bermasalah',
+        cell: (c) => <TruncatedText text={c.getValue<string>()} />,
+      },
       { accessorKey: 'DP Sampai', header: 'DP' },
       {
         accessorKey: 'Waktu Sampai',
         header: 'Waktu Sampai',
         cell: (c) => <span className="whitespace-nowrap">{formatWaktuSampai(c.getValue<string>())}</span>,
       },
-      { accessorKey: 'Sprinter Delivery', header: 'Sprinter', cell: (c) => c.getValue<string>() || '—' },
+      {
+        accessorKey: 'Sprinter Delivery',
+        header: 'Sprinter',
+        cell: (c) => <TruncatedText text={c.getValue<string>()} />,
+      },
       { accessorKey: 'COD', header: 'COD' },
       { accessorKey: 'Delivery Attempt', header: 'Attempt' },
       {
@@ -212,7 +258,7 @@ export function FeedbackTable({
                 ) : (
                   <FeedbackCell
                     row={r}
-                    optionsListId={OPTIONS_LIST_ID}
+                    options={options}
                     saving={submit.isPending && submit.variables?.waybill === r['No. Waybill']}
                     onCommit={handleCommit}
                     registerRef={registerRef}
@@ -320,10 +366,13 @@ export function FeedbackTable({
           ]}
         />
         <SelectFilter
-          label="Filter Drop Point"
-          value={dpFilter}
-          onChange={setDpFilter}
-          options={[{ value: '', label: 'Semua DP' }, ...dpOptions.map((dp) => ({ value: dp, label: dp }))]}
+          label="Filter alasan bermasalah"
+          value={alasanFilter}
+          onChange={setAlasanFilter}
+          options={[
+            { value: '', label: 'Semua Alasan' },
+            ...alasanOptions.map((a) => ({ value: a, label: a })),
+          ]}
         />
         <SelectFilter
           label="Filter sprinter"
@@ -338,6 +387,20 @@ export function FeedbackTable({
           <input type="checkbox" checked={onlyBelum} onChange={(e) => setOnlyBelum(e.target.checked)} />
           Belum feedback saja
         </label>
+        {/* Chip DP aktif dari drill-down Dashboard (?dp=) - bisa dihapus. */}
+        {dpFilter && (
+          <span className="bg-brand-muted text-brand inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
+            DP: {dpFilter}
+            <button
+              type="button"
+              onClick={() => setDpFilter('')}
+              aria-label="Hapus filter DP"
+              className="hover:text-brand-strong -mr-0.5 leading-none"
+            >
+              ✕
+            </button>
+          </span>
+        )}
       </div>
 
       {/* Ringkasan aging - warna konsisten dgn badge & chart */}
@@ -357,15 +420,6 @@ export function FeedbackTable({
         </span>
       </div>
 
-      {/* datalist bersama: favorit dulu lalu master, tetap boleh ketik bebas */}
-      {!readOnly && (
-        <datalist id={OPTIONS_LIST_ID}>
-          {options.map((o) => (
-            <option key={o} value={o} />
-          ))}
-        </datalist>
-      )}
-
       {/* Area tabel scroll (flex-1) -> pagination di bawah selalu terlihat */}
       <div className="min-h-0 flex-1 overflow-auto rounded-lg border">
         <table className="w-full border-collapse text-xs">
@@ -378,7 +432,7 @@ export function FeedbackTable({
                     <th
                       key={h.id}
                       className={cn(
-                        'bg-muted text-muted-foreground h-8 border-b px-2 text-left font-medium whitespace-nowrap',
+                        'bg-muted text-muted-foreground h-7 border-b px-2 text-left font-medium whitespace-nowrap',
                         h.column.getCanSort() && 'cursor-pointer select-none',
                         sticky && `${sticky} !z-30`,
                       )}
@@ -414,7 +468,7 @@ export function FeedbackTable({
                       <td
                         key={cell.id}
                         className={cn(
-                          'px-2 py-1 align-middle',
+                          'px-2 py-0.5 align-middle',
                           // Sel sticky butuh latar solid supaya kolom lain tidak
                           // tembus di baliknya saat scroll horizontal.
                           sticky && `${sticky} ${stickyBg}`,
@@ -448,13 +502,14 @@ export function FeedbackTable({
         totalRows={table.getFilteredRowModel().rows.length}
         pageSize={table.getState().pagination.pageSize}
         onPageSizeChange={(n) => table.setPageSize(n)}
+        pageSizeOptions={[10, 20, 30, 40, 50, 100]}
       />
 
       {/* Popup riwayat feedback (gantikan kolom Log Feedback yg bikin baris tinggi) */}
       <Dialog open={!!historyRow} onOpenChange={(o) => !o && setHistoryRow(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-mono text-sm">{historyRow?.['No. Waybill']}</DialogTitle>
+            <DialogTitle className="text-sm tabular-nums">{historyRow?.['No. Waybill']}</DialogTitle>
             <DialogDescription>Riwayat feedback (Log Feedback) untuk waybill ini.</DialogDescription>
           </DialogHeader>
           <ol className="max-h-80 space-y-1.5 overflow-auto">

@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { auth, signIn } from '@/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CredentialsLoginForm } from '@/components/auth/credentials-login-form';
 
 export default async function LoginPage() {
   const session = await auth();
@@ -27,6 +28,14 @@ export default async function LoginPage() {
               Sign in with Google
             </Button>
           </form>
+
+          <div className="my-4 flex items-center gap-2">
+            <div className="bg-border h-px flex-1" />
+            <span className="text-muted-foreground text-xs">atau</span>
+            <div className="bg-border h-px flex-1" />
+          </div>
+
+          <CredentialsLoginForm />
         </CardContent>
       </Card>
     </div>

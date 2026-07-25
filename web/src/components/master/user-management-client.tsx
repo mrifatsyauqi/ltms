@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { KeyRound, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/layout/page-header';
 import { StatusBadge, isAktif } from '@/components/master/status-badge';
@@ -56,6 +56,8 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [confirmDelete, setConfirmDelete] = useState<UserRow | null>(null);
+  const [passwordFor, setPasswordFor] = useState<UserRow | null>(null);
+  const [passwordValue, setPasswordValue] = useState('');
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -123,6 +125,21 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
       invalidate();
     },
     onError: (e: Error) => toast.error(`Gagal menghapus: ${e.message}`),
+  });
+
+  const setPasswordMut = useMutation({
+    mutationFn: ({ email, password }: { email: string; password: string }) =>
+      api(`/api/users/${encodeURIComponent(email)}/password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      }),
+    onSuccess: () => {
+      toast.success('Password diperbarui.');
+      setPasswordFor(null);
+      setPasswordValue('');
+    },
+    onError: (e: Error) => toast.error(`Gagal set password: ${e.message}`),
   });
 
   function openCreate() {
@@ -202,7 +219,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                     <th className="h-8 border-b px-3 text-left font-medium">Role</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Drop Point</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Status</th>
-                    <th className="h-8 w-24 border-b px-3 text-right font-medium">Aksi</th>
+                    <th className="h-8 w-32 border-b px-3 text-right font-medium">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -235,6 +252,18 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                             className="hover:bg-muted rounded-md p-1.5 transition-colors"
                           >
                             <Pencil className="size-3.5" aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPasswordFor(r);
+                              setPasswordValue('');
+                            }}
+                            aria-label={`Set password ${r.Email}`}
+                            title="Set password login manual"
+                            className="hover:bg-muted rounded-md p-1.5 transition-colors"
+                          >
+                            <KeyRound className="size-3.5" aria-hidden />
                           </button>
                           <button
                             type="button"
@@ -385,6 +414,38 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
               disabled={deleteMut.isPending}
             >
               {deleteMut.isPending ? 'Menghapus…' : 'Hapus'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!passwordFor} onOpenChange={(o) => !o && setPasswordFor(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Set Password</DialogTitle>
+            <DialogDescription>
+              Password login manual untuk {passwordFor?.Nama} ({passwordFor?.Email}). Minimal 8 karakter.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="new-password">Password baru</Label>
+            <Input
+              id="new-password"
+              type="password"
+              value={passwordValue}
+              onChange={(e) => setPasswordValue(e.target.value)}
+              autoComplete="new-password"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPasswordFor(null)} disabled={setPasswordMut.isPending}>
+              Batal
+            </Button>
+            <Button
+              onClick={() => passwordFor && setPasswordMut.mutate({ email: passwordFor.Email, password: passwordValue })}
+              disabled={passwordValue.length < 8 || setPasswordMut.isPending}
+            >
+              {setPasswordMut.isPending ? 'Menyimpan…' : 'Simpan'}
             </Button>
           </DialogFooter>
         </DialogContent>
