@@ -12,7 +12,7 @@ import {
 import { AgingBarChart } from '@/components/charts/aging-bar-chart';
 import { FeedbackDonut } from '@/components/charts/feedback-donut';
 import { ProgressGauge } from '@/components/charts/progress-gauge';
-import { Pkt3HariChart } from '@/components/charts/pkt3hari-chart';
+import { Pkt3HariChart, Pkt3HariSummary } from '@/components/charts/pkt3hari-chart';
 import { PageHeader } from '@/components/layout/page-header';
 import { SectionCard } from '@/components/layout/section-card';
 import { PaketPrioritas } from '@/components/dashboard/paket-prioritas';
@@ -229,10 +229,11 @@ export function DashboardClient({ title, description }: { title: string; descrip
                 </SectionCard>
 
                 <SectionCard
-                  title="% Paket > 3 Hari"
+                  title="Presentase Paket >3 Hari"
                   description="Per Drop Point. Klik satu DP untuk memfilter dashboard ke DP itu."
                   bodyClassName="px-0 pb-0"
                 >
+                  <Pkt3HariSummary total={s.total} lebih3={s.paketLebih3Hari} />
                   <Pkt3HariChart data={data.monitoringDp} onSelectDp={setScope} />
                 </SectionCard>
               </div>
