@@ -6,6 +6,7 @@ import { ArrowRight } from 'lucide-react';
 import { SectionCard } from '@/components/layout/section-card';
 import { AgingBadge } from '@/components/ui/aging-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatWaktuSampai } from '@/lib/feedback-format';
 import type { LongTailRow } from '@/lib/apps-script/longtail';
 
 const MAX_ROWS = 10;
@@ -93,7 +94,9 @@ export function AgingPrioritas({ dp }: { dp: string }) {
                       <AgingBadge umur={umurOf(r)} />
                     </TableCell>
                     <TableCell className="px-2 py-1.5">{r['Status Terakhir'] || '—'}</TableCell>
-                    <TableCell className="text-muted-foreground px-2 py-1.5">{r['Waktu Sampai'] || '—'}</TableCell>
+                    <TableCell className="text-muted-foreground px-2 py-1.5 whitespace-nowrap">
+                      {formatWaktuSampai(String(r['Waktu Sampai'] ?? '')) || '—'}
+                    </TableCell>
                   </TableRow>
                 ))
               )}

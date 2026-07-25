@@ -84,6 +84,7 @@ export function FeedbackTable({
   const [globalFilter, setGlobalFilter] = useState('');
   const [dpFilter, setDpFilter] = useState(initialDpFilter);
   const [umurFilter, setUmurFilter] = useState(initialUmurFilter);
+  const [alasanFilter, setAlasanFilter] = useState('');
   const [sprinterFilter, setSprinterFilter] = useState('');
   const [onlyBelum, setOnlyBelum] = useState(false);
   const [historyRow, setHistoryRow] = useState<LongTailRow | null>(null);
@@ -93,18 +94,21 @@ export function FeedbackTable({
 
   const rows = useMemo(() => data ?? [], [data]);
 
-  const dpOptions = useMemo(
-    () => Array.from(new Set(rows.map((r) => String(r['DP Sampai']).trim()).filter(Boolean))).sort(),
-    [rows],
-  );
   const sprinterOptions = useMemo(
     () => Array.from(new Set(rows.map((r) => String(r['Sprinter Delivery']).trim()).filter(Boolean))).sort(),
+    [rows],
+  );
+  const alasanOptions = useMemo(
+    () => Array.from(new Set(rows.map((r) => String(r['Alasan Paket Bermasalah']).trim()).filter(Boolean))).sort(),
     [rows],
   );
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
+      // dpFilter tetap didukung untuk drill-down dari Dashboard (?dp=), tapi
+      // dropdown-nya kini diganti filter Alasan Bermasalah (lihat chip di UI).
       if (dpFilter && String(r['DP Sampai']).trim() !== dpFilter) return false;
+      if (alasanFilter && String(r['Alasan Paket Bermasalah']).trim() !== alasanFilter) return false;
       if (sprinterFilter && String(r['Sprinter Delivery']).trim() !== sprinterFilter) return false;
       if (onlyBelum && String(r.Feedback ?? '').trim() !== '') return false;
       if (umurFilter) {
@@ -114,7 +118,7 @@ export function FeedbackTable({
       }
       return true;
     });
-  }, [rows, dpFilter, sprinterFilter, onlyBelum, umurFilter]);
+  }, [rows, dpFilter, alasanFilter, sprinterFilter, onlyBelum, umurFilter]);
 
   const aging = useMemo(() => ringkasanAging(rows), [rows]);
 
@@ -187,8 +191,9 @@ export function FeedbackTable({
           const perluReview = String(r['Perlu Review'] ?? '').trim();
           return (
             <div className="min-w-0">
-              <span className="inline-flex items-center gap-1">
-                <span className="font-mono text-[11px]">{wb}</span>
+              {/* justify-between: nomor di kiri, ikon salin rata kanan (seragam). */}
+              <span className="flex w-full items-center justify-between gap-2">
+                <span className="text-[11px] tabular-nums">{wb}</span>
                 <CopyButton
                   text={wb}
                   title={`Salin ${wb}`}
@@ -361,10 +366,13 @@ export function FeedbackTable({
           ]}
         />
         <SelectFilter
-          label="Filter Drop Point"
-          value={dpFilter}
-          onChange={setDpFilter}
-          options={[{ value: '', label: 'Semua DP' }, ...dpOptions.map((dp) => ({ value: dp, label: dp }))]}
+          label="Filter alasan bermasalah"
+          value={alasanFilter}
+          onChange={setAlasanFilter}
+          options={[
+            { value: '', label: 'Semua Alasan' },
+            ...alasanOptions.map((a) => ({ value: a, label: a })),
+          ]}
         />
         <SelectFilter
           label="Filter sprinter"
@@ -379,6 +387,20 @@ export function FeedbackTable({
           <input type="checkbox" checked={onlyBelum} onChange={(e) => setOnlyBelum(e.target.checked)} />
           Belum feedback saja
         </label>
+        {/* Chip DP aktif dari drill-down Dashboard (?dp=) - bisa dihapus. */}
+        {dpFilter && (
+          <span className="bg-brand-muted text-brand inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
+            DP: {dpFilter}
+            <button
+              type="button"
+              onClick={() => setDpFilter('')}
+              aria-label="Hapus filter DP"
+              className="hover:text-brand-strong -mr-0.5 leading-none"
+            >
+              ✕
+            </button>
+          </span>
+        )}
       </div>
 
       {/* Ringkasan aging - warna konsisten dgn badge & chart */}
@@ -487,7 +509,7 @@ export function FeedbackTable({
       <Dialog open={!!historyRow} onOpenChange={(o) => !o && setHistoryRow(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-mono text-sm">{historyRow?.['No. Waybill']}</DialogTitle>
+            <DialogTitle className="text-sm tabular-nums">{historyRow?.['No. Waybill']}</DialogTitle>
             <DialogDescription>Riwayat feedback (Log Feedback) untuk waybill ini.</DialogDescription>
           </DialogHeader>
           <ol className="max-h-80 space-y-1.5 overflow-auto">
