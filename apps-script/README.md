@@ -79,10 +79,12 @@ Google, lewat kolom baru `Password Hash` di sheet `Users` (hash dihitung di
 Next.js dengan `scrypt` — sheet cuma menyimpan hash-nya, tidak pernah
 password asli). Kalau sheet `Users` Anda dibuat **sebelum** perubahan ini:
 
-1. Buka sheet `Users` di Google Sheets, tambahkan kolom baru di paling kanan
-   dengan header persis `Password Hash` (boleh kosong untuk semua user —
+1. Buka sheet `Users` di Google Sheets, tambahkan kolom baru dengan header
+   persis `Password Hash` (posisinya bebas karena kode membaca berdasarkan
+   nama header, bukan urutan — di setup baru kolom ini ditaruh setelah
+   `Drop Point`, sebelum `Status Aktif`). Boleh kosong untuk semua user —
    user yang belum punya password cuma bisa login lewat Google sampai
-   Admin Cabang set password-nya lewat User Management).
+   Admin Cabang set password-nya lewat User Management.
 2. Redeploy Web App Apps Script (**Deploy → Manage deployments → Edit →
    New version**) supaya route `setUserPassword` dan `getPasswordHash` yang
    baru di `Code.gs` aktif.
