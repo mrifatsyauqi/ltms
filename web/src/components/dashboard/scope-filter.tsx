@@ -34,7 +34,7 @@ export function ScopeFilter() {
       <option value={ALL_SCOPE}>Semua DP</option>
       {dps.map((d) => (
         <option key={d['Kode DP']} value={d['Kode DP']}>
-          {d['Kode DP']} — {d['Nama DP']}
+          {d['Kode DP']}
         </option>
       ))}
     </select>
