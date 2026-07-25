@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { SelectFilter } from '@/components/ui/select-filter';
 import { TablePager } from '@/components/ui/table-pager';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { AGING_ROW_CLASS, AGING_STICKY_BG, AgingBadge, agingLevel } from '@/components/ui/aging-badge';
 import { cn } from '@/lib/utils';
 import type { LongTailRow } from '@/lib/apps-script/longtail';
@@ -186,15 +187,27 @@ export function FeedbackTable({
         accessorFn: (r) => umurValue(r),
         cell: (c) => <AgingBadge umur={umurValue(c.row.original)} frozen={c.row.original.__isClearTTD} />,
       },
-      { accessorKey: 'Status Terakhir', header: 'Status Terakhir' },
-      { accessorKey: 'Alasan Paket Bermasalah', header: 'Alasan Bermasalah', cell: (c) => c.getValue<string>() || '—' },
+      {
+        accessorKey: 'Status Terakhir',
+        header: 'Status Terakhir',
+        cell: (c) => <TruncatedText text={c.getValue<string>()} />,
+      },
+      {
+        accessorKey: 'Alasan Paket Bermasalah',
+        header: 'Alasan Bermasalah',
+        cell: (c) => <TruncatedText text={c.getValue<string>()} />,
+      },
       { accessorKey: 'DP Sampai', header: 'DP' },
       {
         accessorKey: 'Waktu Sampai',
         header: 'Waktu Sampai',
         cell: (c) => <span className="whitespace-nowrap">{formatWaktuSampai(c.getValue<string>())}</span>,
       },
-      { accessorKey: 'Sprinter Delivery', header: 'Sprinter', cell: (c) => c.getValue<string>() || '—' },
+      {
+        accessorKey: 'Sprinter Delivery',
+        header: 'Sprinter',
+        cell: (c) => <TruncatedText text={c.getValue<string>()} />,
+      },
       { accessorKey: 'COD', header: 'COD' },
       { accessorKey: 'Delivery Attempt', header: 'Attempt' },
       {
@@ -381,7 +394,7 @@ export function FeedbackTable({
                     <th
                       key={h.id}
                       className={cn(
-                        'bg-muted text-muted-foreground h-8 border-b px-2 text-left font-medium whitespace-nowrap',
+                        'bg-muted text-muted-foreground h-7 border-b px-2 text-left font-medium whitespace-nowrap',
                         h.column.getCanSort() && 'cursor-pointer select-none',
                         sticky && `${sticky} !z-30`,
                       )}
@@ -417,7 +430,7 @@ export function FeedbackTable({
                       <td
                         key={cell.id}
                         className={cn(
-                          'px-2 py-1 align-middle',
+                          'px-2 py-0.5 align-middle',
                           // Sel sticky butuh latar solid supaya kolom lain tidak
                           // tembus di baliknya saat scroll horizontal.
                           sticky && `${sticky} ${stickyBg}`,
@@ -451,6 +464,7 @@ export function FeedbackTable({
         totalRows={table.getFilteredRowModel().rows.length}
         pageSize={table.getState().pagination.pageSize}
         onPageSizeChange={(n) => table.setPageSize(n)}
+        pageSizeOptions={[10, 20, 30, 40, 50, 100]}
       />
 
       {/* Popup riwayat feedback (gantikan kolom Log Feedback yg bikin baris tinggi) */}

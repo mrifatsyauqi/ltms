@@ -46,7 +46,7 @@ export function FeedbackCell({ row, optionsListId, saving, onCommit, registerRef
       value={value}
       disabled={saving}
       placeholder="Isi feedback…"
-      className="h-8 w-full min-w-40 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+      className="h-7 w-full min-w-32 rounded-md border border-input bg-transparent px-2 text-xs outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
       onChange={(e) => {
         dirtyRef.current = true;
         setValue(e.target.value);
