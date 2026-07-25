@@ -1,5 +1,6 @@
 import { auth } from '@/auth';
 import { PageHeader } from '@/components/layout/page-header';
+import { DataFreshness } from '@/components/layout/data-freshness';
 import { FeedbackTable } from '@/components/feedback/feedback-table';
 
 /**
@@ -30,6 +31,7 @@ export default async function FeedbackPage({
             : `${scope}. Urut umur tertua di atas.`
         }
       />
+      <DataFreshness />
       {/* flex-col + min-h-0: area tabel mengisi sisa tinggi, pagination
           menempel di bawah tanpa perlu scroll halaman (poin 2c). */}
       <div className="flex min-h-0 flex-1 flex-col p-3">

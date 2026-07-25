@@ -1205,6 +1205,25 @@ const ROUTES_ = {
   // Semua angka dihitung server-side dari LongTail + Activity_Log (BUKAN parsing
   // teks Log Feedback). Di-scope per role: Admin DP hanya DP miliknya. Read-only,
   // jadi tidak pakai lock.
+  // Waktu data terakhir berubah (import atau feedback) = entri terakhir di
+  // Activity_Log. Admin DP di-scope ke DP-nya; Admin Cabang global.
+  getLastUpdate: function (params) {
+    var actor = requireActor_(params);
+    var isCabang = actor.role === 'Admin Cabang';
+    var mine = String(actor.dropPoint).trim().toLowerCase();
+    var rows = readTable_('Activity_Log').rows;
+    for (var i = rows.length - 1; i >= 0; i--) {
+      var r = rows[i];
+      if (!isCabang && String(r['DP'] || '').trim().toLowerCase() !== mine) continue;
+      var t = r['Tanggal'];
+      var tanggal = (t instanceof Date)
+        ? Utilities.formatDate(t, Session.getScriptTimeZone(), 'dd/MM/yy')
+        : String(t == null ? '' : t).trim();
+      return { hasUpdate: true, tanggal: tanggal, jam: formatJam_(r['Jam']), sumber: String(r['Sumber Perubahan'] || '') };
+    }
+    return { hasUpdate: false };
+  },
+
   getDashboard: function (params) {
     const actor = requireActor_(params);
     const isCabang = actor.role === 'Admin Cabang';
