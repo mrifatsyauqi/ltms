@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { SelectFilter } from '@/components/ui/select-filter';
 import { TablePager } from '@/components/ui/table-pager';
 import { TruncatedText } from '@/components/ui/truncated-text';
+import { CopyButton } from '@/components/ui/copy-button';
 import { AGING_ROW_CLASS, AGING_STICKY_BG, AgingBadge, agingLevel } from '@/components/ui/aging-badge';
 import { cn } from '@/lib/utils';
 import type { LongTailRow } from '@/lib/apps-script/longtail';
@@ -36,8 +37,6 @@ import {
   type SubmitFeedbackError,
 } from './feedback-hooks';
 import { FeedbackCell } from './feedback-cell';
-
-const OPTIONS_LIST_ID = 'feedback-options';
 
 /** Kolom mana yang di-pin & ke sisi mana (offset kanan disetel via kelas). */
 const STICKY_POS: Record<string, string> = {
@@ -162,16 +161,42 @@ export function FeedbackTable({
     return [
       {
         id: 'waybill',
-        header: 'No. Waybill',
+        // Header + tombol salin SEMUA No. Waybill di halaman ini (mengikuti
+        // jumlah /laman & halaman aktif). stopPropagation di CopyButton mencegah
+        // klik ikut men-toggle sort kolom.
+        header: ({ table: t }) => {
+          const list = t.getRowModel().rows.map((rr) => rr.original['No. Waybill']).filter(Boolean);
+          return (
+            <span className="inline-flex items-center gap-1">
+              No. Waybill
+              <CopyButton
+                text={list.join('\n')}
+                title={`Salin ${list.length} No. Waybill di halaman ini`}
+                successMessage={`${list.length} No. Waybill disalin`}
+                className="size-5"
+              />
+            </span>
+          );
+        },
         // accessorFn, bukan accessorKey: titik di 'No. Waybill' ditafsirkan
         // TanStack sbg deep path -> undefined.
         accessorFn: (r) => r['No. Waybill'],
         cell: (c) => {
           const r = c.row.original;
+          const wb = c.getValue<string>();
           const perluReview = String(r['Perlu Review'] ?? '').trim();
           return (
             <div className="min-w-0">
-              <span className="font-mono text-[11px]">{c.getValue<string>()}</span>
+              <span className="inline-flex items-center gap-1">
+                <span className="font-mono text-[11px]">{wb}</span>
+                <CopyButton
+                  text={wb}
+                  title={`Salin ${wb}`}
+                  successMessage="No. Waybill disalin"
+                  className="size-4"
+                  iconClassName="size-3"
+                />
+              </span>
               {perluReview && (
                 <Badge variant="destructive" className="mt-0.5 block w-fit text-[9px]">
                   Perlu Review
@@ -228,7 +253,7 @@ export function FeedbackTable({
                 ) : (
                   <FeedbackCell
                     row={r}
-                    optionsListId={OPTIONS_LIST_ID}
+                    options={options}
                     saving={submit.isPending && submit.variables?.waybill === r['No. Waybill']}
                     onCommit={handleCommit}
                     registerRef={registerRef}
@@ -372,15 +397,6 @@ export function FeedbackTable({
           Total · {aging.total}
         </span>
       </div>
-
-      {/* datalist bersama: favorit dulu lalu master, tetap boleh ketik bebas */}
-      {!readOnly && (
-        <datalist id={OPTIONS_LIST_ID}>
-          {options.map((o) => (
-            <option key={o} value={o} />
-          ))}
-        </datalist>
-      )}
 
       {/* Area tabel scroll (flex-1) -> pagination di bawah selalu terlihat */}
       <div className="min-h-0 flex-1 overflow-auto rounded-lg border">
