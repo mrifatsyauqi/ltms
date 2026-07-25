@@ -17,6 +17,8 @@ import { PageHeader } from '@/components/layout/page-header';
 import { SectionCard } from '@/components/layout/section-card';
 import { PaketPrioritas } from '@/components/dashboard/paket-prioritas';
 import { AgingAlert } from '@/components/dashboard/aging-alert';
+import { BreakdownAlasan } from '@/components/dashboard/breakdown-alasan';
+import { AgingPrioritas } from '@/components/dashboard/aging-prioritas';
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/ui/stat-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -176,8 +178,17 @@ export function DashboardClient({ title, description }: { title: string; descrip
                 memakai tabel Progress per DP/Sprinter di bawah. */}
             {!isCabang && <PaketPrioritas />}
 
-            {/* Progress per DP & per Sprinter - Admin Cabang saja */}
-            {isCabang && (
+            {/* Admin Cabang. Mode DP Spesifik: swap ke Breakdown Alasan +
+                Aging Prioritas (khusus DP terpilih). Mode Semua DP: tabel
+                Progress per DP + chart Persentase Paket >3 Hari. */}
+            {isCabang && dpFilter && (
+              <div className="grid gap-2.5 @3xl:grid-cols-2">
+                <BreakdownAlasan dp={dpFilter} />
+                <AgingPrioritas dp={dpFilter} />
+              </div>
+            )}
+
+            {isCabang && !dpFilter && (
               <div className="grid gap-2.5 @3xl:grid-cols-2">
                 <SectionCard title="Progress per Drop Point" bodyClassName="px-0 pb-0">
                   <div className="max-h-[210px] overflow-auto">
