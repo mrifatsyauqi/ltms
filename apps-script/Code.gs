@@ -136,6 +136,21 @@ function getSheet_(name) {
   return sheet;
 }
 
+/** Jumlah baris data (tanpa header) di sebuah sheet. */
+function countSheetData_(sheetName) {
+  var lastRow = getSheet_(sheetName).getLastRow();
+  return lastRow > 1 ? lastRow - 1 : 0;
+}
+
+/** Hapus semua baris data (baris 2..bawah), header baris 1 tetap. Kembalikan jumlah yang dihapus. */
+function clearSheetData_(sheetName) {
+  var sheet = getSheet_(sheetName);
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return 0;
+  sheet.deleteRows(2, lastRow - 1);
+  return lastRow - 1;
+}
+
 /** Reads a sheet into {sheet, headers, rows}; each row is an object keyed by header, plus __row (1-based sheet row number). Blank rows are skipped. */
 function readTable_(sheetName) {
   const sheet = getSheet_(sheetName);
@@ -840,6 +855,26 @@ const ROUTES_ = {
         lt.sheet.deleteRow(r.__row);
       });
       return { archived: eligible.length, thresholdDays: thresholdDays };
+    });
+  },
+
+  // ---- Reset Data Long Tail (bersihkan data transaksi untuk go-live) ----
+  // Kosongkan HANYA sheet transaksi; master data (Users, Master Drop Point,
+  // Master/Favorite Feedback, Import Mapping) tidak disentuh. Admin Cabang saja.
+  // dryRun=true -> hanya menghitung berapa yang akan dihapus (untuk konfirmasi UI).
+  // Tindakan ini PERMANEN dan tidak bisa dibatalkan.
+  resetLongTailData: function (params) {
+    requireRole_(requireActor_(params), ['Admin Cabang']);
+    var targets = ['LongTail', 'LongTail_Archive', 'Activity_Log', 'Import Batch'];
+    if (params.dryRun) {
+      var counts = {};
+      targets.forEach(function (name) { counts[name] = countSheetData_(name); });
+      return { dryRun: true, counts: counts };
+    }
+    return withLock_(function () {
+      var cleared = {};
+      targets.forEach(function (name) { cleared[name] = clearSheetData_(name); });
+      return { cleared: cleared };
     });
   },
 
