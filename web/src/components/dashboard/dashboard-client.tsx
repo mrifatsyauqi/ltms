@@ -19,10 +19,13 @@ import { AgingAlert } from '@/components/dashboard/aging-alert';
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/ui/stat-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ALL_SCOPE, useDashboardScope } from '@/components/dashboard/scope-context';
 import type { DashboardData } from '@/lib/apps-script/dashboard';
 
-async function fetchDashboard(): Promise<DashboardData> {
-  const res = await fetch('/api/dashboard');
+async function fetchDashboard(scope: string): Promise<DashboardData> {
+  // Mode "Semua DP" memanggil endpoint tanpa query -> identik dgn perilaku lama.
+  const url = scope && scope !== ALL_SCOPE ? `/api/dashboard?dp=${encodeURIComponent(scope)}` : '/api/dashboard';
+  const res = await fetch(url);
   const body = await res.json();
   if (!body.ok) throw new Error(body.message || body.error);
   return body.data;
@@ -50,9 +53,12 @@ function StatSkeleton() {
 }
 
 export function DashboardClient({ title, description }: { title: string; description: string }) {
+  const { scope } = useDashboardScope();
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: fetchDashboard,
+    // scope masuk queryKey: ganti filter -> refetch otomatis; Refresh tetap
+    // menyegarkan scope yang sedang aktif.
+    queryKey: ['dashboard', scope],
+    queryFn: () => fetchDashboard(scope),
   });
 
   const isCabang = data?.role === 'Admin Cabang';

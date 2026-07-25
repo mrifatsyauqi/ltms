@@ -34,7 +34,11 @@ export type DashboardData = {
   progressPerSprinter: { sprinter: string; total: number; sudah: number; progressPct: number }[];
 };
 
-/** Semua angka dihitung & di-scope server-side (Admin DP hanya DP-nya). */
-export function getDashboard(actorEmail: string) {
-  return callAppsScript<DashboardData>('getDashboard', { email: actorEmail });
+/**
+ * Semua angka dihitung & di-scope server-side (Admin DP hanya DP-nya).
+ * `dp` opsional: bila diisi (Admin Cabang memilih 1 DP di filter CAKUPAN),
+ * server memfilter ke DP itu memakai jalur yang sama dengan Admin DP.
+ */
+export function getDashboard(actorEmail: string, dp?: string) {
+  return callAppsScript<DashboardData>('getDashboard', { email: actorEmail, dp });
 }
