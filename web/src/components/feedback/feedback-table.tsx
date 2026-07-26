@@ -157,20 +157,17 @@ export function FeedbackTable({
     const activeEl = document.activeElement;
     // Hanya kembalikan bila fokus benar-benar hilang (jatuh ke body akibat
     // re-render). Jika masih di el, atau user sengaja pindah ke elemen lain,
-    // jangan direbut.
+    // jangan direbut. TIDAK di-clear: submit memicu DUA re-render (optimistic
+    // lalu sukses server) — keduanya harus mempertahankan fokus. Target diganti
+    // saat focusNext berikutnya, jadi tak menempel selamanya.
     const focusLost = !activeEl || activeEl === document.body;
     if (focusLost) el.focus();
-    pendingFocusRef.current = null;
   }, [rows]);
 
   function handleCommit(waybill: string, feedback: string, baseVersion: string | undefined) {
     submit.mutate(
       { waybill, feedback, baseVersion },
       {
-        onSuccess: (updated) => {
-          if (updated.__isClearTTD) toast.success(`${waybill}: Clear TTD — aging dibekukan.`);
-          else toast.success(`Feedback tersimpan untuk ${waybill}.`);
-        },
         onError: (err: SubmitFeedbackError) => {
           if (err.code === 'VERSION_CONFLICT') {
             toast.warning(`${waybill}: data sudah diubah pihak lain. Baris di-refresh, cek lalu isi ulang.`);
