@@ -1,8 +1,7 @@
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
 import Credentials from 'next-auth/providers/credentials';
-import { getUserByEmail } from '@/lib/apps-script';
-import { verifyCredentials } from '@/lib/apps-script/users';
+import { getUserByEmail, verifyCredentials } from '@/lib/data/auth';
 
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60; // 8 jam idle (PRD Bagian 4)
 const ALLOWED_DOMAIN = process.env.ALLOWED_GOOGLE_DOMAIN;

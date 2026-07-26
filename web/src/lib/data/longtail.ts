@@ -8,5 +8,7 @@ export const submitFeedback = USE_SUPABASE ? supa.submitFeedback : sheets.submit
 export const createLongTail = USE_SUPABASE ? supa.createLongTail : sheets.createLongTail;
 export const updateLongTail = USE_SUPABASE ? supa.updateLongTail : sheets.updateLongTail;
 export const deleteLongTail = USE_SUPABASE ? supa.deleteLongTail : sheets.deleteLongTail;
+export const previewResetLongTail = USE_SUPABASE ? supa.previewResetLongTail : sheets.previewResetLongTail;
+export const resetLongTailData = USE_SUPABASE ? supa.resetLongTailData : sheets.resetLongTailData;
 
-export type { LongTailRow, CreateLongTailInput, UpdateLongTailInput } from '@/lib/apps-script/longtail';
+export type { LongTailRow, CreateLongTailInput, UpdateLongTailInput, ResetPreview, ResetResult } from '@/lib/apps-script/longtail';

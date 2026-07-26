@@ -11,7 +11,7 @@ import {
   nextAttempt,
   type LongtailDbRow,
 } from './longtail-shared';
-import type { CreateLongTailInput, LongTailRow, UpdateLongTailInput } from '@/lib/apps-script/longtail';
+import type { CreateLongTailInput, LongTailRow, ResetPreview, ResetResult, UpdateLongTailInput } from '@/lib/apps-script/longtail';
 
 async function findRow(waybill: string): Promise<LongtailDbRow | null> {
   const { data, error } = await db().from('longtail').select('*').eq('no_waybill', waybill).maybeSingle();
@@ -193,4 +193,39 @@ export async function deleteLongTail(actorEmail: string, waybill: string): Promi
   const { error } = await db().from('longtail').delete().eq('no_waybill', waybill);
   if (error) throw new ApiError('INTERNAL_ERROR', error.message);
   return { waybill };
+}
+
+// ---- Reset data transaksi (bersihkan untuk go-live) --------------------------
+// Kosongkan HANYA tabel transaksi; master data tidak disentuh. Admin Cabang saja.
+// Key hasil dipertahankan sesuai nama sheet lama agar UI tak berubah.
+const RESET_TARGETS: { key: string; table: string; pk: string }[] = [
+  { key: 'LongTail', table: 'longtail', pk: 'no_waybill' },
+  { key: 'LongTail_Archive', table: 'longtail_archive', pk: 'no_waybill' },
+  { key: 'Activity_Log', table: 'activity_log', pk: 'id' },
+  { key: 'Import Batch', table: 'import_batch', pk: 'batch_id' },
+];
+
+async function countTable(table: string): Promise<number> {
+  const { count, error } = await db().from(table).select('*', { count: 'exact', head: true });
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  return count ?? 0;
+}
+
+export async function previewResetLongTail(actorEmail: string): Promise<ResetPreview> {
+  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  const counts: Record<string, number> = {};
+  for (const t of RESET_TARGETS) counts[t.key] = await countTable(t.table);
+  return { dryRun: true, counts };
+}
+
+export async function resetLongTailData(actorEmail: string): Promise<ResetResult> {
+  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  const cleared: Record<string, number> = {};
+  for (const t of RESET_TARGETS) {
+    cleared[t.key] = await countTable(t.table);
+    // PK selalu non-null -> filter ini mencakup semua baris (PostgREST wajib ada filter).
+    const { error } = await db().from(t.table).delete().not(t.pk, 'is', null);
+    if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  }
+  return { cleared };
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { previewResetLongTail, resetLongTailData } from '@/lib/apps-script/longtail';
+import { previewResetLongTail, resetLongTailData } from '@/lib/data/longtail';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 // GET = preview (dry-run) berapa baris data transaksi yang akan dihapus.

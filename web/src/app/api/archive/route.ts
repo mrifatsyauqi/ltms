@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { previewArchive, runArchive } from '@/lib/apps-script/archive';
+import { previewArchive, runArchive } from '@/lib/data/archive';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 const THRESHOLD = 30; // hari (PRD Bagian 8)
