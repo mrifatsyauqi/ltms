@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   type ColumnDef,
   type SortingState,
@@ -91,6 +91,9 @@ export function FeedbackTable({
 
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   const [activeWaybill, setActiveWaybill] = useState<string | null>(null);
+  // Input berikutnya yang harus tetap fokus setelah submit (survive re-render
+  // akibat setQueryData). Ala spreadsheet: enter/pilih -> lompat & siap ketik.
+  const pendingFocusRef = useRef<string | null>(null);
 
   const rows = useMemo(() => data ?? [], [data]);
 
@@ -128,11 +131,13 @@ export function FeedbackTable({
   }
 
   function focusNext(currentWaybill: string) {
+    pendingFocusRef.current = null;
     const ordered = table.getRowModel().rows.map((r) => r.original['No. Waybill']);
     const idx = ordered.indexOf(currentWaybill);
     for (let i = idx + 1; i < ordered.length; i++) {
       const el = inputRefs.current.get(ordered[i]);
       if (el && !el.disabled) {
+        pendingFocusRef.current = ordered[i]; // target fokus yg dipertahankan
         el.focus();
         setActiveWaybill(ordered[i]);
         return;
@@ -140,14 +145,29 @@ export function FeedbackTable({
     }
   }
 
+  // Setelah data ter-update (submit sukses -> setQueryData -> re-render), pastikan
+  // fokus tetap di input tujuan supaya user bisa langsung mengetik (tanpa klik).
+  // Hanya diterapkan bila fokus benar-benar hilang; kalau user sudah pindah ke
+  // input lain secara sadar, jangan direbut.
+  useEffect(() => {
+    const wb = pendingFocusRef.current;
+    if (!wb) return;
+    const el = inputRefs.current.get(wb);
+    if (!el || el.disabled) return;
+    const activeEl = document.activeElement;
+    // Hanya kembalikan bila fokus benar-benar hilang (jatuh ke body akibat
+    // re-render). Jika masih di el, atau user sengaja pindah ke elemen lain,
+    // jangan direbut. TIDAK di-clear: submit memicu DUA re-render (optimistic
+    // lalu sukses server) — keduanya harus mempertahankan fokus. Target diganti
+    // saat focusNext berikutnya, jadi tak menempel selamanya.
+    const focusLost = !activeEl || activeEl === document.body;
+    if (focusLost) el.focus();
+  }, [rows]);
+
   function handleCommit(waybill: string, feedback: string, baseVersion: string | undefined) {
     submit.mutate(
       { waybill, feedback, baseVersion },
       {
-        onSuccess: (updated) => {
-          if (updated.__isClearTTD) toast.success(`${waybill}: Clear TTD — aging dibekukan.`);
-          else toast.success(`Feedback tersimpan untuk ${waybill}.`);
-        },
         onError: (err: SubmitFeedbackError) => {
           if (err.code === 'VERSION_CONFLICT') {
             toast.warning(`${waybill}: data sudah diubah pihak lain. Baris di-refresh, cek lalu isi ulang.`);
@@ -243,38 +263,24 @@ export function FeedbackTable({
       {
         id: 'feedback',
         header: 'Feedback',
+        // Lencana jumlah feedback DIHAPUS dari sini — cukup satu di ikon jam (Aksi).
         cell: (c) => {
           const r = c.row.original;
-          const n = logLines(r).length;
-          return (
-            <div className="flex items-center gap-1.5">
-              <div className="min-w-0 flex-1">
-                {readOnly ? (
-                  r.Feedback ? (
-                    <span className="line-clamp-1">{r.Feedback}</span>
-                  ) : (
-                    <span className="text-muted-foreground italic">Belum ada</span>
-                  )
-                ) : (
-                  <FeedbackCell
-                    row={r}
-                    options={options}
-                    saving={submit.isPending && submit.variables?.waybill === r['No. Waybill']}
-                    onCommit={handleCommit}
-                    registerRef={registerRef}
-                    onEnterNext={focusNext}
-                  />
-                )}
-              </div>
-              {n > 1 && (
-                <span
-                  className="bg-brand-muted text-brand shrink-0 rounded px-1 text-[10px] font-semibold tabular-nums"
-                  title={`${n} kali feedback`}
-                >
-                  {n}×
-                </span>
-              )}
-            </div>
+          return readOnly ? (
+            r.Feedback ? (
+              <span className="line-clamp-1">{r.Feedback}</span>
+            ) : (
+              <span className="text-muted-foreground italic">Belum ada</span>
+            )
+          ) : (
+            <FeedbackCell
+              row={r}
+              options={options}
+              saving={submit.isPending && submit.variables?.waybill === r['No. Waybill']}
+              onCommit={handleCommit}
+              registerRef={registerRef}
+              onEnterNext={focusNext}
+            />
           );
         },
       },
