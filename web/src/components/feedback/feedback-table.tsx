@@ -266,38 +266,24 @@ export function FeedbackTable({
       {
         id: 'feedback',
         header: 'Feedback',
+        // Lencana jumlah feedback DIHAPUS dari sini — cukup satu di ikon jam (Aksi).
         cell: (c) => {
           const r = c.row.original;
-          const n = logLines(r).length;
-          return (
-            <div className="flex items-center gap-1.5">
-              <div className="min-w-0 flex-1">
-                {readOnly ? (
-                  r.Feedback ? (
-                    <span className="line-clamp-1">{r.Feedback}</span>
-                  ) : (
-                    <span className="text-muted-foreground italic">Belum ada</span>
-                  )
-                ) : (
-                  <FeedbackCell
-                    row={r}
-                    options={options}
-                    saving={submit.isPending && submit.variables?.waybill === r['No. Waybill']}
-                    onCommit={handleCommit}
-                    registerRef={registerRef}
-                    onEnterNext={focusNext}
-                  />
-                )}
-              </div>
-              {n > 1 && (
-                <span
-                  className="bg-brand-muted text-brand shrink-0 rounded px-1 text-[10px] font-semibold tabular-nums"
-                  title={`${n} kali feedback`}
-                >
-                  {n}×
-                </span>
-              )}
-            </div>
+          return readOnly ? (
+            r.Feedback ? (
+              <span className="line-clamp-1">{r.Feedback}</span>
+            ) : (
+              <span className="text-muted-foreground italic">Belum ada</span>
+            )
+          ) : (
+            <FeedbackCell
+              row={r}
+              options={options}
+              saving={submit.isPending && submit.variables?.waybill === r['No. Waybill']}
+              onCommit={handleCommit}
+              registerRef={registerRef}
+              onEnterNext={focusNext}
+            />
           );
         },
       },

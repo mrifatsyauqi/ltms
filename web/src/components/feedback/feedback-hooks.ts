@@ -67,18 +67,36 @@ export function useSubmitFeedback() {
       }
       return body.data as LongTailRow;
     },
+    // Optimistic update: teks langsung tampil & tersimpan di cache begitu Enter,
+    // backend menyusul di belakang layar. Mencegah teks "hilang sesaat" —
+    // terasa natural spt isi formulir web biasa.
+    onMutate: async (vars) => {
+      await qc.cancelQueries({ queryKey: ['longtail'] });
+      const prev = qc.getQueryData<LongTailRow[]>(['longtail']);
+      qc.setQueryData<LongTailRow[]>(['longtail'], (old) =>
+        old?.map((r) =>
+          r['No. Waybill'] === vars.waybill
+            ? { ...r, Feedback: vars.feedback, 'Status Terakhir': vars.feedback }
+            : r,
+        ),
+      );
+      return { prev };
+    },
     onSuccess: (updated) => {
-      // Perbarui hanya baris terkait di cache (hindari refetch seluruh list).
+      // Ganti dengan baris server final (versi/__isClearTTD/Log yang benar).
       qc.setQueryData<LongTailRow[]>(['longtail'], (old) =>
         old?.map((r) => (r['No. Waybill'] === updated['No. Waybill'] ? updated : r)),
       );
     },
-    onError: (err: SubmitFeedbackError) => {
-      // VERSION_CONFLICT membawa baris terkini → segarkan cache agar user lihat versi baru.
+    onError: (err: SubmitFeedbackError, _vars, ctx) => {
+      // VERSION_CONFLICT membawa baris terkini → tampilkan versi server itu.
       if (err.code === 'VERSION_CONFLICT' && err.currentRow) {
         qc.setQueryData<LongTailRow[]>(['longtail'], (old) =>
           old?.map((r) => (r['No. Waybill'] === err.currentRow!['No. Waybill'] ? err.currentRow! : r)),
         );
+      } else if (ctx?.prev) {
+        // Error lain → batalkan optimistic (kembalikan snapshot sebelum submit).
+        qc.setQueryData<LongTailRow[]>(['longtail'], ctx.prev);
       }
     },
   });
