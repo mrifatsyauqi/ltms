@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { deleteUser, updateUser } from '@/lib/apps-script/users';
+import { deleteUser, updateUser } from '@/lib/data/users';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 type Params = { params: Promise<{ email: string }> };

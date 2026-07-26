@@ -34,3 +34,16 @@ export function requireRole(actor: Actor, roles: string[]): Actor {
 export function aktifText(v: unknown): string {
   return v ? 'Aktif' : 'Nonaktif';
 }
+
+/** Pastikan Drop Point ada & aktif (ganti assertDropPointActive_ Apps Script). */
+export async function assertDropPointActive(kodeDp: string): Promise<void> {
+  const kode = String(kodeDp ?? '').trim();
+  const { data, error } = await db()
+    .from('master_drop_point')
+    .select('status_aktif')
+    .eq('kode_dp', kode)
+    .maybeSingle();
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  if (!data) throw new ApiError('VALIDATION_ERROR', `Drop Point "${kode}" tidak ditemukan`);
+  if (data.status_aktif !== true) throw new ApiError('VALIDATION_ERROR', `Drop Point "${kode}" tidak aktif`);
+}

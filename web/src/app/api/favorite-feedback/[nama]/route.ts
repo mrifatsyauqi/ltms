@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { removeFavoriteFeedback } from '@/lib/apps-script/favorite-feedback';
+import { removeFavoriteFeedback } from '@/lib/data/favorite-feedback';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 type Params = { params: Promise<{ nama: string }> };

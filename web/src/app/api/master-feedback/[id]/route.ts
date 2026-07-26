@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { deleteMasterFeedback, updateMasterFeedback } from '@/lib/apps-script/master-feedback';
+import { deleteMasterFeedback, updateMasterFeedback } from '@/lib/data/master-feedback';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 type Params = { params: Promise<{ id: string }> };
