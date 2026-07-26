@@ -1,4 +1,4 @@
-/** Canonical fields the rest of the system understands — must match apps-script Code.gs's LongTail payload shape. */
+/** Canonical fields the rest of the system understands — must match the LongTail import payload shape (lib/data/supabase/import). */
 export const CANONICAL_FIELDS = [
   'noWaybill',
   'statusTerakhir',

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TablePager } from '@/components/ui/table-pager';
 import { cn } from '@/lib/utils';
-import type { ImportBatchRow } from '@/lib/apps-script/import';
+import type { ImportBatchRow } from '@/lib/data/import';
 
 async function fetchBatches(): Promise<ImportBatchRow[]> {
   const res = await fetch('/api/import/history');

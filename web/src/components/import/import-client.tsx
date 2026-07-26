@@ -22,7 +22,7 @@ import { parseFiles } from '@/lib/import/parse';
 import { autoDetectMapping, isMappingComplete } from '@/lib/import/mapping';
 import { applyMapping, mergeAndDedup } from '@/lib/import/dedup';
 import { CANONICAL_FIELDS, CANONICAL_FIELD_LABELS, type HeaderMapping, type MappedRow } from '@/lib/import/types';
-import type { ImportResult, MappingTemplate } from '@/lib/apps-script/import';
+import type { ImportResult, MappingTemplate } from '@/lib/data/import';
 import { ImportHistory } from './import-history';
 
 const IGNORE = '__ignore__';

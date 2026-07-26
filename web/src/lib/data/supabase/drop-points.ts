@@ -5,7 +5,7 @@ import type {
   CreateDropPointInput,
   DropPointRow,
   UpdateDropPointInput,
-} from '@/lib/apps-script/drop-points';
+} from '@/lib/data/types';
 
 type DbRow = {
   kode_dp: string;

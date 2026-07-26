@@ -1,7 +1,7 @@
 import { db } from './client';
 import { aktifText, requireActor, requireRole } from './helpers';
 import { ApiError } from '@/lib/errors';
-import type { MasterFeedbackRow } from '@/lib/apps-script/master-feedback';
+import type { MasterFeedbackRow } from '@/lib/data/types';
 
 type DbRow = { id: number; nama_feedback: string; status_aktif: boolean };
 

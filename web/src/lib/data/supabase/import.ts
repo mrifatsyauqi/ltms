@@ -3,7 +3,7 @@ import { requireActor, requireRole } from './helpers';
 import { ApiError } from '@/lib/errors';
 import { isClearTTD, jakartaParts, jakartaStamp, planAutoClose } from './longtail-shared';
 import type { LongtailDbRow } from './longtail-shared';
-import type { ImportBatchRow, ImportResult, MappingTemplate } from '@/lib/apps-script/import';
+import type { ImportBatchRow, ImportResult, MappingTemplate } from '@/lib/data/types';
 import type { MappedRow } from '@/lib/import/types';
 
 const CHUNK = 500;

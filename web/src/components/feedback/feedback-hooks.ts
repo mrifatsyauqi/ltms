@@ -1,9 +1,9 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { LongTailRow } from '@/lib/apps-script/longtail';
-import type { MasterFeedbackRow } from '@/lib/apps-script/master-feedback';
-import type { FavoriteFeedbackRow } from '@/lib/apps-script/favorite-feedback';
+import type { LongTailRow } from '@/lib/data/longtail';
+import type { MasterFeedbackRow } from '@/lib/data/master-feedback';
+import type { FavoriteFeedbackRow } from '@/lib/data/favorite-feedback';
 
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url);

@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { ALL_SCOPE, useDashboardScope } from '@/components/dashboard/scope-context';
-import type { DropPointRow } from '@/lib/apps-script/drop-points';
+import type { DropPointRow } from '@/lib/data/drop-points';
 
 async function fetchDropPoints(): Promise<DropPointRow[]> {
   const res = await fetch('/api/drop-points');

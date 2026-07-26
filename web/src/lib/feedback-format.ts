@@ -1,4 +1,4 @@
-import type { LongTailRow } from '@/lib/apps-script/longtail';
+import type { LongTailRow } from '@/lib/data/longtail';
 
 // Catatan: aturan warna aging (Bagian 9.1 PRD) TIDAK lagi di sini - satu-satunya
 // definisi ada di <AgingBadge> / agingLevel() (components/ui/aging-badge.tsx),

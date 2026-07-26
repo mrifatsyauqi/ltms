@@ -11,7 +11,7 @@ import {
   nextAttempt,
   type LongtailDbRow,
 } from './longtail-shared';
-import type { CreateLongTailInput, LongTailRow, ResetPreview, ResetResult, UpdateLongTailInput } from '@/lib/apps-script/longtail';
+import type { CreateLongTailInput, LongTailRow, ResetPreview, ResetResult, UpdateLongTailInput } from '@/lib/data/types';
 
 async function findRow(waybill: string): Promise<LongtailDbRow | null> {
   const { data, error } = await db().from('longtail').select('*').eq('no_waybill', waybill).maybeSingle();

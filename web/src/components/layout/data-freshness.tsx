@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { Clock } from 'lucide-react';
-import type { LastUpdate } from '@/lib/apps-script/meta';
+import type { LastUpdate } from '@/lib/data/meta';
 
 async function fetchLastUpdate(): Promise<LastUpdate> {
   const res = await fetch('/api/last-update');

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
-import type { LongTailRow } from '@/lib/apps-script/longtail';
+import type { LongTailRow } from '@/lib/data/longtail';
 
 type Props = {
   row: LongTailRow;

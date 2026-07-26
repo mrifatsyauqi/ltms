@@ -28,7 +28,7 @@ import { SelectFilter } from '@/components/ui/select-filter';
 import { StatCard } from '@/components/ui/stat-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ALL_SCOPE, useDashboardScope } from '@/components/dashboard/scope-context';
-import type { DashboardData } from '@/lib/apps-script/dashboard';
+import type { DashboardData } from '@/lib/data/dashboard';
 
 /** Tanggal Jakarta (UTC+7) `daysAgo` hari lalu sebagai ISO 'YYYY-MM-DD'. */
 function jakDateIso(daysAgo: number): string {

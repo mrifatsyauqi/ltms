@@ -1,7 +1,7 @@
 // Helper MURNI (tanpa DB / tanpa import runtime dari '@/') supaya bisa diuji
 // unit langsung dg `node --experimental-strip-types`. longtail-shared.ts
 // mengekspor ulang semua ini, jadi import lama dari './longtail-shared' tetap jalan.
-import type { LongTailRow } from '@/lib/apps-script/longtail';
+import type { LongTailRow } from '@/lib/data/types';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 

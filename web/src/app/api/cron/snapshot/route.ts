@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { writeDailySnapshot } from '@/lib/data/dashboard';
-import { USE_SUPABASE } from '@/lib/data/backend';
 
 /**
  * Rekam snapshot Dashboard harian (v1.3). Dipanggil:
@@ -9,9 +8,6 @@ import { USE_SUPABASE } from '@/lib/data/backend';
  *  - Manual oleh Admin Cabang (sesi login) — utk seed hari ini / uji.
  */
 async function run() {
-  if (!USE_SUPABASE) {
-    return NextResponse.json({ ok: false, error: 'Snapshot hanya untuk backend Supabase' }, { status: 400 });
-  }
   try {
     const data = await writeDailySnapshot();
     return NextResponse.json({ ok: true, data });

@@ -2,7 +2,7 @@ import { db } from './client';
 import { requireActor } from './helpers';
 import { ApiError } from '@/lib/errors';
 import { jakartaParts } from './longtail-shared';
-import type { LastUpdate } from '@/lib/apps-script/meta';
+import type { LastUpdate } from '@/lib/data/types';
 
 /**
  * Waktu data Long Tail terakhir berubah (import/feedback) = entri terakhir di
