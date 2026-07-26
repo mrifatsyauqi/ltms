@@ -18,7 +18,7 @@ export async function requireActor(email: string | null | undefined): Promise<Ac
     .maybeSingle();
   if (error) throw new ApiError('INTERNAL_ERROR', error.message);
   if (!data || data.status_aktif !== true) {
-    throw new ApiError('UNAUTHENTICATED', 'User tidak dikenali atau nonaktif di tabel users');
+    throw new ApiError('UNAUTHENTICATED', `User "${e}" tidak dikenali atau nonaktif di tabel users Supabase`);
   }
   return { email: String(data.email), role: String(data.role), dropPoint: String(data.drop_point ?? '') };
 }
