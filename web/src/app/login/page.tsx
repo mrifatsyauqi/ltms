@@ -6,7 +6,10 @@ import { CredentialsLoginForm } from '@/components/auth/credentials-login-form';
 
 export default async function LoginPage() {
   const session = await auth();
-  if (session) {
+  // Hanya redirect kalau sesi benar-benar valid (punya role). Sesi setengah
+  // jadi (tanpa role) dibiarkan di halaman login — konsisten dgn (app)/layout,
+  // supaya tidak terjadi loop redirect & user bisa login ulang dengan benar.
+  if (session?.user?.role) {
     redirect('/');
   }
 

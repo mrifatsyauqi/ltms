@@ -29,7 +29,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const user = await verifyCredentials(email, password);
         if (!user) return null;
 
-        return { id: user.email, email: user.email, name: user.nama };
+        // Bawa role/dropPoint dari sini supaya jwt callback tak perlu query lagi.
+        return { id: user.email, email: user.email, name: user.nama, role: user.role, dropPoint: user.dropPoint };
       },
     }),
   ],
@@ -42,34 +43,45 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     updateAge: 60 * 60, // refresh sliding expiry setiap request lewat 1 jam sejak update terakhir
   },
   callbacks: {
-    async signIn({ user, profile }) {
-      // `profile` cuma ada untuk login Google; login Credentials pakai `user`
-      // (hasil authorize() di atas) - keduanya sama-sama punya `email`.
+    async signIn({ user, account, profile }) {
+      // Login Credentials SUDAH divalidasi penuh di authorize() (email+password+
+      // status aktif). Jangan query ulang di sini — panggilan DB berlebih yang
+      // bisa gagal setelah cookie sempat terbentuk = sumber bug "error tapi masuk".
+      if (account?.provider === 'credentials') return true;
+
+      // Login Google: email HARUS terdaftar & aktif di tabel users.
       const email = user?.email ?? profile?.email;
       if (!email) return false;
-
-      // Proyek ini sengaja tidak memakai domain Google Workspace (menggantikan
-      // PRD Bagian 4/5) — ALLOWED_GOOGLE_DOMAIN dibiarkan kosong secara permanen,
-      // jadi blok ini tidak aktif. Kontrol akses satu-satunya adalah whitelist
-      // email di sheet Users di bawah. (Cek hd hanya berlaku utk login Google.)
       if (ALLOWED_DOMAIN && profile && profile.hd !== ALLOWED_DOMAIN) {
         return false;
       }
-
-      const found = await getUserByEmail(email);
-      // Tidak ditemukan di sheet Users / status nonaktif → tolak login,
-      // meski autentikasi Google-nya sendiri berhasil. Ini yang menggantikan
-      // domain restriction sebagai kontrol akses utama. (Login Credentials
-      // sudah divalidasi status aktif di authorize() di atas juga.)
-      return found !== null;
+      try {
+        const found = await getUserByEmail(email);
+        return found !== null;
+      } catch {
+        // Error DB saat validasi -> tolak (jangan loloskan sesi setengah jadi).
+        return false;
+      }
     },
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user, account, trigger }) {
       if (trigger === 'signIn' && user?.email) {
-        const found = await getUserByEmail(user.email);
-        if (found) {
-          token.role = found.role;
-          token.dropPoint = found.dropPoint;
-          token.nama = found.nama;
+        if (account?.provider === 'credentials') {
+          // role/dropPoint sudah dibawa dari authorize() — tanpa query lagi.
+          const u = user as { role?: string; dropPoint?: string; name?: string | null };
+          token.role = u.role;
+          token.dropPoint = u.dropPoint;
+          token.nama = u.name ?? undefined;
+        } else {
+          try {
+            const found = await getUserByEmail(user.email);
+            if (found) {
+              token.role = found.role;
+              token.dropPoint = found.dropPoint;
+              token.nama = found.nama;
+            }
+          } catch {
+            /* biarkan token tanpa role -> di-gate di layout/login */
+          }
         }
       }
       return token;

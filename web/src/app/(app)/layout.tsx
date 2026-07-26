@@ -10,7 +10,10 @@ import { DashboardScopeProvider } from '@/components/dashboard/scope-context';
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
-  if (!session) redirect('/login');
+  // Sesi valid HARUS punya role (diisi jwt callback hanya untuk login yang
+  // lolos penuh). Sesi "setengah jadi" tanpa role ditolak — cegah akses via
+  // cookie yang terbentuk tak sempurna.
+  if (!session?.user?.role) redirect('/login');
 
   const { user } = session;
 
