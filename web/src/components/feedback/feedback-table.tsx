@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   type ColumnDef,
   type SortingState,
@@ -91,6 +91,9 @@ export function FeedbackTable({
 
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   const [activeWaybill, setActiveWaybill] = useState<string | null>(null);
+  // Input berikutnya yang harus tetap fokus setelah submit (survive re-render
+  // akibat setQueryData). Ala spreadsheet: enter/pilih -> lompat & siap ketik.
+  const pendingFocusRef = useRef<string | null>(null);
 
   const rows = useMemo(() => data ?? [], [data]);
 
@@ -128,17 +131,37 @@ export function FeedbackTable({
   }
 
   function focusNext(currentWaybill: string) {
+    pendingFocusRef.current = null;
     const ordered = table.getRowModel().rows.map((r) => r.original['No. Waybill']);
     const idx = ordered.indexOf(currentWaybill);
     for (let i = idx + 1; i < ordered.length; i++) {
       const el = inputRefs.current.get(ordered[i]);
       if (el && !el.disabled) {
+        pendingFocusRef.current = ordered[i]; // target fokus yg dipertahankan
         el.focus();
         setActiveWaybill(ordered[i]);
         return;
       }
     }
   }
+
+  // Setelah data ter-update (submit sukses -> setQueryData -> re-render), pastikan
+  // fokus tetap di input tujuan supaya user bisa langsung mengetik (tanpa klik).
+  // Hanya diterapkan bila fokus benar-benar hilang; kalau user sudah pindah ke
+  // input lain secara sadar, jangan direbut.
+  useEffect(() => {
+    const wb = pendingFocusRef.current;
+    if (!wb) return;
+    const el = inputRefs.current.get(wb);
+    if (!el || el.disabled) return;
+    const activeEl = document.activeElement;
+    // Hanya kembalikan bila fokus benar-benar hilang (jatuh ke body akibat
+    // re-render). Jika masih di el, atau user sengaja pindah ke elemen lain,
+    // jangan direbut.
+    const focusLost = !activeEl || activeEl === document.body;
+    if (focusLost) el.focus();
+    pendingFocusRef.current = null;
+  }, [rows]);
 
   function handleCommit(waybill: string, feedback: string, baseVersion: string | undefined) {
     submit.mutate(
