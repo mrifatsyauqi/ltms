@@ -8,9 +8,13 @@ let cached: SupabaseClient | null = null;
 
 export function db(): SupabaseClient {
   if (cached) return cached;
-  // Buang trailing slash: "https://x.supabase.co/" -> jadi "//rest/v1" (double
-  // slash) yang ditolak Supabase ("Invalid path specified in request URL").
-  const url = (process.env.SUPABASE_URL || '').trim().replace(/\/+$/, '');
+  // Normalkan SUPABASE_URL ke base project ("https://<ref>.supabase.co"):
+  // buang path "/rest/v1" bila ter-copy dari halaman Data API, dan trailing
+  // slash. Keduanya bikin "Invalid path specified in request URL".
+  const url = (process.env.SUPABASE_URL || '')
+    .trim()
+    .replace(/\/rest\/v1\/?$/i, '')
+    .replace(/\/+$/, '');
   const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
   if (!url || !key) {
     throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY belum diset di environment');
