@@ -40,6 +40,11 @@ export async function getDashboard(actorEmail: string, dp?: string): Promise<Das
   if (!isCabang) dpFilter = actor.dropPoint;
   else if (dp && String(dp) !== 'ALL') dpFilter = String(dp);
 
+  return computeDashboard(dpFilter, actor.role, actor.dropPoint || '');
+}
+
+/** Inti agregasi Dashboard tanpa auth — dipakai getDashboard (live) & snapshot cron. */
+async function computeDashboard(dpFilter: string | null, role: string, dropPoint: string): Promise<DashboardData> {
   const rows = await fetchScoped(dpFilter);
 
   const total = rows.length;
@@ -127,8 +132,8 @@ export async function getDashboard(actorEmail: string, dp?: string): Promise<Das
   });
 
   return {
-    role: actor.role,
-    dropPoint: actor.dropPoint || '',
+    role,
+    dropPoint,
     summary: {
       total,
       sudahFeedback: sudah,
@@ -146,4 +151,59 @@ export async function getDashboard(actorEmail: string, dp?: string): Promise<Das
     monitoringDp,
     progressPerSprinter,
   };
+}
+
+/**
+ * Rekam snapshot Dashboard harian (v1.3): scope 'ALL' + tiap DP aktif. Idempotent
+ * per hari (upsert (tanggal, scope)), jadi aman dipanggil ulang. Dipanggil cron
+ * (~23:55 WIB) atau manual oleh Admin Cabang.
+ */
+export async function writeDailySnapshot(): Promise<{ tanggal: string; scopes: number }> {
+  const tanggal = jakartaTodayIso();
+  const rows: { tanggal: string; scope: string; data: DashboardData }[] = [];
+
+  rows.push({ tanggal, scope: 'ALL', data: await computeDashboard(null, 'Admin Cabang', '') });
+
+  const { data: dps, error } = await db()
+    .from('master_drop_point')
+    .select('kode_dp')
+    .eq('status_aktif', true);
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  for (const d of (dps ?? []) as { kode_dp: string }[]) {
+    const kode = String(d.kode_dp);
+    rows.push({ tanggal, scope: kode, data: await computeDashboard(kode, 'Admin DP', kode) });
+  }
+
+  const { error: upErr } = await db().from('dashboard_snapshot').upsert(rows, { onConflict: 'tanggal,scope' });
+  if (upErr) throw new ApiError('INTERNAL_ERROR', upErr.message);
+  return { tanggal, scopes: rows.length };
+}
+
+/**
+ * Baca Dashboard "keadaan tanggal X" dari snapshot. Scope ditentukan role/DP
+ * aktor (Admin DP -> DP-nya; Admin Cabang -> 'ALL' atau DP terpilih). Null bila
+ * snapshot tanggal itu belum ada (mis. sebelum fitur aktif). role/dropPoint
+ * di-override dari aktor supaya UI konsisten.
+ */
+export async function getDashboardSnapshot(
+  actorEmail: string,
+  dateIso: string,
+  dp?: string,
+): Promise<DashboardData | null> {
+  const actor = await requireActor(actorEmail);
+  const isCabang = actor.role === 'Admin Cabang';
+  let scope = 'ALL';
+  if (!isCabang) scope = actor.dropPoint;
+  else if (dp && String(dp) !== 'ALL') scope = String(dp);
+
+  const { data, error } = await db()
+    .from('dashboard_snapshot')
+    .select('data')
+    .eq('tanggal', dateIso)
+    .eq('scope', scope)
+    .maybeSingle();
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  if (!data) return null;
+  const dd = (data as { data: DashboardData }).data;
+  return { ...dd, role: actor.role, dropPoint: actor.dropPoint || '' };
 }
