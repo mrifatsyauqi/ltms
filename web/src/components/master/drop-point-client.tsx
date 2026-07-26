@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import type { DropPointRow } from '@/lib/apps-script/drop-points';
+import type { DropPointRow } from '@/lib/data/drop-points';
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);

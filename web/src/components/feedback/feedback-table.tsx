@@ -28,7 +28,7 @@ import { TruncatedText } from '@/components/ui/truncated-text';
 import { CopyButton } from '@/components/ui/copy-button';
 import { AGING_ROW_CLASS, AGING_STICKY_BG, AgingBadge, agingLevel } from '@/components/ui/aging-badge';
 import { cn } from '@/lib/utils';
-import type { LongTailRow } from '@/lib/apps-script/longtail';
+import type { LongTailRow } from '@/lib/data/longtail';
 import { formatWaktuSampai, umurValue } from '@/lib/feedback-format';
 import {
   useFeedbackOptions,

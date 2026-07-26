@@ -1,7 +1,7 @@
 import { db } from './client';
 import { requireActor } from './helpers';
 import { ApiError } from '@/lib/errors';
-import type { FavoriteFeedbackRow } from '@/lib/apps-script/favorite-feedback';
+import type { FavoriteFeedbackRow } from '@/lib/data/types';
 
 type DbRow = { email_admin_dp: string; nama_feedback: string; urutan: number };
 

@@ -2,7 +2,7 @@ import { db } from './client';
 import { requireActor } from './helpers';
 import { ApiError } from '@/lib/errors';
 import { isClearTTD, jakartaParts } from './longtail-shared';
-import type { RiwayatFeedbackRow } from '@/lib/apps-script/riwayat-feedback';
+import type { RiwayatFeedbackRow } from '@/lib/data/types';
 
 const AUTO_CLOSE = 'Auto-Close (tidak muncul di import)';
 

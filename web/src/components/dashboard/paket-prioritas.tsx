@@ -6,7 +6,7 @@ import { ArrowRight } from 'lucide-react';
 import { SectionCard } from '@/components/layout/section-card';
 import { AgingBadge } from '@/components/ui/aging-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { LongTailRow } from '@/lib/apps-script/longtail';
+import type { LongTailRow } from '@/lib/data/longtail';
 
 const MAX_ROWS = 6;
 

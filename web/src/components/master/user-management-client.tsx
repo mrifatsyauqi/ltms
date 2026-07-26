@@ -19,8 +19,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import type { UserRow } from '@/lib/apps-script/users';
-import type { DropPointRow } from '@/lib/apps-script/drop-points';
+import type { UserRow } from '@/lib/data/users';
+import type { DropPointRow } from '@/lib/data/drop-points';
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);

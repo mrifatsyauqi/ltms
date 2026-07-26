@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { ImportBatchRow } from '@/lib/apps-script/import';
+import type { ImportBatchRow } from '@/lib/data/import';
 
 async function fetchHistory(): Promise<ImportBatchRow[]> {
   const res = await fetch('/api/import/history');

@@ -1,14 +1,14 @@
 import { db } from './client';
 import { verifyPassword } from '@/lib/password';
-import type { AppsScriptUser } from '@/lib/apps-script';
-import type { CredentialsUser } from '@/lib/apps-script/users';
+import type { AuthUser } from '@/lib/data/types';
+import type { CredentialsUser } from '@/lib/data/types';
 
 /**
  * Resolusi role + Drop Point dari tabel users (pengganti getUserByEmail Apps
  * Script). Null = tolak login: tidak ada / nonaktif. Error DB dilempar supaya
  * salah konfigurasi terlihat (bukan diam-diam menolak semua login).
  */
-export async function getUserByEmail(email: string): Promise<AppsScriptUser | null> {
+export async function getUserByEmail(email: string): Promise<AuthUser | null> {
   const e = String(email ?? '').trim().toLowerCase();
   if (!e) return null;
   const { data, error } = await db()

@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import type { ResetPreview, ResetResult } from '@/lib/apps-script/longtail';
+import type { ResetPreview, ResetResult } from '@/lib/data/longtail';
 
 const CONFIRM_WORD = 'RESET';
 

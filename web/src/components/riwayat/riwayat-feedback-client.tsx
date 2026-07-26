@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { SelectFilter } from '@/components/ui/select-filter';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import type { RiwayatFeedbackRow } from '@/lib/apps-script/riwayat-feedback';
+import type { RiwayatFeedbackRow } from '@/lib/data/riwayat-feedback';
 
 function isoDaysAgo(days: number) {
   const d = new Date();

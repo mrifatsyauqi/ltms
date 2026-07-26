@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import type { MasterFeedbackRow } from '@/lib/apps-script/master-feedback';
+import type { MasterFeedbackRow } from '@/lib/data/master-feedback';
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);

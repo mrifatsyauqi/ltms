@@ -1,7 +1,7 @@
 import { db } from './client';
 import { aktifText, assertDropPointActive, requireActor, requireRole } from './helpers';
 import { ApiError } from '@/lib/errors';
-import type { CreateUserInput, UpdateUserInput, UserRow } from '@/lib/apps-script/users';
+import type { CreateUserInput, UpdateUserInput, UserRow } from '@/lib/data/types';
 
 type DbRow = {
   nama: string;

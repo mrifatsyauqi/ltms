@@ -2,7 +2,7 @@
 
 import { Bar, BarChart, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { cn } from '@/lib/utils';
-import type { MonitoringDpRow } from '@/lib/apps-script/dashboard';
+import type { MonitoringDpRow } from '@/lib/data/dashboard';
 
 export type Pkt3HariDatum = { dp: string; pct: number; lebih3: number; total: number };
 

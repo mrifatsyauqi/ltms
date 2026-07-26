@@ -8,7 +8,7 @@ import {
   jakartaTodayIso,
   type LongtailDbRow,
 } from './longtail-shared';
-import type { DashboardData } from '@/lib/apps-script/dashboard';
+import type { DashboardData } from '@/lib/data/types';
 
 /** Ambil baris LongTail ter-scope: Admin DP -> DP-nya; Admin Cabang -> semua atau 1 DP (filter CAKUPAN). */
 async function fetchScoped(dpFilter: string | null): Promise<LongtailDbRow[]> {

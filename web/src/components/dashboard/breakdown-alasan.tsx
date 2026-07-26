@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { SectionCard } from '@/components/layout/section-card';
-import type { LongTailRow } from '@/lib/apps-script/longtail';
+import type { LongTailRow } from '@/lib/data/longtail';
 
 async function fetchLongTail(): Promise<LongTailRow[]> {
   const res = await fetch('/api/longtail');
