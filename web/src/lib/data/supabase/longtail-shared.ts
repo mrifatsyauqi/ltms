@@ -95,14 +95,33 @@ export async function fetchLongtailScoped(actor: Actor): Promise<LongtailDbRow[]
   return out;
 }
 
-/** Waktu Jakarta (UTC+7) sebagai bagian tanggal 'dd/MM/yy' & jam 'HH:mm:ss'. */
-export function jakartaNowParts(): { tanggal: string; jam: string } {
-  const j = new Date(Date.now() + 7 * 3600 * 1000);
+/** Bagian tanggal 'dd/MM/yy' & jam 'HH:mm:ss' untuk sebuah waktu, di zona Jakarta (UTC+7). */
+export function jakartaParts(d: Date): { tanggal: string; jam: string } {
+  const j = new Date(d.getTime() + 7 * 3600 * 1000);
   const p = (n: number) => String(n).padStart(2, '0');
   return {
     tanggal: `${p(j.getUTCDate())}/${p(j.getUTCMonth() + 1)}/${String(j.getUTCFullYear()).slice(-2)}`,
     jam: `${p(j.getUTCHours())}:${p(j.getUTCMinutes())}:${p(j.getUTCSeconds())}`,
   };
+}
+
+/** Waktu sekarang Jakarta (UTC+7) sebagai bagian tanggal 'dd/MM/yy' & jam 'HH:mm:ss'. */
+export function jakartaNowParts(): { tanggal: string; jam: string } {
+  return jakartaParts(new Date());
+}
+
+/** Tanggal hari ini di Jakarta sebagai ISO 'YYYY-MM-DD' (utk batas query timestamptz). */
+export function jakartaTodayIso(): string {
+  const j = new Date(Date.now() + 7 * 3600 * 1000);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${j.getUTCFullYear()}-${p(j.getUTCMonth() + 1)}-${p(j.getUTCDate())}`;
+}
+
+/** Cap waktu 'yyyyMMddHHmmss' Jakarta (utk Batch ID import). */
+export function jakartaStamp(): string {
+  const j = new Date(Date.now() + 7 * 3600 * 1000);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${j.getUTCFullYear()}${p(j.getUTCMonth() + 1)}${p(j.getUTCDate())}${p(j.getUTCHours())}${p(j.getUTCMinutes())}${p(j.getUTCSeconds())}`;
 }
 
 /** Attempt berikutnya = jumlah baris Activity_Log utk waybill itu + 1. */

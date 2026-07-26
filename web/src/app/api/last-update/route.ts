@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { getLastUpdate } from '@/lib/apps-script/meta';
+import { getLastUpdate } from '@/lib/data/meta';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 export async function GET() {
