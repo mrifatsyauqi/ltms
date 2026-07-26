@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { createLongTail, listLongTail } from '@/lib/apps-script/longtail';
+import { createLongTail, listLongTail } from '@/lib/data/longtail';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 export async function GET() {

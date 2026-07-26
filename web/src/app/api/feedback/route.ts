@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { submitFeedback } from '@/lib/apps-script/longtail';
+import { submitFeedback } from '@/lib/data/longtail';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 export async function POST(request: Request) {
