@@ -126,6 +126,7 @@ create table longtail_archive (
   delivery_attempt  int,
   feedback          text,
   log_feedback      text,
+  tipe_close        text,                    -- 'Clear TTD' | 'Close Alur' (v1.3 auto-close)
   tanggal_arsip     date not null default current_date
 );
 

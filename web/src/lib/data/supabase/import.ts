@@ -1,7 +1,7 @@
 import { db } from './client';
 import { requireActor, requireRole } from './helpers';
 import { ApiError } from '@/lib/errors';
-import { isClearTTD, jakartaParts, jakartaStamp } from './longtail-shared';
+import { isClearTTD, jakartaParts, jakartaStamp, planAutoClose } from './longtail-shared';
 import type { LongtailDbRow } from './longtail-shared';
 import type { ImportBatchRow, ImportResult, MappingTemplate } from '@/lib/apps-script/import';
 import type { MappedRow } from '@/lib/import/types';
@@ -197,6 +197,74 @@ export async function importLongTail(
     if (error) throw new ApiError('INTERNAL_ERROR', error.message);
   }
 
+  // === TAHAP 2 (v1.3): AUTO-CLOSE waybill yang HILANG dari tarikan ===
+  // Scope per-DP: hanya DP yang muncul di file; DP lain tidak tersentuh.
+  const presentLower = new Set(items.map((i) => i.wb.toLowerCase()));
+  const dpsInFile = [...new Set(items.map((i) => s(i.row.dpSampai).trim()).filter(Boolean))];
+  let closed = 0, closedClearTTD = 0, closedAlur = 0;
+
+  if (dpsInFile.length) {
+    // Ambil semua baris AKTIF di DP tsb (paginasi 1000 + chunk .in()).
+    const active: LongtailDbRow[] = [];
+    for (const dpChunk of chunks(dpsInFile, CHUNK)) {
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await db()
+          .from('longtail')
+          .select('*')
+          .in('dp_sampai', dpChunk)
+          .order('no_waybill')
+          .range(from, from + 999);
+        if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+        const batch = (data ?? []) as LongtailDbRow[];
+        active.push(...batch);
+        if (batch.length < 1000) break;
+      }
+    }
+
+    const plan = planAutoClose(active, presentLower);
+    if (plan.length) {
+      const archiveRows = plan.map(({ row, decision }) => ({
+        no_waybill: row.no_waybill,
+        status_terakhir: decision.statusTerakhir, // 'CLOSE ALUR' utk Close Alur; tak diubah utk Clear TTD
+        alasan_bermasalah: row.alasan_bermasalah,
+        dp_sampai: row.dp_sampai,
+        waktu_sampai: row.waktu_sampai,
+        umur_frozen: decision.umurFrozen, // Close Alur -> umur di-freeze; Clear TTD -> apa adanya
+        sprinter_delivery: row.sprinter_delivery,
+        cod: row.cod,
+        delivery_attempt: row.delivery_attempt,
+        feedback: row.feedback,
+        log_feedback: row.log_feedback,
+        tipe_close: decision.tipeClose, // 'Clear TTD' | 'Close Alur'
+      }));
+      for (const chunk of chunks(archiveRows, CHUNK)) {
+        const { error } = await db().from('longtail_archive').upsert(chunk, { onConflict: 'no_waybill' });
+        if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+      }
+      const wbs = plan.map((p) => p.row.no_waybill);
+      for (const chunk of chunks(wbs, CHUNK)) {
+        const { error } = await db().from('longtail').delete().in('no_waybill', chunk);
+        if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+      }
+      const closeLogs: LogInsert[] = plan.map(({ row, decision }) => ({
+        user_email: actor.email, // jejak Admin Cabang pemicu import (bukan dikosongkan)
+        dp: s(row.dp_sampai),
+        waybill: row.no_waybill,
+        attempt_ke: 0, // event sistem, bukan attempt feedback
+        data_lama: decision.dataLama,
+        data_baru: decision.dataBaru,
+        sumber: 'Auto-Close (tidak muncul di import)',
+      }));
+      for (const chunk of chunks(closeLogs, CHUNK)) {
+        const { error } = await db().from('activity_log').insert(chunk);
+        if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+      }
+      closed = plan.length;
+      closedClearTTD = plan.filter((p) => p.decision.tipeClose === 'Clear TTD').length;
+      closedAlur = closed - closedClearTTD;
+    }
+  }
+
   const batchId = 'B' + jakartaStamp() + '-' + Math.floor(Math.random() * 1000);
   const { error: batchErr } = await db().from('import_batch').insert({
     batch_id: batchId,
@@ -206,11 +274,11 @@ export async function importLongTail(
     berhasil: inserted + updated + needReview,
     gagal: skipped,
     status: skipped > 0 ? 'Sebagian' : 'Sukses',
-    keterangan: `Baru ${inserted}, Update ${updated}, Perlu Review ${needReview}, Skip ${skipped}`,
+    keterangan: `Baru ${inserted}, Update ${updated}, Perlu Review ${needReview}, Skip ${skipped}, Close ${closed}`,
   });
   if (batchErr) throw new ApiError('INTERNAL_ERROR', batchErr.message);
 
-  return { batchId, total: incoming.length, inserted, updated, needReview, skipped };
+  return { batchId, total: incoming.length, inserted, updated, needReview, skipped, closed, closedClearTTD, closedAlur };
 }
 
 export async function listImportBatches(actorEmail: string): Promise<ImportBatchRow[]> {

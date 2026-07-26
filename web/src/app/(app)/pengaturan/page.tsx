@@ -1,6 +1,5 @@
 import { auth } from '@/auth';
 import { PageHeader } from '@/components/layout/page-header';
-import { ArchiveCard } from '@/components/settings/archive-card';
 import { ResetLongTailCard } from '@/components/settings/reset-longtail-card';
 
 export default async function Page() {
@@ -18,7 +17,6 @@ export default async function Page() {
     <>
       <PageHeader title="Pengaturan" description="Pemeliharaan data & preferensi sistem." />
       <div className="max-w-2xl space-y-3 p-3">
-        <ArchiveCard />
         <ResetLongTailCard />
       </div>
     </>

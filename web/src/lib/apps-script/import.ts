@@ -8,6 +8,10 @@ export type ImportResult = {
   updated: number;
   needReview: number;
   skipped: number;
+  /** Auto-Close (v1.3, Supabase): jumlah waybill yang hilang dari tarikan lalu diarsipkan. */
+  closed?: number;
+  closedClearTTD?: number;
+  closedAlur?: number;
 };
 
 export type ImportBatchRow = {
