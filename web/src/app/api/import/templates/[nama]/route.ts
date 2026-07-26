@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { deleteMappingTemplate } from '@/lib/apps-script/import';
+import { deleteMappingTemplate } from '@/lib/data/import';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 type Params = { params: Promise<{ nama: string }> };

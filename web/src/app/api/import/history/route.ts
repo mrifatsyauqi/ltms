@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { listImportBatches } from '@/lib/apps-script/import';
+import { listImportBatches } from '@/lib/data/import';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 export async function GET() {

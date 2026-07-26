@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { addFavoriteFeedback, listFavoriteFeedback } from '@/lib/apps-script/favorite-feedback';
+import { addFavoriteFeedback, listFavoriteFeedback } from '@/lib/data/favorite-feedback';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 export async function GET() {

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { listRiwayatFeedback } from '@/lib/apps-script/riwayat-feedback';
+import { listRiwayatFeedback } from '@/lib/data/riwayat-feedback';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 export async function GET(request: Request) {

@@ -5,6 +5,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
@@ -18,6 +26,8 @@ import type { ImportResult, MappingTemplate } from '@/lib/apps-script/import';
 import { ImportHistory } from './import-history';
 
 const IGNORE = '__ignore__';
+/** Di bawah ambang ini, import memicu banyak Auto-Close -> minta konfirmasi (Bagian 7.4). */
+const SMALL_FILE_THRESHOLD = 100;
 
 type EntryStatus = 'parsing' | 'error' | 'needs-mapping' | 'ready' | 'importing' | 'imported' | 'import-error';
 
@@ -48,7 +58,14 @@ export function ImportClient() {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [smallConfirm, setSmallConfirm] = useState<{ entry: FileEntry; resolve: (ok: boolean) => void } | null>(null);
   const queryClient = useQueryClient();
+
+  /** Konfirmasi file kecil (<100 baris) sebelum import; resolve(true)=lanjut. */
+  const askProceedSmall = useCallback(
+    (entry: FileEntry) => new Promise<boolean>((resolve) => setSmallConfirm({ entry, resolve })),
+    [],
+  );
 
   const templatesQuery = useQuery({ queryKey: ['import-templates'], queryFn: fetchTemplates });
 
@@ -130,6 +147,16 @@ export function ImportClient() {
   }
 
   async function importOne(entry: FileEntry) {
+    // Pengaman: file kecil berpotensi meng-Auto-Close banyak paket -> konfirmasi.
+    const n = entry.mappedRows?.length ?? 0;
+    if (n < SMALL_FILE_THRESHOLD) {
+      const ok = await askProceedSmall(entry);
+      if (!ok) {
+        setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, status: 'ready' } : e)));
+        toast.info(`${entry.fileName}: import dibatalkan`);
+        return;
+      }
+    }
     setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, status: 'importing' } : e)));
     try {
       const res = await fetch('/api/import', {
@@ -141,7 +168,10 @@ export function ImportClient() {
       if (!body.ok) throw new Error(body.message || body.error);
       setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, status: 'imported', result: body.data } : e)));
       const r: ImportResult = body.data;
-      toast.success(`${entry.fileName}: ${r.inserted} baru, ${r.updated} update, ${r.needReview} perlu review, ${r.skipped} dilewati`);
+      const closeInfo = r.closed ? `, ${r.closed} di-close` : '';
+      toast.success(
+        `${entry.fileName}: ${r.inserted} baru, ${r.updated} update, ${r.needReview} perlu review, ${r.skipped} dilewati${closeInfo}`,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Gagal import';
       setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, status: 'import-error', error: message } : e)));
@@ -232,6 +262,16 @@ export function ImportClient() {
                   <p className="text-sm">
                     {entry.result.inserted} baru • {entry.result.updated} update • {entry.result.needReview} perlu review •{' '}
                     {entry.result.skipped} dilewati
+                    {entry.result.closed ? (
+                      <>
+                        {' '}
+                        • {entry.result.closed} di-close
+                        <span className="text-muted-foreground">
+                          {' '}
+                          ({entry.result.closedClearTTD ?? 0} Clear TTD, {entry.result.closedAlur ?? 0} Close Alur)
+                        </span>
+                      </>
+                    ) : null}
                   </p>
                 )}
 
@@ -330,6 +370,48 @@ export function ImportClient() {
           <ImportHistory />
         </CardContent>
       </Card>
+
+      <Dialog
+        open={!!smallConfirm}
+        onOpenChange={(o) => {
+          if (!o && smallConfirm) {
+            smallConfirm.resolve(false);
+            setSmallConfirm(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>File kecil — konfirmasi import</DialogTitle>
+            <DialogDescription>
+              File <span className="font-medium">{smallConfirm?.entry.fileName}</span> hanya berisi{' '}
+              <span className="font-medium">{smallConfirm?.entry.mappedRows?.length ?? 0}</span> baris (&lt;{' '}
+              {SMALL_FILE_THRESHOLD}). Paket DP di file ini yang <span className="font-medium">tidak</span> tercantum akan
+              otomatis di-<span className="font-medium">Close</span> (Clear TTD / CLOSE ALUR) dan diarsipkan. Pastikan
+              file tarikan sudah lengkap sebelum melanjutkan.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                smallConfirm?.resolve(false);
+                setSmallConfirm(null);
+              }}
+            >
+              Batal
+            </Button>
+            <Button
+              onClick={() => {
+                smallConfirm?.resolve(true);
+                setSmallConfirm(null);
+              }}
+            >
+              Lanjut Import
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

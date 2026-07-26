@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { deleteLongTail, getLongTail, updateLongTail } from '@/lib/apps-script/longtail';
+import { deleteLongTail, getLongTail, updateLongTail } from '@/lib/data/longtail';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 type Params = { params: Promise<{ waybill: string }> };

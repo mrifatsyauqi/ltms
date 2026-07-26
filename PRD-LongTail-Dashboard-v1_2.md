@@ -2,10 +2,11 @@
 
 # LongTail Dashboard Management System (LTMS)
 
-**Version:** 1.2\
+**Version:** 1.3\
 **Status:** Draft for Review\
 **Perubahan dari v1.0 → v1.1:** Menambahkan keputusan arsitektur database, KPI, Out of Scope, penanganan konflik konkurensi, aturan aging pasca Clear TTD, notifikasi, master data, dan error handling import.\
-**Perubahan v1.1 → v1.2:** Mengganti pendekatan sheet-per-hari dengan model "1 waybill = 1 baris" + kolom **Log Feedback** (riwayat feedback menumpuk dalam satu sel, tampil ke user) yang didukung sheet tersembunyi `Activity_Log` (data terstruktur untuk Dashboard). Lihat **Lampiran A – Changelog** di akhir dokumen.
+**Perubahan v1.1 → v1.2:** Mengganti pendekatan sheet-per-hari dengan model "1 waybill = 1 baris" + kolom **Log Feedback** (riwayat feedback menumpuk dalam satu sel, tampil ke user) yang didukung sheet tersembunyi `Activity_Log` (data terstruktur untuk Dashboard).\
+**Perubahan v1.2 → v1.3:** Mengganti mekanisme arsip "Clear TTD > 30 hari" dengan **Auto-Close real-time saat import** (paket yang hilang dari tarikan JMS langsung diarsipkan sebagai `Clear TTD` atau `CLOSE ALUR`); menambahkan status **CLOSE ALUR** dan pengaman konfirmasi import file < 100 baris (Bagian 7.4). Lihat **Lampiran A – Changelog** di akhir dokumen.
 
 ------------------------------------------------------------------------
 
@@ -72,9 +73,13 @@ bukan solusi permanen jangka panjang, dengan batasan berikut:
 
 -   Batas volume data aktif: maksimum **±20.000 baris** pada sheet
     `LongTail` sebelum evaluasi migrasi wajib dilakukan.
--   Data yang sudah **Clear TTD lebih dari 30 hari** diarsipkan
-    otomatis ke sheet terpisah (`LongTail_Archive`) agar sheet utama
-    tetap ringan.
+-   ~~Data yang sudah **Clear TTD lebih dari 30 hari** diarsipkan
+    otomatis ke sheet terpisah (`LongTail_Archive`).~~ **DIGANTI di
+    v1.3** oleh mekanisme **Auto-Close saat import** (lihat Bagian 7.4):
+    paket tidak lagi diarsipkan berdasarkan umur, melainkan **saat
+    paket hilang dari tarikan JMS** pada import berikutnya. `LongTail`
+    aktif otomatis hanya berisi paket yang masih longtail di JMS,
+    sehingga tetap ringan tanpa perlu ambang 30 hari.
 -   Jika volume harian/mingguan melebihi kapasitas Google Sheets API
     (rate limit) atau waktu respons dashboard > 3 detik, tim wajib
     mengevaluasi migrasi ke database relasional (misal PostgreSQL/
@@ -219,6 +224,54 @@ sebelumnya (paket lama yang belum Clear TTD):
     lain (termasuk Auto Save feedback) yang bentrok ke sheet yang sama
     di waktu bersamaan.
 
+## 7.4 Auto-Close Paket yang Hilang dari Tarikan (Baru v1.3)
+
+**Menggantikan** aturan arsip "Clear TTD > 30 hari" (Bagian 3). Setiap
+hari Admin Cabang meng-import file tarikan JMS **per DP**, dan file itu
+**hanya** berisi paket yang **masih** berstatus longtail di JMS. Maka
+waybill yang kemarin ada di `LongTail` tetapi **tidak muncul lagi** di
+file hari ini menandakan JMS sudah tidak menganggapnya longtail.
+
+Setelah sebuah file berhasil diimport untuk DP tertentu, sistem
+merekonsiliasi **scope per DP** (DP lain yang tidak ikut diimport hari
+itu tidak tersentuh):
+
+1.  Kumpulkan semua `No. Waybill` di file yang baru diimport.
+2.  Ambil semua waybill `LongTail` **aktif** untuk **DP yang sama**.
+3.  Untuk waybill yang ada di `LongTail` tetapi **tidak ada** di file
+    baru, tentukan status berdasarkan kondisinya:
+    -   **Sudah Clear TTD** → diarsipkan **apa adanya** dengan penanda
+        `tipe_close = "Clear TTD"` (status & umur tidak diubah; data ini
+        sudah valid dan pasti).
+    -   **Belum Clear TTD** (masih On Delivery, Reschedule, PAKET
+        BERMASALAH, CEK, dsb.) → `Status Terakhir` di-set **`CLOSE
+        ALUR`**, **Umur Paket dibekukan** (sama seperti freeze saat Clear
+        TTD, karena sudah tidak *actionable*), penanda `tipe_close =
+        "Close Alur"`.
+4.  Kedua kasus **dipindahkan** ke `LongTail_Archive` dan **dihapus**
+    dari `LongTail` aktif → otomatis hilang dari halaman kerja harian.
+5.  Setiap pemindahan dicatat ke `Activity_Log` dengan **Sumber
+    Perubahan = "Auto-Close (tidak muncul di import)"**, Data Lama =
+    status sebelumnya, Data Baru = `Clear TTD`/`CLOSE ALUR`, dan **User
+    = Admin Cabang** yang menjalankan import (bukan dikosongkan — jejak
+    pemicu tetap ada).
+
+Waybill yang **masih** muncul di file (baik lama maupun benar-benar
+baru) tetap mengikuti aturan dedup Bagian 7.1 — **tidak** terpengaruh
+mekanisme ini.
+
+**Pengaman file kurang lengkap:** karena file tarikan yang tidak lengkap
+akan meng-Auto-Close banyak paket sekaligus, bila sebuah file berisi
+**< 100 baris** sistem menampilkan **dialog konfirmasi (Lanjut / Batal)**
+sebelum import diproses, mengingatkan admin bahwa paket DP yang tidak
+tercantum akan di-Close & diarsipkan.
+
+**Penelusuran:** paket yang sudah di-Auto-Close tetap dapat ditelusuri
+lewat **Riwayat Feedback** (Activity_Log tidak pernah dihapus). Status
+`CLOSE ALUR` ditampilkan sebagai badge **terpisah** dari `Clear TTD`
+supaya Admin bisa membedakan paket yang benar-benar selesai vs yang
+sekadar hilang dari tarikan.
+
 ------------------------------------------------------------------------
 
 # 8. Dashboard
@@ -333,7 +386,16 @@ Dihitung otomatis berdasarkan: `Hari Ini - Waktu Sampai`.
 pada saat status diubah menjadi **Clear TTD**; nilai umur dibekukan
 (*frozen*) pada angka saat Clear TTD tercatat, dan tidak terus
 bertambah setelahnya. Ini penting karena Aging adalah indikator
-prioritas utama sistem (lihat Bagian 15).
+prioritas utama sistem (lihat Bagian 15). *(v1.3)* Umur juga dibekukan
+saat paket di-**Auto-Close** menjadi **`CLOSE ALUR`** (Bagian 7.4),
+karena paket tersebut sudah tidak *actionable*.
+
+**Nilai `Status Terakhir` (v1.3):** selain status operasional dari JMS
+(On Delivery, Reschedule, PAKET BERMASALAH, CEK, dll.) dan **`Clear
+TTD`** (diisi manual oleh admin), kini ada **`CLOSE ALUR`** — status
+final yang **diset otomatis** oleh sistem saat paket non-final hilang
+dari tarikan JMS (Bagian 7.4). Paket berstatus `Clear TTD` atau `CLOSE
+ALUR` berada di arsip, bukan di daftar kerja aktif.
 
 ### Warna Aging
 
@@ -438,7 +500,8 @@ Kolom minimum:
 -   Data Baru (status/feedback saat ini)
 -   Tanggal
 -   Jam
--   Sumber perubahan (Manual Feedback / Auto-update Import)
+-   Sumber perubahan (Manual Feedback / Auto-update Import / **Auto-Close
+    (tidak muncul di import)** *(v1.3)*)
 
 Dari sheet inilah Dashboard menghitung metrik seperti Progress Hari
 Ini, Distribusi Feedback, dan rata-rata jumlah attempt sebelum Clear
@@ -452,7 +515,10 @@ TTD (Bagian 8, 15) — **tanpa** perlu mem-parsing teks di kolom
 -   Users
 -   LongTail — 1 baris per waybill, termasuk kolom `Log Feedback`
     yang tampil ke user (Bagian 9.0)
--   LongTail_Archive *(baru — lihat Bagian 3)*
+-   LongTail_Archive — tujuan paket yang di-Auto-Close saat import
+    (Bagian 7.4); punya kolom `tipe_close` (`Clear TTD` | `Close Alur`)
+    utk membedakan asal penutupan *(v1.3; menggantikan aturan arsip
+    30-hari)*
 -   Master Feedback
 -   Favorite Feedback
 -   Import Batch
@@ -546,3 +612,8 @@ Untuk mengelola ekspektasi, hal berikut **tidak** termasuk dalam MVP:
 | 10 | Menambahkan kebijakan arsip data (LongTail_Archive) | Antisipasi Google Sheets melambat lagi |
 | 11 *(v1.2)* | Mengganti konsep sheet-per-hari dengan kolom `Log Feedback` (1 waybill = 1 baris, riwayat menumpuk dalam satu sel) | Menjaga kebiasaan Admin DP melihat progress harian tanpa duplikasi data status paket |
 | 12 *(v1.2)* | Menambahkan `Activity_Log` tersembunyi sebagai sumber data terstruktur di balik `Log Feedback` | Dashboard/KPI tetap bisa dihitung otomatis tanpa parsing teks bebas |
+| 13 *(v1.3)* | Mengganti arsip "Clear TTD > 30 hari" dengan **Auto-Close saat import** (Bagian 7.4) | Paket yang hilang dari tarikan JMS di-close real-time; `LongTail` aktif selalu mencerminkan kondisi JMS terkini |
+| 14 *(v1.3)* | Menambahkan status **`CLOSE ALUR`** + kolom `LongTail_Archive.tipe_close` | Membedakan paket yang benar-benar selesai (`Clear TTD`) vs yang sekadar hilang dari tarikan |
+| 15 *(v1.3)* | Umur Paket ikut dibekukan saat Auto-Close `CLOSE ALUR` | Paket sudah tidak *actionable*, aging tak boleh terus berjalan |
+| 16 *(v1.3)* | Dialog konfirmasi import file < 100 baris (Bagian 7.4) | Mencegah Auto-Close massal akibat file tarikan tidak lengkap |
+| 17 *(v1.3)* | Event Auto-Close dicatat ke `Activity_Log` & tampil di Riwayat Feedback | Paket terarsip tetap dapat ditelusuri; jejak Admin pemicu import tersimpan |

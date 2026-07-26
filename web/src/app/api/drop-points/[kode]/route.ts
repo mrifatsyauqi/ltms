@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { deleteDropPoint, updateDropPoint } from '@/lib/apps-script/drop-points';
+import { deleteDropPoint, updateDropPoint } from '@/lib/data/drop-points';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 type Params = { params: Promise<{ kode: string }> };

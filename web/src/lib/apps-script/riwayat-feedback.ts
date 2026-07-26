@@ -8,9 +8,11 @@ export type RiwayatFeedbackRow = {
   feedbackSaatItu: string;
   adminDp: string;
   dp: string;
-  /** 'Clear TTD' | 'Belum Clear TTD' | 'Tidak ada di LongTail' */
+  /** 'Clear TTD' | 'Belum Clear TTD' | 'Clear TTD (Arsip)' | 'Close Alur (Arsip)' | 'Tidak ada di LongTail' */
   statusTerkini: string;
   ts: number | null;
+  /** Sumber aktivitas: 'Manual Feedback' | 'Auto-Close (tidak muncul di import)' (Supabase v1.3). */
+  sumber?: string;
 };
 
 /**

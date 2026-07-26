@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { createDropPoint, listDropPoints } from '@/lib/apps-script/drop-points';
+import { createDropPoint, listDropPoints } from '@/lib/data/drop-points';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 export async function GET() {

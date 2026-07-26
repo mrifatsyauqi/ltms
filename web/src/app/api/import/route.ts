@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { importLongTail } from '@/lib/apps-script/import';
+import { importLongTail } from '@/lib/data/import';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 /** Satu request = satu file (PRD Bagian 7.3 partial failure — file lain tetap lanjut walau ini gagal). */

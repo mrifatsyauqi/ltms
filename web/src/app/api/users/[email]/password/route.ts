@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { setUserPassword } from '@/lib/apps-script/users';
+import { setUserPassword } from '@/lib/data/users';
 import { hashPassword } from '@/lib/password';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { AppsScriptError } from '@/lib/apps-script/client';
+import { ApiError } from '@/lib/errors';
 
 const STATUS_BY_CODE: Record<string, number> = {
   UNAUTHENTICATED: 401,
@@ -17,7 +18,7 @@ export function unauthenticated() {
 }
 
 export function errorResponse(err: unknown) {
-  if (err instanceof AppsScriptError) {
+  if (err instanceof AppsScriptError || err instanceof ApiError) {
     const status = STATUS_BY_CODE[err.code] ?? 400;
     return NextResponse.json(
       { ok: false, error: err.code, message: err.message, data: err.data },

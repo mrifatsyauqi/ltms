@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { createMasterFeedback, listMasterFeedback } from '@/lib/apps-script/master-feedback';
+import { createMasterFeedback, listMasterFeedback } from '@/lib/data/master-feedback';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 export async function GET() {

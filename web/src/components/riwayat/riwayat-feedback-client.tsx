@@ -54,14 +54,20 @@ async function fetchRiwayat(from: string, to: string): Promise<RiwayatFeedbackRo
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const clear = status === 'Clear TTD';
+  // Clear TTD (aktif & arsip) = hijau; Close Alur = ungu (SENGAJA beda dari Clear
+  // TTD — instruksi: jangan disamakan visualnya); Belum = outline; hilang = muted.
+  const clear = status === 'Clear TTD' || status === 'Clear TTD (Arsip)';
+  const closeAlur = status === 'Close Alur (Arsip)';
   const hilang = status === 'Tidak ada di LongTail';
+  const belum = !clear && !closeAlur && !hilang;
   return (
     <span
       className={cn(
         'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap',
         clear && 'bg-aging-1 text-aging-1-fg',
-        !clear && !hilang && 'border-aging-2-fg/40 text-aging-2-fg border bg-transparent',
+        closeAlur &&
+          'border border-violet-300 bg-violet-100 text-violet-700 dark:border-violet-800 dark:bg-violet-950/60 dark:text-violet-300',
+        belum && 'border-aging-2-fg/40 text-aging-2-fg border bg-transparent',
         hilang && 'bg-muted text-muted-foreground',
       )}
     >
@@ -165,6 +171,9 @@ export function RiwayatFeedbackClient({ isCabang, scope }: { isCabang: boolean; 
               { value: '', label: 'Semua Status' },
               { value: 'Clear TTD', label: 'Clear TTD' },
               { value: 'Belum Clear TTD', label: 'Belum Clear TTD' },
+              { value: 'Clear TTD (Arsip)', label: 'Clear TTD (Arsip)' },
+              { value: 'Close Alur (Arsip)', label: 'Close Alur (Arsip)' },
+              { value: 'Tidak ada di LongTail', label: 'Tidak ada di LongTail' },
             ]}
           />
 
@@ -218,7 +227,12 @@ export function RiwayatFeedbackClient({ isCabang, scope }: { isCabang: boolean; 
                       <TableCell className="px-2 py-1.5 whitespace-nowrap">
                         {r.tanggal} <span className="text-muted-foreground">{r.jam}</span>
                       </TableCell>
-                      <TableCell className="px-2 py-1.5">{r.feedbackSaatItu || '—'}</TableCell>
+                      <TableCell className="px-2 py-1.5">
+                        {r.feedbackSaatItu || '—'}
+                        {r.sumber?.startsWith('Auto-Close') && (
+                          <span className="text-muted-foreground ml-1 text-[10px] italic">· otomatis</span>
+                        )}
+                      </TableCell>
                       <TableCell className="px-2 py-1.5">
                         <StatusBadge status={r.statusTerkini} />
                       </TableCell>

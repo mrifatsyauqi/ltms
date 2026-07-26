@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { getDashboard } from '@/lib/apps-script/dashboard';
+import { getDashboard } from '@/lib/data/dashboard';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 export async function GET(request: Request) {

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { createUser, listUsers } from '@/lib/apps-script/users';
+import { createUser, listUsers } from '@/lib/data/users';
 import { errorResponse, unauthenticated } from '@/lib/api-response';
 
 export async function GET() {
