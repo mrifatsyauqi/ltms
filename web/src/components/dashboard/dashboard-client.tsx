@@ -1,8 +1,11 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   AlertTriangle,
+  Camera,
   CheckCircle2,
   ClipboardCheck,
   Clock,
@@ -21,18 +24,37 @@ import { AgingAlert } from '@/components/dashboard/aging-alert';
 import { BreakdownAlasan } from '@/components/dashboard/breakdown-alasan';
 import { AgingPrioritas } from '@/components/dashboard/aging-prioritas';
 import { Button } from '@/components/ui/button';
+import { SelectFilter } from '@/components/ui/select-filter';
 import { StatCard } from '@/components/ui/stat-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ALL_SCOPE, useDashboardScope } from '@/components/dashboard/scope-context';
 import type { DashboardData } from '@/lib/apps-script/dashboard';
 
-async function fetchDashboard(scope: string): Promise<DashboardData> {
-  // Mode "Semua DP" memanggil endpoint tanpa query -> identik dgn perilaku lama.
-  const url = scope && scope !== ALL_SCOPE ? `/api/dashboard?dp=${encodeURIComponent(scope)}` : '/api/dashboard';
-  const res = await fetch(url);
+/** Tanggal Jakarta (UTC+7) `daysAgo` hari lalu sebagai ISO 'YYYY-MM-DD'. */
+function jakDateIso(daysAgo: number): string {
+  const j = new Date(Date.now() + 7 * 3600 * 1000 - daysAgo * 86400000);
+  return j.toISOString().slice(0, 10);
+}
+
+/** Opsi "as-of": hari ini + 6 hari ke belakang (v1.3, snapshot historis). */
+const AS_OF_OPTIONS = Array.from({ length: 7 }, (_, i) => {
+  const j = new Date(Date.now() + 7 * 3600 * 1000 - i * 86400000);
+  const dd = String(j.getUTCDate()).padStart(2, '0');
+  const mm = String(j.getUTCMonth() + 1).padStart(2, '0');
+  const wd = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'][j.getUTCDay()];
+  const label = i === 0 ? 'Hari ini' : i === 1 ? 'Kemarin' : `${wd} ${dd}/${mm}`;
+  return { value: j.toISOString().slice(0, 10), label };
+});
+
+async function fetchDashboard(scope: string, date?: string): Promise<DashboardData | null> {
+  const params = new URLSearchParams();
+  if (scope && scope !== ALL_SCOPE) params.set('dp', scope);
+  if (date) params.set('date', date); // historis -> baca snapshot
+  const qs = params.toString();
+  const res = await fetch(`/api/dashboard${qs ? `?${qs}` : ''}`);
   const body = await res.json();
   if (!body.ok) throw new Error(body.message || body.error);
-  return body.data;
+  return body.data as DashboardData | null; // null = snapshot tanggal itu belum ada
 }
 
 function pct(part: number, whole: number) {
@@ -58,11 +80,26 @@ function StatSkeleton() {
 
 export function DashboardClient({ title, description }: { title: string; description: string }) {
   const { scope, setScope } = useDashboardScope();
+  const today = jakDateIso(0);
+  const [asOf, setAsOf] = useState(today);
+  const isHistorical = asOf !== today;
+
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    // scope masuk queryKey: ganti filter -> refetch otomatis; Refresh tetap
-    // menyegarkan scope yang sedang aktif.
-    queryKey: ['dashboard', scope],
-    queryFn: () => fetchDashboard(scope),
+    // scope + asOf masuk queryKey: ganti filter/tanggal -> refetch otomatis.
+    queryKey: ['dashboard', scope, asOf],
+    queryFn: () => fetchDashboard(scope, isHistorical ? asOf : undefined),
+  });
+
+  // Ambil snapshot hari ini secara manual (Admin Cabang) — seed / uji tanpa nunggu cron.
+  const snapMut = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/cron/snapshot', { method: 'POST' });
+      const body = await res.json();
+      if (!body.ok) throw new Error(body.message || body.error);
+      return body.data as { tanggal: string; scopes: number };
+    },
+    onSuccess: (d) => toast.success(`Snapshot ${d.tanggal} tersimpan (${d.scopes} scope)`),
+    onError: (e: Error) => toast.error(`Gagal snapshot: ${e.message}`),
   });
 
   const isCabang = data?.role === 'Admin Cabang';
@@ -71,6 +108,7 @@ export function DashboardClient({ title, description }: { title: string; descrip
   // Mode DP Spesifik = Admin Cabang memfilter ke 1 DP lewat CAKUPAN.
   const dpFilter = isCabang && scope !== ALL_SCOPE ? scope : undefined;
   const effectiveDescription = dpFilter ? `Ringkasan Drop Point ${dpFilter}.` : description;
+  const asOfLabel = AS_OF_OPTIONS.find((o) => o.value === asOf)?.label ?? asOf;
 
   return (
     <>
@@ -78,16 +116,48 @@ export function DashboardClient({ title, description }: { title: string; descrip
         title={title}
         description={effectiveDescription}
         actions={
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-            <RefreshCw className={isFetching ? 'animate-spin' : undefined} aria-hidden />
-            <span className="sr-only sm:not-sr-only">Refresh</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <SelectFilter label="Keadaan tanggal" value={asOf} onChange={setAsOf} options={AS_OF_OPTIONS} />
+            {isCabang && !isHistorical && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => snapMut.mutate()}
+                disabled={snapMut.isPending}
+                title="Rekam snapshot Dashboard hari ini"
+              >
+                <Camera className={snapMut.isPending ? 'animate-pulse' : undefined} aria-hidden />
+                <span className="sr-only sm:not-sr-only">Snapshot</span>
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+              <RefreshCw className={isFetching ? 'animate-spin' : undefined} aria-hidden />
+              <span className="sr-only sm:not-sr-only">Refresh</span>
+            </Button>
+          </div>
         }
       />
-      <DataFreshness />
+      {!isHistorical && <DataFreshness />}
 
       <div className="space-y-2.5 p-3" aria-busy={isLoading}>
+        {isHistorical && (
+          <div className="border-primary/30 bg-primary/5 text-primary flex items-center gap-2 rounded-lg border px-3 py-2 text-xs">
+            <Clock className="size-3.5 shrink-0" aria-hidden />
+            <span>
+              Menampilkan <span className="font-medium">snapshot keadaan {asOfLabel}</span> — angka dibekukan pada hari
+              itu. Detail per-paket hanya tersedia untuk hari ini.
+            </span>
+          </div>
+        )}
+
         {isLoading && <StatSkeleton />}
+
+        {!isLoading && !error && isHistorical && data === null && (
+          <div className="border-muted-foreground/20 bg-muted/30 text-muted-foreground rounded-xl border p-6 text-center text-sm">
+            Belum ada snapshot untuk {asOfLabel}. Snapshot mulai terekam sejak fitur ini aktif (otomatis tiap hari
+            ~23.55 WIB).
+          </div>
+        )}
 
         {error && (
           <div role="alert" className="border-destructive/40 bg-destructive/5 rounded-xl border p-4">
@@ -176,14 +246,14 @@ export function DashboardClient({ title, description }: { title: string; descrip
               </SectionCard>
             </div>
 
-            {/* Admin DP: preview paket paling mendesak (read-only). Admin Cabang
-                memakai tabel Progress per DP/Sprinter di bawah. */}
-            {!isCabang && <PaketPrioritas />}
+            {/* Admin DP: preview paket paling mendesak (read-only). Hanya live —
+                snapshot historis tidak menyimpan detail per-paket. */}
+            {!isCabang && !isHistorical && <PaketPrioritas />}
 
             {/* Admin Cabang. Mode DP Spesifik: swap ke Breakdown Alasan +
                 Aging Prioritas (khusus DP terpilih). Mode Semua DP: tabel
                 Progress per DP + chart Persentase Paket >3 Hari. */}
-            {isCabang && dpFilter && (
+            {isCabang && dpFilter && !isHistorical && (
               <div className="grid gap-2.5 @3xl:grid-cols-2">
                 <BreakdownAlasan dp={dpFilter} />
                 <AgingPrioritas dp={dpFilter} />

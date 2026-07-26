@@ -19,6 +19,7 @@
 -- ============================================================================
 
 -- Bersihkan (urut mundur dependensi) supaya bisa dijalankan ulang saat dev.
+drop table if exists dashboard_snapshot cascade;
 drop table if exists favorite_feedback cascade;
 drop table if exists activity_log      cascade;
 drop table if exists longtail_archive  cascade;
@@ -173,6 +174,20 @@ create table import_mapping (
   dibuat_oleh   text,
   created_at    timestamptz not null default now()
 );
+
+-- ---------------------------------------------------------------------------
+-- DASHBOARD SNAPSHOT (v1.3): agregat harian per scope utk "Dashboard keadaan
+-- tanggal X". Diisi cron harian (~23:55 WIB). scope = 'ALL' atau kode DP.
+-- `data` = payload DashboardData yang dibekukan hari itu.
+-- ---------------------------------------------------------------------------
+create table dashboard_snapshot (
+  tanggal    date not null,
+  scope      text not null,               -- 'ALL' | kode DP
+  data       jsonb not null,
+  created_at timestamptz not null default now(),
+  primary key (tanggal, scope)
+);
+create index dashboard_snapshot_tanggal_idx on dashboard_snapshot (tanggal desc);
 
 -- ============================================================================
 -- Catatan RLS: kontrol akses (Admin DP hanya DP-nya) ditegakkan di API layer
