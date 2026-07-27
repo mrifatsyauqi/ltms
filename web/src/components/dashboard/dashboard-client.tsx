@@ -5,7 +5,6 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   AlertTriangle,
-  Camera,
   CheckCircle2,
   ClipboardCheck,
   Clock,
@@ -90,16 +89,6 @@ export function DashboardClient({ title, description }: { title: string; descrip
     queryFn: () => fetchDashboard(scope, isHistorical ? asOf : undefined),
   });
 
-  // Ambil snapshot hari ini secara manual (Admin Cabang) — seed / uji tanpa nunggu cron.
-  const snapMut = useMutation({
-    mutationFn: async () => {
-      const res = await fetch('/api/cron/snapshot', { method: 'POST' });
-      const body = await res.json();
-      if (!body.ok) throw new Error(body.message || body.error);
-      return body.data as { tanggal: string; scopes: number };
-    },
-    onSuccess: (d) => toast.success(`Snapshot ${d.tanggal} tersimpan (${d.scopes} scope)`),
-    onError: (e: Error) => toast.error(`Gagal snapshot: ${e.message}`),
   });
 
   const isCabang = data?.role === 'Admin Cabang';
@@ -118,18 +107,6 @@ export function DashboardClient({ title, description }: { title: string; descrip
         actions={
           <div className="flex items-center gap-2">
             <SelectFilter label="Keadaan tanggal" value={asOf} onChange={setAsOf} options={AS_OF_OPTIONS} />
-            {isCabang && !isHistorical && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => snapMut.mutate()}
-                disabled={snapMut.isPending}
-                title="Rekam snapshot Dashboard hari ini"
-              >
-                <Camera className={snapMut.isPending ? 'animate-pulse' : undefined} aria-hidden />
-                <span className="sr-only sm:not-sr-only">Snapshot</span>
-              </Button>
-            )}
             <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
               <RefreshCw className={isFetching ? 'animate-spin' : undefined} aria-hidden />
               <span className="sr-only sm:not-sr-only">Refresh</span>
@@ -262,8 +239,8 @@ export function DashboardClient({ title, description }: { title: string; descrip
 
             {isCabang && !dpFilter && (
               <div className="grid gap-2.5 @3xl:grid-cols-2">
-                <SectionCard title="Progress per Drop Point" bodyClassName="px-0 pb-0">
-                  <div className="max-h-[210px] overflow-auto">
+                <SectionCard title="Progress per Drop Point" bodyClassName="px-0 pb-0 h-full flex flex-col">
+                  <div className="flex-1 overflow-auto">
                     <Table className="text-xs">
                       <TableHeader className="bg-muted/60 sticky top-0 z-10">
                         <TableRow>

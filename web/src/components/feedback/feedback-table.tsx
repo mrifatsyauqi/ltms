@@ -300,11 +300,6 @@ export function FeedbackTable({
               className="hover:bg-muted focus-visible:ring-ring relative inline-flex size-8 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
             >
               <History className="size-4" aria-hidden />
-              {n > 0 && (
-                <span className="bg-primary text-primary-foreground absolute -top-0.5 -right-0.5 flex size-3.5 items-center justify-center rounded-full text-[8px] font-bold tabular-nums">
-                  {n}
-                </span>
-              )}
             </button>
           );
         },
@@ -412,16 +407,16 @@ export function FeedbackTable({
       {/* Ringkasan aging - warna konsisten dgn badge & chart */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-muted-foreground text-[11px] font-medium">Ringkasan Aging (Belum Clear TTD):</span>
-        <span className="bg-aging-1 text-aging-1-fg rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums">
+        <span className="bg-aging-1 text-aging-1-fg rounded px-2 py-0.5 text-[11px] font-medium tabular-nums">
           1 Hari · {aging[1]}
         </span>
-        <span className="bg-aging-2 text-aging-2-fg rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums">
+        <span className="bg-aging-2 text-aging-2-fg rounded px-2 py-0.5 text-[11px] font-medium tabular-nums">
           2 Hari · {aging[2]}
         </span>
-        <span className="bg-aging-3 text-aging-3-fg rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums">
+        <span className="bg-aging-3 text-aging-3-fg rounded px-2 py-0.5 text-[11px] font-medium tabular-nums">
           ≥ 3 Hari · {aging[3]}
         </span>
-        <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums">
+        <span className="bg-muted text-muted-foreground rounded px-2 py-0.5 text-[11px] font-medium tabular-nums">
           Total · {aging.total}
         </span>
       </div>
@@ -464,8 +459,7 @@ export function FeedbackTable({
                   data-active={active || undefined}
                   className={cn(
                     'border-b',
-                    AGING_ROW_CLASS[level],
-                    'data-[active=true]:ring-ring/60 data-[active=true]:ring-1',
+                    AGING_ROW_CLASS[level]
                   )}
                 >
                   {r.getVisibleCells().map((cell) => {

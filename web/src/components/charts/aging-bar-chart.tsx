@@ -34,7 +34,7 @@ export function AgingBarChart({ data }: { data: { hari: string; jumlah: number }
             fontSize={11}
             interval={0}
           />
-          <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} width={40} />
+          <YAxis allowDecimals={false} tickFormatter={(v) => Math.floor(v).toString()} tickLine={false} axisLine={false} fontSize={11} width={40} />
           <Tooltip
             cursor={{ fill: 'var(--muted)' }}
             formatter={(v) => [`${v} paket`, 'Jumlah']}

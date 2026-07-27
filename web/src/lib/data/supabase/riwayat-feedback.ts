@@ -28,6 +28,7 @@ export async function listRiwayatFeedback(
   actorEmail: string,
   from?: string,
   to?: string,
+  dpFilter?: string,
 ): Promise<RiwayatFeedbackRow[]> {
   const actor = await requireActor(actorEmail);
   const isCabang = actor.role === 'Admin Cabang';
@@ -37,7 +38,11 @@ export async function listRiwayatFeedback(
     .select('waybill, user_email, dp, attempt_ke, data_baru, sumber, created_at')
     .in('sumber', ['Manual Feedback', AUTO_CLOSE])
     .order('created_at', { ascending: false });
-  if (!isCabang) q = q.eq('dp', actor.dropPoint);
+  if (!isCabang) {
+    q = q.eq('dp', actor.dropPoint);
+  } else if (dpFilter) {
+    q = q.eq('dp', dpFilter);
+  }
   if (from) q = q.gte('created_at', `${from}T00:00:00+07:00`);
   if (to) q = q.lte('created_at', `${to}T23:59:59.999+07:00`);
 

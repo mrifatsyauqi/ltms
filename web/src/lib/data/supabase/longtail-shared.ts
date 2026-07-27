@@ -6,13 +6,17 @@ import type { LongtailDbRow } from './longtail-pure';
 // Re-export semua helper MURNI supaya import lama dari './longtail-shared' tetap jalan.
 export * from './longtail-pure';
 
-/** Ambil semua baris LongTail ter-scope (Admin DP -> DP-nya), paginasi 1000. */
-export async function fetchLongtailScoped(actor: Actor): Promise<LongtailDbRow[]> {
+/** Ambil semua baris LongTail ter-scope (Admin DP -> DP-nya, Admin Cabang -> opsional filter dpFilter). */
+export async function fetchLongtailScoped(actor: Actor, dpFilter?: string): Promise<LongtailDbRow[]> {
   const PAGE = 1000;
   const out: LongtailDbRow[] = [];
   for (let from = 0; ; from += PAGE) {
     let q = db().from('longtail').select('*').order('no_waybill').range(from, from + PAGE - 1);
-    if (actor.role !== 'Admin Cabang') q = q.eq('dp_sampai', actor.dropPoint);
+    if (actor.role !== 'Admin Cabang') {
+      q = q.eq('dp_sampai', actor.dropPoint);
+    } else if (dpFilter) {
+      q = q.eq('dp_sampai', dpFilter);
+    }
     const { data, error } = await q;
     if (error) throw new ApiError('INTERNAL_ERROR', error.message);
     const batch = (data ?? []) as LongtailDbRow[];
