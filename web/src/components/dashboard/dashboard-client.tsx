@@ -87,10 +87,6 @@ export function DashboardClient({ title, description }: { title: string; descrip
     // scope + asOf masuk queryKey: ganti filter/tanggal -> refetch otomatis.
     queryKey: ['dashboard', scope, asOf],
     queryFn: () => fetchDashboard(scope, isHistorical ? asOf : undefined),
-  });
-
-  });
-
   const isCabang = data?.role === 'Admin Cabang';
   const s = data?.summary;
 
