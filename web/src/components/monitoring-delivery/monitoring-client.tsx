@@ -145,7 +145,7 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
       });
       
       await navigator.clipboard.write([clipboardItem]);
-      toast.success('Berhasil! Coba paste di Chat (gambar) atau Excel (tabel).');
+      toast.success('Berhasil Dicopy');
     } catch (error) {
       console.error('Gagal copy image', error);
       toast.error('Gagal menyalin. Pastikan browser tidak berada dalam Incognito dan mendukung Clipboard API.');
@@ -197,21 +197,24 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
             </div>
 
             {stagedData.length > 0 && (
-              <div className="flex flex-col sm:flex-row sm:items-end gap-4 p-4 border rounded-lg bg-slate-50">
-                <div className="space-y-1.5 flex-1">
+              <div className="p-4 border rounded-lg bg-slate-50 space-y-3">
+                <div className="space-y-1.5">
                   <Label htmlFor="totalSampaiSetup">Jumlah Total Sampai</Label>
-                  <Input
-                    id="totalSampaiSetup"
-                    type="number"
-                    value={totalSampai || ''}
-                    onChange={(e) => setTotalSampai(Number(e.target.value))}
-                    placeholder="Masukkan angka..."
-                  />
+                  <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                    <Input
+                      id="totalSampaiSetup"
+                      type="number"
+                      value={totalSampai || ''}
+                      onChange={(e) => setTotalSampai(Number(e.target.value))}
+                      placeholder="Masukkan angka..."
+                      className="max-w-[250px]"
+                    />
+                    <Button onClick={handleGenerate} className="w-full sm:w-auto">
+                      Generate Data
+                    </Button>
+                  </div>
                   <p className="text-xs text-muted-foreground">Angka ini akan ditampilkan pada baris terbawah tabel.</p>
                 </div>
-                <Button onClick={handleGenerate} className="w-full sm:w-auto">
-                  Generate Data
-                </Button>
               </div>
             )}
           </CardContent>
@@ -227,7 +230,7 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
                 Edit Parameter
               </Button>
               <Button onClick={handleCopyImage} disabled={isGeneratingImg}>
-                {isGeneratingImg ? 'Menyalin...' : 'Copy as Image'}
+                {isGeneratingImg ? 'Menyalin...' : 'Copy Tabel'}
               </Button>
             </div>
           </CardHeader>
