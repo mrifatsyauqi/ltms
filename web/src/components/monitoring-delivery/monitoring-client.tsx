@@ -114,25 +114,34 @@ export function MonitoringClient() {
     try {
       setIsGeneratingImg(true);
       
-      // Ambil elemen HTML dan Teksnya
       const htmlString = tableRef.current.outerHTML;
       const textString = tableRef.current.innerText;
 
-      // Hasilkan format gambar PNG (lebih aman dari Jpeg untuk Clipboard API browser)
-      // Dibuat await langsung tanpa setTimeout agar context user-gesture tidak hilang yang menyebabkan error Clipboard
-      const dataUrl = await toPng(tableRef.current, { quality: 1, backgroundColor: '#ffffff' });
-      const response = await fetch(dataUrl);
-      const imageBlob = await response.blob();
+      // Kita bungkus proses toPng yang berat di dalam Promise.
+      // Dengan memberikan Promise langsung ke ClipboardItem, pemanggilan navigator.clipboard.write
+      // terjadi secara sinkron (menjaga user-gesture), tetapi browser akan menunggu Promise ini
+      // di latar belakang. Ini memungkinkan kita menggunakan setTimeout agar UI tidak freeze (INP fix).
+      const imagePromise = new Promise<Blob>(async (resolve, reject) => {
+        try {
+          // Memberi jeda 50ms ke main thread agar browser bisa merender tulisan "Menyalin..."
+          await new Promise((r) => setTimeout(r, 50));
+          
+          const dataUrl = await toPng(tableRef.current!, { quality: 1, backgroundColor: '#ffffff' });
+          const response = await fetch(dataUrl);
+          const blob = await response.blob();
+          resolve(blob);
+        } catch (err) {
+          reject(err);
+        }
+      });
       
       const htmlBlob = new Blob([htmlString], { type: 'text/html' });
       const textBlob = new Blob([textString], { type: 'text/plain' });
       
-      // Gabungkan 3 format ini sehingga WhatsApp akan membacanya sebagai Gambar,
-      // tapi Excel akan membacanya sebagai HTML Table / Teks.
       const clipboardItem = new ClipboardItem({
         'text/plain': textBlob,
         'text/html': htmlBlob,
-        [imageBlob.type]: imageBlob
+        'image/png': imagePromise
       });
       
       await navigator.clipboard.write([clipboardItem]);
