@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import * as xlsx from 'xlsx';
-import { toJpeg } from 'html-to-image';
+import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -114,23 +114,32 @@ export function MonitoringClient() {
     try {
       setIsGeneratingImg(true);
       
-      // Memberi jeda (yield) ke browser agar UI (tombol "Menyalin...") bisa di-render
-      // sebelum mengeksekusi html-to-image yang berat di main thread (mengatasi INP issue).
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // Ambil elemen HTML dan Teksnya
+      const htmlString = tableRef.current.outerHTML;
+      const textString = tableRef.current.innerText;
+
+      // Hasilkan format gambar PNG (lebih aman dari Jpeg untuk Clipboard API browser)
+      // Dibuat await langsung tanpa setTimeout agar context user-gesture tidak hilang yang menyebabkan error Clipboard
+      const dataUrl = await toPng(tableRef.current, { quality: 1, backgroundColor: '#ffffff' });
+      const response = await fetch(dataUrl);
+      const imageBlob = await response.blob();
       
-      const dataUrl = await toJpeg(tableRef.current, { quality: 0.95, backgroundColor: '#ffffff' });
+      const htmlBlob = new Blob([htmlString], { type: 'text/html' });
+      const textBlob = new Blob([textString], { type: 'text/plain' });
       
-      const blob = await (await fetch(dataUrl)).blob();
+      // Gabungkan 3 format ini sehingga WhatsApp akan membacanya sebagai Gambar,
+      // tapi Excel akan membacanya sebagai HTML Table / Teks.
+      const clipboardItem = new ClipboardItem({
+        'text/plain': textBlob,
+        'text/html': htmlBlob,
+        [imageBlob.type]: imageBlob
+      });
       
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          [blob.type]: blob
-        })
-      ]);
-      toast.success('Gambar tabel berhasil disalin ke clipboard!');
+      await navigator.clipboard.write([clipboardItem]);
+      toast.success('Berhasil! Coba paste di Chat (gambar) atau Excel (tabel).');
     } catch (error) {
       console.error('Gagal copy image', error);
-      toast.error('Gagal menyalin gambar. Browser mungkin tidak mendukung fitur ini.');
+      toast.error('Gagal menyalin. Pastikan browser tidak berada dalam Incognito dan mendukung Clipboard API.');
     } finally {
       setIsGeneratingImg(false);
     }
