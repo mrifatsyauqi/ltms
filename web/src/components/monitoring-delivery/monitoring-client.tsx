@@ -113,6 +113,11 @@ export function MonitoringClient() {
     if (!tableRef.current) return;
     try {
       setIsGeneratingImg(true);
+      
+      // Memberi jeda (yield) ke browser agar UI (tombol "Menyalin...") bisa di-render
+      // sebelum mengeksekusi html-to-image yang berat di main thread (mengatasi INP issue).
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      
       const dataUrl = await toJpeg(tableRef.current, { quality: 0.95, backgroundColor: '#ffffff' });
       
       const blob = await (await fetch(dataUrl)).blob();
