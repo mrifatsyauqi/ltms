@@ -22,9 +22,9 @@ async function findRow(waybill: string): Promise<LongtailDbRow | null> {
 const sameDp = (a: string | null, b: string) =>
   String(a ?? '').trim().toLowerCase() === String(b).trim().toLowerCase();
 
-export async function listLongTail(actorEmail: string): Promise<LongTailRow[]> {
+export async function listLongTail(actorEmail: string, dpFilter?: string): Promise<LongTailRow[]> {
   const actor = await requireActor(actorEmail);
-  const rows = await fetchLongtailScoped(actor);
+  const rows = await fetchLongtailScoped(actor, dpFilter);
   return rows.map(decorateLongTailRow);
 }
 
@@ -218,10 +218,15 @@ export async function previewResetLongTail(actorEmail: string): Promise<ResetPre
   return { dryRun: true, counts };
 }
 
-export async function resetLongTailData(actorEmail: string): Promise<ResetResult> {
+export async function resetLongTailData(actorEmail: string, targets?: string[]): Promise<ResetResult> {
   requireRole(await requireActor(actorEmail), ['Admin Cabang']);
   const cleared: Record<string, number> = {};
-  for (const t of RESET_TARGETS) {
+  
+  const tablesToReset = targets 
+    ? RESET_TARGETS.filter(t => targets.includes(t.key)) 
+    : RESET_TARGETS;
+
+  for (const t of tablesToReset) {
     cleared[t.key] = await countTable(t.table);
     // PK selalu non-null -> filter ini mencakup semua baris (PostgREST wajib ada filter).
     const { error } = await db().from(t.table).delete().not(t.pk, 'is', null);

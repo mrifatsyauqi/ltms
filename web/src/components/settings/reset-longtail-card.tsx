@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -8,6 +8,7 @@ import { SectionCard } from '@/components/layout/section-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -39,14 +40,31 @@ export function ResetLongTailCard() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState('');
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['reset-preview'],
     queryFn: () => api<ResetPreview>('/api/reset-longtail'),
   });
 
+  // Initialize selected all true
+  useEffect(() => {
+    if (data?.counts) {
+      const init: Record<string, boolean> = {};
+      Object.keys(data.counts).forEach((k) => (init[k] = true));
+      setSelected(init);
+    }
+  }, [data?.counts]);
+
   const runMut = useMutation({
-    mutationFn: () => api<ResetResult>('/api/reset-longtail', { method: 'POST' }),
+    mutationFn: () => {
+      const targets = Object.keys(selected).filter(k => selected[k]);
+      return api<ResetResult>('/api/reset-longtail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targets }),
+      });
+    },
     onSuccess: (res) => {
       const total = Object.values(res.cleared).reduce((a, b) => a + b, 0);
       toast.success(`Reset selesai. ${total.toLocaleString('id-ID')} baris data dihapus.`);
@@ -111,8 +129,15 @@ export function ResetLongTailCard() {
 
           <ul className="border-border divide-border divide-y rounded-lg border text-sm">
             {Object.entries(counts).map(([sheet, n]) => (
-              <li key={sheet} className="flex items-center justify-between px-3 py-1.5">
-                <span>{LABELS[sheet] ?? sheet}</span>
+              <li key={sheet} className="flex items-center justify-between px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox 
+                    id={`chk-${sheet}`} 
+                    checked={selected[sheet] ?? false} 
+                    onCheckedChange={(c) => setSelected((s) => ({ ...s, [sheet]: c === true }))} 
+                  />
+                  <Label htmlFor={`chk-${sheet}`} className="cursor-pointer">{LABELS[sheet] ?? sheet}</Label>
+                </div>
                 <span className="tabular-nums font-medium">{n.toLocaleString('id-ID')} baris</span>
               </li>
             ))}
@@ -138,9 +163,9 @@ export function ResetLongTailCard() {
             <Button
               variant="destructive"
               onClick={() => runMut.mutate()}
-              disabled={typed !== CONFIRM_WORD || runMut.isPending}
+              disabled={typed !== CONFIRM_WORD || runMut.isPending || Object.values(selected).filter(Boolean).length === 0}
             >
-              {runMut.isPending ? 'Menghapus…' : 'Ya, hapus semua'}
+              {runMut.isPending ? 'Menghapus…' : 'Ya, hapus terpilih'}
             </Button>
           </DialogFooter>
         </DialogContent>

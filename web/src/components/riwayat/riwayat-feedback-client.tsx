@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw, Search } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
+import { useDashboardScope, ALL_SCOPE } from '@/components/dashboard/scope-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SelectFilter } from '@/components/ui/select-filter';
@@ -46,8 +47,9 @@ function sortKey(r: RiwayatFeedbackRow): number {
   ).getTime();
 }
 
-async function fetchRiwayat(from: string, to: string): Promise<RiwayatFeedbackRow[]> {
-  const res = await fetch(`/api/riwayat-feedback?from=${from}&to=${to}`);
+async function fetchRiwayat(from: string, to: string, scope?: string): Promise<RiwayatFeedbackRow[]> {
+  const dpQuery = scope && scope !== ALL_SCOPE ? `&dp=${encodeURIComponent(scope)}` : '';
+  const res = await fetch(`/api/riwayat-feedback?from=${from}&to=${to}${dpQuery}`);
   const body = await res.json();
   if (!body.ok) throw new Error(body.message || body.error);
   return (body.data as RiwayatFeedbackRow[]).sort((a, b) => sortKey(b) - sortKey(a));
@@ -76,7 +78,10 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export function RiwayatFeedbackClient({ isCabang, scope }: { isCabang: boolean; scope: string }) {
+export function RiwayatFeedbackClient({ isCabang }: { isCabang: boolean }) {
+  const { scope } = useDashboardScope();
+  const scopeDisplay = isCabang ? (scope === ALL_SCOPE ? 'Semua Drop Point' : `DP ${scope}`) : 'Drop Point Anda';
+
   const [preset, setPreset] = useState('7');
   const [customFrom, setCustomFrom] = useState(isoDaysAgo(7));
   const [customTo, setCustomTo] = useState(today());
@@ -89,8 +94,8 @@ export function RiwayatFeedbackClient({ isCabang, scope }: { isCabang: boolean; 
       : { from: isoDaysAgo(Number(preset) - 1), to: today() };
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ['riwayat-feedback', from, to],
-    queryFn: () => fetchRiwayat(from, to),
+    queryKey: ['riwayat-feedback', from, to, scope],
+    queryFn: () => fetchRiwayat(from, to, scope),
   });
 
   const rows = useMemo(() => {
@@ -110,7 +115,7 @@ export function RiwayatFeedbackClient({ isCabang, scope }: { isCabang: boolean; 
     <>
       <PageHeader
         title="Riwayat Feedback"
-        description={`${scope}. Sumber: catatan aktivitas feedback per waybill.`}
+        description={`${scopeDisplay}. Sumber: catatan aktivitas feedback per waybill.`}
         actions={
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={isFetching ? 'animate-spin' : undefined} aria-hidden />

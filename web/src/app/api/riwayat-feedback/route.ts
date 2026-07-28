@@ -10,9 +10,10 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const from = searchParams.get('from') ?? undefined;
   const to = searchParams.get('to') ?? undefined;
+  const dpFilter = searchParams.get('dp') ?? undefined;
 
   try {
-    const data = await listRiwayatFeedback(session.user.email, from, to);
+    const data = await listRiwayatFeedback(session.user.email, from, to, dpFilter);
     return NextResponse.json({ ok: true, data });
   } catch (err) {
     return errorResponse(err);

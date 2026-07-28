@@ -8,7 +8,6 @@ export default async function RiwayatFeedbackPage() {
   return (
     <RiwayatFeedbackClient
       isCabang={isCabang}
-      scope={isCabang ? 'Semua Drop Point' : `DP ${session?.user.dropPoint ?? '-'}`}
     />
   );
 }

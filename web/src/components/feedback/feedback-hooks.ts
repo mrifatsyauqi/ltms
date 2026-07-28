@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useDashboardScope, ALL_SCOPE } from '@/components/dashboard/scope-context';
 import type { LongTailRow } from '@/lib/data/longtail';
 import type { MasterFeedbackRow } from '@/lib/data/master-feedback';
 import type { FavoriteFeedbackRow } from '@/lib/data/favorite-feedback';
@@ -15,7 +16,9 @@ async function getJson<T>(url: string): Promise<T> {
 export type SubmitFeedbackError = Error & { code?: string; currentRow?: LongTailRow };
 
 export function useLongTail() {
-  return useQuery({ queryKey: ['longtail'], queryFn: () => getJson<LongTailRow[]>('/api/longtail') });
+  const { scope } = useDashboardScope();
+  const query = scope && scope !== ALL_SCOPE ? `?dp=${encodeURIComponent(scope)}` : '';
+  return useQuery({ queryKey: ['longtail', scope], queryFn: () => getJson<LongTailRow[]>(`/api/longtail${query}`) });
 }
 
 export function useMasterFeedback() {
@@ -72,31 +75,48 @@ export function useSubmitFeedback() {
     // terasa natural spt isi formulir web biasa.
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: ['longtail'] });
-      const prev = qc.getQueryData<LongTailRow[]>(['longtail']);
-      qc.setQueryData<LongTailRow[]>(['longtail'], (old) =>
-        old?.map((r) =>
-          r['No. Waybill'] === vars.waybill
-            ? { ...r, Feedback: vars.feedback, 'Status Terakhir': vars.feedback }
-            : r,
-        ),
-      );
-      return { prev };
+      const currentScope = qc.getQueryData<string>(['current-scope']) || 'ALL'; // Fallback
+      // To properly handle optimistic updates with scope, we should invalidate or update all matching
+      // Since it's complex, we just update all cached longtail arrays
+      const queryKeys = qc.getQueriesData<LongTailRow[]>({ queryKey: ['longtail'] });
+      queryKeys.forEach(([key, old]) => {
+        if (old) {
+          qc.setQueryData<LongTailRow[]>(key, 
+            old.map((r) =>
+              r['No. Waybill'] === vars.waybill
+                ? { ...r, Feedback: vars.feedback, 'Status Terakhir': vars.feedback }
+                : r,
+            )
+          );
+        }
+      });
+      return { prevKeys: queryKeys };
     },
     onSuccess: (updated) => {
-      // Ganti dengan baris server final (versi/__isClearTTD/Log yang benar).
-      qc.setQueryData<LongTailRow[]>(['longtail'], (old) =>
-        old?.map((r) => (r['No. Waybill'] === updated['No. Waybill'] ? updated : r)),
-      );
+      const queryKeys = qc.getQueriesData<LongTailRow[]>({ queryKey: ['longtail'] });
+      queryKeys.forEach(([key, old]) => {
+        if (old) {
+          qc.setQueryData<LongTailRow[]>(key, 
+            old.map((r) => (r['No. Waybill'] === updated['No. Waybill'] ? updated : r))
+          );
+        }
+      });
     },
     onError: (err: SubmitFeedbackError, _vars, ctx) => {
-      // VERSION_CONFLICT membawa baris terkini → tampilkan versi server itu.
+      const prevKeys = ctx?.prevKeys;
       if (err.code === 'VERSION_CONFLICT' && err.currentRow) {
-        qc.setQueryData<LongTailRow[]>(['longtail'], (old) =>
-          old?.map((r) => (r['No. Waybill'] === err.currentRow!['No. Waybill'] ? err.currentRow! : r)),
-        );
-      } else if (ctx?.prev) {
-        // Error lain → batalkan optimistic (kembalikan snapshot sebelum submit).
-        qc.setQueryData<LongTailRow[]>(['longtail'], ctx.prev);
+        const queryKeys = qc.getQueriesData<LongTailRow[]>({ queryKey: ['longtail'] });
+        queryKeys.forEach(([key, old]) => {
+          if (old) {
+            qc.setQueryData<LongTailRow[]>(key, 
+              old.map((r) => (r['No. Waybill'] === err.currentRow!['No. Waybill'] ? err.currentRow! : r))
+            );
+          }
+        });
+      } else if (prevKeys) {
+        prevKeys.forEach(([key, data]) => {
+          qc.setQueryData<LongTailRow[]>(key, data);
+        });
       }
     },
   });
