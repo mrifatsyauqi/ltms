@@ -7,6 +7,7 @@ import {
   MessageSquareText,
   Settings,
   Table2,
+  Truck,
   Upload,
   UserCog,
   UserRound,
@@ -40,6 +41,7 @@ export function navForRole(role: string | undefined): NavGroup[] {
           { label: 'Feedback Long Tail', href: '/feedback', icon: MessageSquareText },
           { label: 'Data Long Tail', href: '/feedback?view=data', icon: Table2 },
           { label: 'Import Long Tail', href: '/import', icon: Upload },
+          { label: 'Monitoring Delivery', href: '/monitoring-delivery', icon: Truck },
         ],
       },
       {
@@ -72,6 +74,7 @@ export function navForRole(role: string | undefined): NavGroup[] {
     {
       items: [
         { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+        { label: 'Monitoring Delivery', href: '/monitoring-delivery', icon: Truck },
         { label: 'Feedback Long Tail', href: '/feedback', icon: MessageSquareText },
         { label: 'Riwayat Feedback', href: '/riwayat-feedback', icon: History },
         { label: 'Profil Saya', href: '/profil', icon: UserRound },
