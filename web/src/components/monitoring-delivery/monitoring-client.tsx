@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MonitoringRow, MonitoringTable } from './monitoring-table';
 
-export function MonitoringClient() {
+export function MonitoringClient({ dpName }: { dpName: string }) {
   const [stagedData, setStagedData] = useState<MonitoringRow[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [totalSampai, setTotalSampai] = useState<number>(0);
@@ -232,7 +232,7 @@ export function MonitoringClient() {
             </div>
           </CardHeader>
           <CardContent className="overflow-x-auto">
-            <MonitoringTable ref={tableRef} data={stagedData} totalSampai={totalSampai} />
+            <MonitoringTable ref={tableRef} data={stagedData} totalSampai={totalSampai} dpName={dpName} />
           </CardContent>
         </Card>
       )}

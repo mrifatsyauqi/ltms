@@ -12,9 +12,10 @@ export type MonitoringRow = {
 interface MonitoringTableProps {
   data: MonitoringRow[];
   totalSampai: number;
+  dpName: string;
 }
 
-export const MonitoringTable = forwardRef<HTMLDivElement, MonitoringTableProps>(({ data, totalSampai }, ref) => {
+export const MonitoringTable = forwardRef<HTMLDivElement, MonitoringTableProps>(({ data, totalSampai, dpName }, ref) => {
   // Hitung Agregat
   const totalDelivery = data.reduce((sum, row) => sum + row.waybillDelivery, 0);
   const totalTandaTerima = data.reduce((sum, row) => sum + row.tandaTerima, 0);
@@ -22,9 +23,9 @@ export const MonitoringTable = forwardRef<HTMLDivElement, MonitoringTableProps>(
   const totalPaketBermasalah = data.reduce((sum, row) => sum + row.paketBermasalah, 0);
 
   const getPercentageColor = (percentage: number) => {
-    if (percentage === 100) return 'bg-[#c6efce] text-[#006100]'; // Excel green
-    if (percentage >= 80) return 'bg-[#ffeb9c] text-[#9c5700]'; // Excel yellow
-    return 'bg-[#ffc7ce] text-[#9c0006]'; // Excel red
+    if (percentage >= 95) return 'bg-[#b6d7a8] text-black'; // Hijau
+    if (percentage > 90) return 'bg-[#ffe599] text-black'; // Kuning muda
+    return 'bg-[#ea9999] text-black'; // Merah
   };
 
   const formatPercent = (val: number) => {
@@ -36,6 +37,11 @@ export const MonitoringTable = forwardRef<HTMLDivElement, MonitoringTableProps>(
     <div ref={ref} className="bg-white p-4 inline-block w-full overflow-x-auto">
       <table className="w-full border-collapse border border-gray-400 text-sm font-sans" style={{ minWidth: '800px' }}>
         <thead>
+          <tr className="bg-[#4f6272] text-white">
+            <th colSpan={6} className="border border-gray-400 px-3 py-3 text-center align-middle font-bold text-lg uppercase tracking-wider">
+              MONITORING DELIVERY {dpName}
+            </th>
+          </tr>
           <tr className="bg-gray-100">
             <th rowSpan={2} className="border border-gray-400 px-3 py-2 text-center align-middle font-semibold">
               Sprinter
