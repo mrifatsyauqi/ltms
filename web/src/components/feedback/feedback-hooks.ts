@@ -75,9 +75,8 @@ export function useSubmitFeedback() {
     // terasa natural spt isi formulir web biasa.
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: ['longtail'] });
-      const currentScope = qc.getQueryData<string>(['current-scope']) || 'ALL'; // Fallback
-      // To properly handle optimistic updates with scope, we should invalidate or update all matching
-      // Since it's complex, we just update all cached longtail arrays
+      // Cache longtail dikunci per-scope (['longtail', scope]) — cocokkan semua
+      // key yg berawalan ['longtail'] agar tetap update walau scope berbeda.
       const queryKeys = qc.getQueriesData<LongTailRow[]>({ queryKey: ['longtail'] });
       queryKeys.forEach(([key, old]) => {
         if (old) {

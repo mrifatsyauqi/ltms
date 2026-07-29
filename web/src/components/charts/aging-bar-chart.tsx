@@ -24,7 +24,7 @@ export function AgingBarChart({ data }: { data: { hari: string; jumlah: number }
     <div className="h-[176px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         {/* Bar VERTIKAL: sumbu X = kategori hari, sumbu Y = jumlah paket. */}
-        <BarChart data={data} margin={{ left: -18, right: 6, top: 14, bottom: 0 }}>
+        <BarChart data={data} margin={{ left: 0, right: 6, top: 14, bottom: 0 }}>
           <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
           <XAxis
             dataKey="hari"
@@ -34,7 +34,10 @@ export function AgingBarChart({ data }: { data: { hari: string; jumlah: number }
             fontSize={11}
             interval={0}
           />
-          <YAxis allowDecimals={false} tickFormatter={(v) => Math.floor(v).toString()} tickLine={false} axisLine={false} fontSize={11} width={40} />
+          {/* width lebar cukup utk 4 digit (mis. 1024) - margin.left negatif
+              sebelumnya memotong angka besar (hanya sisa 2 digit terakhir yg
+              terlihat, mis. '1000' -> '00'). */}
+          <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} width={48} />
           <Tooltip
             cursor={{ fill: 'var(--muted)' }}
             formatter={(v) => [`${v} paket`, 'Jumlah']}

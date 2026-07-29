@@ -15,8 +15,12 @@ export function CredentialsLoginForm() {
   const [email, setEmail] = useState('');
 
   useEffect(() => {
+    // localStorage tidak tersedia saat SSR; baca setelah mount (bukan lazy
+    // initializer) supaya render pertama cocok dgn server -> hindari hydration
+    // mismatch pada <input value>. Sengaja hanya jalan sekali saat mount.
     const saved = localStorage.getItem('ltms-remember-email');
     if (saved) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEmail(saved);
       setRemember(true);
     }

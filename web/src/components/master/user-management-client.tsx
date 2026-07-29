@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { KeyRound, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, KeyRound, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/layout/page-header';
 import { StatusBadge, isAktif } from '@/components/master/status-badge';
@@ -58,6 +58,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const [confirmDelete, setConfirmDelete] = useState<UserRow | null>(null);
   const [passwordFor, setPasswordFor] = useState<UserRow | null>(null);
   const [passwordValue, setPasswordValue] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -258,6 +259,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                             onClick={() => {
                               setPasswordFor(r);
                               setPasswordValue('');
+                              setShowPassword(false);
                             }}
                             aria-label={`Set password ${r.Email}`}
                             title="Set password login manual"
@@ -429,13 +431,24 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
           </DialogHeader>
           <div className="space-y-1.5">
             <Label htmlFor="new-password">Password baru</Label>
-            <Input
-              id="new-password"
-              type="password"
-              value={passwordValue}
-              onChange={(e) => setPasswordValue(e.target.value)}
-              autoComplete="new-password"
-            />
+            <div className="relative">
+              <Input
+                id="new-password"
+                type={showPassword ? 'text' : 'password'}
+                value={passwordValue}
+                onChange={(e) => setPasswordValue(e.target.value)}
+                autoComplete="new-password"
+                className="pr-9"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
+                title={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+              >
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPasswordFor(null)} disabled={setPasswordMut.isPending}>

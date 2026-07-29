@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -47,18 +47,13 @@ export function ResetLongTailCard() {
     queryFn: () => api<ResetPreview>('/api/reset-longtail'),
   });
 
-  // Initialize selected all true
-  useEffect(() => {
-    if (data?.counts) {
-      const init: Record<string, boolean> = {};
-      Object.keys(data.counts).forEach((k) => (init[k] = true));
-      setSelected(init);
-    }
-  }, [data?.counts]);
+  // Default tercentang: kunci yang belum disentuh user dianggap terpilih.
+  // Menghindari efek sinkronisasi state dari query (react-hooks/set-state-in-effect).
+  const isSelected = (key: string) => selected[key] ?? true;
 
   const runMut = useMutation({
     mutationFn: () => {
-      const targets = Object.keys(selected).filter(k => selected[k]);
+      const targets = Object.keys(counts).filter((k) => isSelected(k));
       return api<ResetResult>('/api/reset-longtail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -131,10 +126,10 @@ export function ResetLongTailCard() {
             {Object.entries(counts).map(([sheet, n]) => (
               <li key={sheet} className="flex items-center justify-between px-3 py-2">
                 <div className="flex items-center gap-2">
-                  <Checkbox 
-                    id={`chk-${sheet}`} 
-                    checked={selected[sheet] ?? false} 
-                    onCheckedChange={(c) => setSelected((s) => ({ ...s, [sheet]: c === true }))} 
+                  <Checkbox
+                    id={`chk-${sheet}`}
+                    checked={isSelected(sheet)}
+                    onCheckedChange={(c) => setSelected((s) => ({ ...s, [sheet]: c === true }))}
                   />
                   <Label htmlFor={`chk-${sheet}`} className="cursor-pointer">{LABELS[sheet] ?? sheet}</Label>
                 </div>
@@ -163,7 +158,7 @@ export function ResetLongTailCard() {
             <Button
               variant="destructive"
               onClick={() => runMut.mutate()}
-              disabled={typed !== CONFIRM_WORD || runMut.isPending || Object.values(selected).filter(Boolean).length === 0}
+              disabled={typed !== CONFIRM_WORD || runMut.isPending || !Object.keys(counts).some(isSelected)}
             >
               {runMut.isPending ? 'Menghapus…' : 'Ya, hapus terpilih'}
             </Button>

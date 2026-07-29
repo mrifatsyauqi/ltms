@@ -37,7 +37,7 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
         
-        const rows: any[][] = xlsx.utils.sheet_to_json(sheet, { header: 1 });
+        const rows = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
         const dataRows = rows.slice(2);
 
         const sprinterMap = new Map<string, MonitoringRow>();
