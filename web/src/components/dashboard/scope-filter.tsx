@@ -1,6 +1,8 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { Building2, LayoutGrid } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ALL_SCOPE, useDashboardScope } from '@/components/dashboard/scope-context';
 import type { DropPointRow } from '@/lib/data/drop-points';
 
@@ -12,9 +14,12 @@ async function fetchDropPoints(): Promise<DropPointRow[]> {
 }
 
 /**
- * Dropdown filter CAKUPAN di sidebar (Admin Cabang saja). Menulis pilihan ke
- * DashboardScopeProvider; Dashboard membaca nilai ini untuk memfilter semua
- * widget. Daftar DP dari Master Drop Point.
+ * Dropdown filter CAKUPAN di sidebar (Admin Cabang saja). UI custom (bukan
+ * <select> bawaan browser) supaya tampilan konsisten lintas OS/browser —
+ * dibangun dari primitif Select (@base-ui/react/select) yang sudah dipakai
+ * di halaman Import. Menulis pilihan ke DashboardScopeProvider; Dashboard
+ * membaca nilai ini untuk memfilter semua widget. Daftar DP dari Master
+ * Drop Point.
  */
 export function ScopeFilter() {
   const { scope, setScope } = useDashboardScope();
@@ -25,18 +30,25 @@ export function ScopeFilter() {
   );
 
   return (
-    <select
-      aria-label="Filter cakupan Drop Point"
-      value={scope}
-      onChange={(e) => setScope(e.target.value)}
-      className="bg-sidebar-accent/60 text-sidebar-accent-foreground focus-visible:ring-sidebar-ring mt-0.5 w-full rounded-md px-1.5 py-1 text-[13px] font-semibold focus-visible:ring-2 focus-visible:outline-none"
-    >
-      <option value={ALL_SCOPE}>Semua DP</option>
-      {dps.map((d) => (
-        <option key={d['Kode DP']} value={d['Kode DP']}>
-          {d['Kode DP']}
-        </option>
-      ))}
-    </select>
+    <Select value={scope} onValueChange={(v) => setScope(v ?? ALL_SCOPE)}>
+      <SelectTrigger
+        aria-label="Filter cakupan Drop Point"
+        className="bg-sidebar-accent/60 hover:bg-sidebar-accent text-sidebar-accent-foreground border-sidebar-border/60 focus-visible:ring-sidebar-ring mt-0.5 h-auto w-full justify-between rounded-md border px-1.5 py-1 text-[13px] font-semibold data-[size=default]:h-auto"
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent align="start">
+        <SelectItem value={ALL_SCOPE}>
+          <LayoutGrid className="text-muted-foreground size-3.5" aria-hidden />
+          Semua DP
+        </SelectItem>
+        {dps.map((d) => (
+          <SelectItem key={d['Kode DP']} value={d['Kode DP']}>
+            <Building2 className="text-muted-foreground size-3.5" aria-hidden />
+            {d['Kode DP']}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
