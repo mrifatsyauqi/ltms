@@ -26,6 +26,13 @@ import type { ImportResult, MappingTemplate } from '@/lib/data/import';
 import { ImportHistory } from './import-history';
 
 const IGNORE = '__ignore__';
+// WAJIB: base-ui Select butuh peta value->label eksplisit (`items`) supaya
+// trigger (SelectValue) menampilkan label yang benar (mis. "No. Waybill"),
+// bukan value mentah (mis. "noWaybill") — merender <SelectItem> saja tak cukup.
+const mappingItems: Record<string, string> = {
+  [IGNORE]: 'Abaikan kolom ini',
+  ...Object.fromEntries(CANONICAL_FIELDS.map((f) => [f, CANONICAL_FIELD_LABELS[f]])),
+};
 /** Di bawah ambang ini, import memicu banyak Auto-Close -> minta konfirmasi (Bagian 7.4). */
 const SMALL_FILE_THRESHOLD = 100;
 
@@ -320,6 +327,7 @@ export function ImportClient() {
                             <TableCell className="font-mono text-xs">{header}</TableCell>
                             <TableCell>
                               <Select
+                                items={mappingItems}
                                 value={entry.mapping![header] ?? IGNORE}
                                 onValueChange={(v) => updateMapping(entry.id, header, v as string)}
                               >

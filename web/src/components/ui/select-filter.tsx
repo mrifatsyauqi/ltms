@@ -20,8 +20,15 @@ const EMPTY_SENTINEL = '__sf_empty__';
 
 /** Dropdown filter standar (UI custom, konsisten lintas browser/OS) - dipakai di semua tabel. */
 export function SelectFilter({ label, value, onChange, options, className }: SelectFilterProps) {
+  // WAJIB: base-ui Select butuh peta value->label eksplisit (`items`) supaya
+  // SelectValue (trigger) bisa menampilkan label yang benar. Tanpa ini, ia
+  // fallback ke value MENTAH (bug: trigger menampilkan "__sf_empty__"/kode
+  // internal, bukan label opsi) — merender <SelectItem> saja tidak cukup.
+  const items = Object.fromEntries(options.map((o) => [o.value === '' ? EMPTY_SENTINEL : o.value, o.label]));
+
   return (
     <Select
+      items={items}
       value={value === '' ? EMPTY_SENTINEL : value}
       onValueChange={(v) => onChange(v === EMPTY_SENTINEL ? '' : (v ?? ''))}
     >

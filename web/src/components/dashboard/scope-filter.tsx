@@ -29,8 +29,14 @@ export function ScopeFilter() {
     String(a['Kode DP']).localeCompare(String(b['Kode DP'])),
   );
 
+  // WAJIB: base-ui Select butuh peta value->label eksplisit (`items`) supaya
+  // trigger (SelectValue) menampilkan label yang benar, bukan value mentah
+  // (bug: trigger sempat menampilkan "ALL" alih-alih "Semua DP").
+  const items: Record<string, string> = { [ALL_SCOPE]: 'Semua DP' };
+  dps.forEach((d) => { items[d['Kode DP']] = d['Kode DP']; });
+
   return (
-    <Select value={scope} onValueChange={(v) => setScope(v ?? ALL_SCOPE)}>
+    <Select items={items} value={scope} onValueChange={(v) => setScope(v ?? ALL_SCOPE)}>
       <SelectTrigger
         aria-label="Filter cakupan Drop Point"
         className="bg-sidebar-accent/60 hover:bg-sidebar-accent text-sidebar-accent-foreground border-sidebar-border/60 focus-visible:ring-sidebar-ring mt-0.5 h-auto w-full justify-between rounded-md border px-1.5 py-1 text-[13px] font-semibold data-[size=default]:h-auto"

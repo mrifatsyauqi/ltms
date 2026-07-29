@@ -167,6 +167,11 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const canSave =
     form.nama.trim() && (editing || form.email.trim()) && (!needDp || form.dropPoint) && (!needDp || activeDps.length > 0);
 
+  // WAJIB: base-ui Select butuh peta value->label eksplisit (`items`) supaya
+  // trigger menampilkan label yang benar, bukan value mentah.
+  const roleItems: Record<string, string> = { 'Admin DP': 'Admin DP', 'Admin Cabang': 'Admin Cabang' };
+  const dpItems = Object.fromEntries(activeDps.map((d) => [d['Kode DP'], `${d['Kode DP']} — ${d['Nama DP']}`]));
+
   return (
     <>
       <PageHeader
@@ -337,7 +342,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="role">Role</Label>
-              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: (v ?? 'Admin DP') as Role })}>
+              <Select items={roleItems} value={form.role} onValueChange={(v) => setForm({ ...form, role: (v ?? 'Admin DP') as Role })}>
                 <SelectTrigger id="role" className="h-9 w-full text-sm">
                   <SelectValue />
                 </SelectTrigger>
@@ -355,7 +360,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                     Belum ada Drop Point aktif. Tambahkan di Master Drop Point dulu.
                   </p>
                 ) : (
-                  <Select value={form.dropPoint} onValueChange={(v) => setForm({ ...form, dropPoint: v ?? '' })}>
+                  <Select items={dpItems} value={form.dropPoint} onValueChange={(v) => setForm({ ...form, dropPoint: v ?? '' })}>
                     <SelectTrigger id="dropPoint" className="h-9 w-full text-sm">
                       <SelectValue />
                     </SelectTrigger>
