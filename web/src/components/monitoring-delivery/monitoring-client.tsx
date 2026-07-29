@@ -20,7 +20,7 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
   const [copying, setCopying] = useState<null | 'img' | 'table'>(null);
   
   const inputRef = useRef<HTMLInputElement>(null);
-  const tableRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
   const handleFileUpload = (fileList: FileList | File[]) => {
