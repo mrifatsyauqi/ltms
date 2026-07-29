@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import * as xlsx from 'xlsx';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
+import { Image as ImageIcon, Table2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,7 +17,7 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
   const [totalSampai, setTotalSampai] = useState<number>(0);
   
   const [isGenerated, setIsGenerated] = useState(false);
-  const [isGeneratingImg, setIsGeneratingImg] = useState(false);
+  const [copying, setCopying] = useState<null | 'img' | 'table'>(null);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const tableRef = useRef<HTMLDivElement>(null);
@@ -109,48 +110,66 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
     setIsGenerated(true);
   };
 
+  /**
+   * Salin GAMBAR saja (image/png). Wajib format tunggal: kalau digabung dgn
+   * text/html atau text/plain, app chat (WhatsApp, Feishu) memilih teks
+   * sehingga yang ter-paste teks — bukan gambar. Dengan hanya image/png, app
+   * chat pasti menempel gambar tabel.
+   *
+   * Promise diberikan LANGSUNG ke ClipboardItem supaya navigator.clipboard.write
+   * dipanggil sinkron (user-gesture terjaga di Safari/iOS), render berat toPng
+   * berjalan di latar (fix INP).
+   */
   const handleCopyImage = async () => {
-    if (!tableRef.current) return;
+    const el = tableRef.current;
+    if (!el) return;
     try {
-      setIsGeneratingImg(true);
-      
-      const htmlString = tableRef.current.outerHTML;
-      const textString = tableRef.current.innerText;
+      setCopying('img');
+      const imagePromise = (async () => {
+        await new Promise((r) => setTimeout(r, 20)); // beri main-thread merender "Menyalin…"
+        // Tangkap LEBAR PENUH tabel (scrollWidth) + overflow visible supaya
+        // kolom tak terpotong saat tabel lebih lebar dari area layar.
+        const fullWidth = el.scrollWidth;
+        const dataUrl = await toPng(el, {
+          quality: 1,
+          pixelRatio: 2,
+          backgroundColor: '#ffffff',
+          width: fullWidth,
+          height: el.scrollHeight,
+          style: { width: `${fullWidth}px`, overflow: 'visible' },
+        });
+        return (await fetch(dataUrl)).blob();
+      })();
 
-      // Kita bungkus proses toPng yang berat di dalam Promise.
-      // Dengan memberikan Promise langsung ke ClipboardItem, pemanggilan navigator.clipboard.write
-      // terjadi secara sinkron (menjaga user-gesture), tetapi browser akan menunggu Promise ini
-      // di latar belakang. Ini memungkinkan kita menggunakan setTimeout agar UI tidak freeze (INP fix).
-      const imagePromise = new Promise<Blob>(async (resolve, reject) => {
-        try {
-          // Memberi jeda 50ms ke main thread agar browser bisa merender tulisan "Menyalin..."
-          await new Promise((r) => setTimeout(r, 50));
-          
-          const dataUrl = await toPng(tableRef.current!, { quality: 1, backgroundColor: '#ffffff' });
-          const response = await fetch(dataUrl);
-          const blob = await response.blob();
-          resolve(blob);
-        } catch (err) {
-          reject(err);
-        }
-      });
-      
-      const htmlBlob = new Blob([htmlString], { type: 'text/html' });
-      const textBlob = new Blob([textString], { type: 'text/plain' });
-      
-      const clipboardItem = new ClipboardItem({
-        'text/plain': textBlob,
-        'text/html': htmlBlob,
-        'image/png': imagePromise
-      });
-      
-      await navigator.clipboard.write([clipboardItem]);
-      toast.success('Berhasil Dicopy');
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': imagePromise })]);
+      toast.success('Gambar tabel disalin — tempel di chat (WA/Feishu).');
     } catch (error) {
-      console.error('Gagal copy image', error);
-      toast.error('Gagal menyalin. Pastikan browser tidak berada dalam Incognito dan mendukung Clipboard API.');
+      console.error('Gagal copy gambar', error);
+      toast.error('Gagal menyalin gambar. Pastikan bukan mode Incognito & browser mendukung Clipboard API.');
     } finally {
-      setIsGeneratingImg(false);
+      setCopying(null);
+    }
+  };
+
+  /**
+   * Salin TABEL (text/html + text/plain) untuk ditempel sebagai sel di
+   * Excel/Google Sheets. Sengaja TANPA image/png supaya spreadsheet menempel
+   * tabel yang bisa diedit, bukan gambar.
+   */
+  const handleCopyTable = async () => {
+    const el = tableRef.current;
+    if (!el) return;
+    try {
+      setCopying('table');
+      const htmlBlob = new Blob([el.outerHTML], { type: 'text/html' });
+      const textBlob = new Blob([el.innerText], { type: 'text/plain' });
+      await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
+      toast.success('Tabel disalin — tempel di Excel/Spreadsheet.');
+    } catch (error) {
+      console.error('Gagal copy tabel', error);
+      toast.error('Gagal menyalin tabel.');
+    } finally {
+      setCopying(null);
     }
   };
 
@@ -225,12 +244,17 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle>2. Hasil Tabel Monitoring</CardTitle>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" onClick={() => setIsGenerated(false)}>
                 Edit Parameter
               </Button>
-              <Button onClick={handleCopyImage} disabled={isGeneratingImg}>
-                {isGeneratingImg ? 'Menyalin...' : 'Copy Tabel'}
+              <Button variant="outline" onClick={handleCopyTable} disabled={copying !== null} title="Tempel sebagai sel di Excel / Google Sheets">
+                <Table2 className="size-4" aria-hidden />
+                {copying === 'table' ? 'Menyalin…' : 'Salin Tabel (Excel)'}
+              </Button>
+              <Button onClick={handleCopyImage} disabled={copying !== null} title="Tempel sebagai gambar di WhatsApp / Feishu">
+                <ImageIcon className="size-4" aria-hidden />
+                {copying === 'img' ? 'Menyalin…' : 'Salin Gambar (Chat)'}
               </Button>
             </div>
           </CardHeader>
