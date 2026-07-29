@@ -1,7 +1,8 @@
 import React, { forwardRef } from 'react';
 
 export type MonitoringRow = {
-  sprinter: string;
+  /** Nama Sprinter (mode Admin DP) atau kode Drop Point (mode Admin Cabang). */
+  groupName: string;
   waybillDelivery: number;
   tandaTerima: number;
   belumDiterima: number;
@@ -13,9 +14,11 @@ interface MonitoringTableProps {
   data: MonitoringRow[];
   totalSampai: number;
   dpName: string;
+  /** Label kolom kelompok: 'Sprinter' (Admin DP) atau 'DP Delivery' (Admin Cabang). */
+  groupLabel: string;
 }
 
-export const MonitoringTable = forwardRef<HTMLTableElement, MonitoringTableProps>(({ data, totalSampai, dpName }, ref) => {
+export const MonitoringTable = forwardRef<HTMLTableElement, MonitoringTableProps>(({ data, totalSampai, dpName, groupLabel }, ref) => {
   // Hitung Agregat
   const totalDelivery = data.reduce((sum, row) => sum + row.waybillDelivery, 0);
   const totalTandaTerima = data.reduce((sum, row) => sum + row.tandaTerima, 0);
@@ -59,7 +62,7 @@ export const MonitoringTable = forwardRef<HTMLTableElement, MonitoringTableProps
           </tr>
           <tr className="bg-gray-100">
             <th rowSpan={2} className={`${cell} text-left align-middle font-semibold`}>
-              Sprinter
+              {groupLabel}
             </th>
             <th rowSpan={2} className={`${cell} text-center align-middle font-semibold`}>
               Jumlah Waybill<br />Delivery
@@ -82,7 +85,7 @@ export const MonitoringTable = forwardRef<HTMLTableElement, MonitoringTableProps
         <tbody>
           {data.map((row, idx) => (
             <tr key={idx}>
-              <td className={`${cell} whitespace-nowrap`}>{row.sprinter}</td>
+              <td className={`${cell} whitespace-nowrap`}>{row.groupName}</td>
               <td className={numCell}>{row.waybillDelivery}</td>
               <td className={numCell}>{row.tandaTerima}</td>
               <td className={numCell}>{row.belumDiterima}</td>

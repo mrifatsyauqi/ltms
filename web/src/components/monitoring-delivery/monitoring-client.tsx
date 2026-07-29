@@ -11,7 +11,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MonitoringRow, MonitoringTable } from './monitoring-table';
 
-export function MonitoringClient({ dpName }: { dpName: string }) {
+type Props = {
+  dpName: string;
+  /** Menentukan sumber pengelompokan: Admin Cabang -> per Drop Point, Admin DP -> per Sprinter. */
+  isCabang: boolean;
+};
+
+export function MonitoringClient({ dpName, isCabang }: Props) {
+  const groupLabel = isCabang ? 'DP Delivery' : 'Sprinter';
   const [stagedData, setStagedData] = useState<MonitoringRow[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [totalSampai, setTotalSampai] = useState<number>(0);
@@ -39,36 +46,19 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
         const sheet = workbook.Sheets[sheetName];
         
         const rows = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
-        const dataRows = rows.slice(2);
+        const dataRows = rows.slice(2); // 2 baris header (grup + sub-kolom) di kedua format JMS
 
-        const sprinterMap = new Map<string, MonitoringRow>();
+        const groupMap = new Map<string, MonitoringRow>();
 
-        for (const row of dataRows) {
-          if (!row || row.length < 17) continue;
-
-          const rawSprinter = row[4];
-          if (typeof rawSprinter !== 'string') continue;
-
-          const sprinter = rawSprinter.trim();
-          
-          if (!sprinter.toLowerCase().startsWith('mtr')) {
-            continue;
-          }
-
-          const waybillDelivery = Number(row[5]) || 0;
-          const ttdNormalTotal = Number(row[6]) || 0;
-          const paketBermasalah = Number(row[15]) || 0;
-          
-          const tandaTerima = ttdNormalTotal;
+        function addRow(groupName: string, waybillDelivery: number, tandaTerima: number, paketBermasalah: number) {
           const belumDiterima = waybillDelivery - tandaTerima;
           const presentaseTtd = waybillDelivery > 0 ? (tandaTerima / waybillDelivery) * 100 : 0;
-
-          if (sprinterMap.has(sprinter)) {
-            const existing = sprinterMap.get(sprinter)!;
+          const existing = groupMap.get(groupName);
+          if (existing) {
             const newWaybill = existing.waybillDelivery + waybillDelivery;
             const newTandaTerima = existing.tandaTerima + tandaTerima;
-            sprinterMap.set(sprinter, {
-              sprinter,
+            groupMap.set(groupName, {
+              groupName,
               waybillDelivery: newWaybill,
               tandaTerima: newTandaTerima,
               belumDiterima: existing.belumDiterima + belumDiterima,
@@ -76,24 +66,57 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
               presentaseTtd: newWaybill > 0 ? (newTandaTerima / newWaybill) * 100 : 0,
             });
           } else {
-            sprinterMap.set(sprinter, {
-              sprinter,
-              waybillDelivery,
-              tandaTerima,
-              belumDiterima,
-              paketBermasalah,
-              presentaseTtd,
-            });
+            groupMap.set(groupName, { groupName, waybillDelivery, tandaTerima, belumDiterima, paketBermasalah, presentaseTtd });
           }
         }
 
-        const parsedData = Array.from(sprinterMap.values());
-        
+        if (isCabang) {
+          // Format JMS "per Drop Point" (Admin Cabang): tiap baris = 1 DP.
+          // Kolom: [2] DP Delivery, [3] Total Delivery, [4] TTD Normal (Total),
+          // [13] Paket Bermasalah. Baris dgn DP sama (mis. beda tanggal) dijumlahkan.
+          for (const row of dataRows) {
+            if (!row || row.length < 14) continue;
+            const rawDp = row[2];
+            if (typeof rawDp !== 'string' || !rawDp.trim()) continue;
+            const dp = rawDp.trim();
+            const waybillDelivery = Number(row[3]) || 0;
+            const tandaTerima = Number(row[4]) || 0;
+            const paketBermasalah = Number(row[13]) || 0;
+            addRow(dp, waybillDelivery, tandaTerima, paketBermasalah);
+          }
+        } else {
+          // Format JMS "per Sprinter" (Admin DP): hanya baris kurir ("Mtr…").
+          // Kolom: [4] Sprinter, [5] Total Delivery, [6] TTD Normal (Total),
+          // [15] Paket Bermasalah.
+          for (const row of dataRows) {
+            if (!row || row.length < 17) continue;
+            const rawSprinter = row[4];
+            if (typeof rawSprinter !== 'string') continue;
+            const sprinter = rawSprinter.trim();
+            if (!sprinter.toLowerCase().startsWith('mtr')) continue;
+            const waybillDelivery = Number(row[5]) || 0;
+            const tandaTerima = Number(row[6]) || 0;
+            const paketBermasalah = Number(row[15]) || 0;
+            addRow(sprinter, waybillDelivery, tandaTerima, paketBermasalah);
+          }
+        }
+
+        const parsedData = Array.from(groupMap.values());
+
         // Urutkan dari presentase TTD terbesar ke terkecil
         parsedData.sort((a, b) => b.presentaseTtd - a.presentaseTtd);
-        
+
         setStagedData(parsedData);
-        toast.success(`Berhasil memproses file. Ditemukan ${parsedData.length} sprinter.`);
+        if (parsedData.length === 0) {
+          toast.warning(
+            isCabang
+              ? 'Tidak ada baris DP Delivery yang terbaca. Pastikan file adalah laporan per-DP dari JMS.'
+              : 'Tidak ada baris Sprinter ("Mtr…") yang terbaca. Pastikan file adalah laporan per-sprinter dari JMS.',
+          );
+        } else {
+          const noun = isCabang ? 'Drop Point' : 'sprinter';
+          toast.success(`Berhasil memproses file. Ditemukan ${parsedData.length} ${noun}.`);
+        }
       } catch (error) {
         console.error('Error parsing file:', error);
         toast.error('Gagal memproses file Excel.');
@@ -199,6 +222,11 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
               <p className="text-sm text-muted-foreground">
                 Drag & drop file Excel Monitor Delivery dari JMS ke sini, atau
               </p>
+              <p className="text-muted-foreground text-xs">
+                {isCabang
+                  ? 'Gunakan laporan JMS per Drop Point (kolom "DP Delivery").'
+                  : 'Gunakan laporan JMS per Sprinter (kolom Sprinter "Mtr…").'}
+              </p>
               <Button type="button" variant="outline" onClick={() => inputRef.current?.click()}>
                 Pilih File Excel
               </Button>
@@ -259,7 +287,7 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
             </div>
           </CardHeader>
           <CardContent className="overflow-x-auto">
-            <MonitoringTable ref={tableRef} data={stagedData} totalSampai={totalSampai} dpName={dpName} />
+            <MonitoringTable ref={tableRef} data={stagedData} totalSampai={totalSampai} dpName={dpName} groupLabel={groupLabel} />
           </CardContent>
         </Card>
       )}
