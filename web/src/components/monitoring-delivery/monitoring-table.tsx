@@ -40,7 +40,7 @@ export const MonitoringTable = forwardRef<HTMLTableElement, MonitoringTableProps
   // Kelas dasar sel: padding vertikal ringkas (pas dgn tinggi teks, bukan
   // longgar). numCell satu ukuran font lebih besar drpd teks label (angka
   // lebih menonjol/gampang dipindai) + tabular-nums biar kolom rata.
-  const cell = 'border border-gray-400 px-2.5 py-1 text-base leading-tight';
+  const cell = 'border border-gray-400 px-2.5 py-0.5 text-base leading-none';
   const numCell = cn(cell, 'text-center whitespace-nowrap tabular-nums text-lg');
 
   // ref di elemen <table> (bukan wrapper) supaya gambar hasil copy pas ukuran
