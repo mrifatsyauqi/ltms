@@ -212,13 +212,25 @@ sebelumnya (paket lama yang belum Clear TTD):
 -   Mapping manual yang dipilih dapat disimpan sebagai template baru
     untuk import berikutnya.
 
-## 7.3 Error Handling & Partial Failure (Baru)
+## 7.3 Error Handling & Partial Failure (Baru; direvisi v1.3)
 
--   Setiap file dalam satu batch upload diproses **independen**. Jika
-    1 dari 6 file gagal (format rusak, header tidak dikenali, dll),
-    file lainnya tetap dapat diproses dan diimport.
--   File yang gagal ditampilkan dengan pesan error spesifik dan dapat
-    diupload ulang tanpa mengulang seluruh batch.
+-   **Parsing & mapping** (format rusak, header tidak dikenali) tetap
+    diproses **independen per file** — 1 dari 6 file gagal dibaca tidak
+    menghalangi file lainnya untuk dipetakan dan disiapkan.
+-   **Submit ke server SEBALIKNYA digabung jadi satu batch** (bukan lagi
+    satu panggilan per file): seluruh file yang sudah siap ("Ready")
+    di-*merge* + dedup by-waybill dulu (baris belakangan menang untuk
+    waybill yang sama), baru dikirim sekali sebagai satu tarikan. Ini
+    **wajib** sejak Auto-Close (Bagian 7.4): Auto-Close membaca "waybill
+    yang tidak muncul di tarikan yang baru diimport" untuk menentukan
+    apa yang diarsipkan. Kalau file dikirim satu-satu, server hanya
+    melihat isi FILE YANG SEDANG diproses sebagai tarikan hari itu —
+    waybill dari file yang sudah diimport sebelumnya (mis. beda DP)
+    akan tampak "hilang dari tarikan" dan salah diarsipkan. Menggabungkan
+    dulu memastikan Auto-Close melihat seluruh tarikan (semua file)
+    sekaligus. Konsekuensinya: submit kini **all-or-nothing** untuk
+    batch gabungan — gagal, seluruh batch gagal dan bisa diulang lewat
+    tombol Import yang sama (bukan retry per-file).
 -   Selama proses Import berjalan, sistem menggunakan **lock** (mis.
     `LockService` pada Google Apps Script) agar tidak ada proses tulis
     lain (termasuk Auto Save feedback) yang bentrok ke sheet yang sama
@@ -617,3 +629,4 @@ Untuk mengelola ekspektasi, hal berikut **tidak** termasuk dalam MVP:
 | 15 *(v1.3)* | Umur Paket ikut dibekukan saat Auto-Close `CLOSE ALUR` | Paket sudah tidak *actionable*, aging tak boleh terus berjalan |
 | 16 *(v1.3)* | Dialog konfirmasi import file < 100 baris (Bagian 7.4) | Mencegah Auto-Close massal akibat file tarikan tidak lengkap |
 | 17 *(v1.3)* | Event Auto-Close dicatat ke `Activity_Log` & tampil di Riwayat Feedback | Paket terarsip tetap dapat ditelusuri; jejak Admin pemicu import tersimpan |
+| 18 *(v1.3)* | Multi-file upload digabung jadi satu batch submit (bukan lagi 1 panggilan server per file), Bagian 7.3 | File dikirim satu-satu membuat Auto-Close (7.4) salah mengarsipkan waybill dari file yang sudah diimport sebelumnya, seolah "hilang dari tarikan" |

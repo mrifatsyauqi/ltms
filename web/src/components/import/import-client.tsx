@@ -29,7 +29,10 @@ const IGNORE = '__ignore__';
 /** Di bawah ambang ini, import memicu banyak Auto-Close -> minta konfirmasi (Bagian 7.4). */
 const SMALL_FILE_THRESHOLD = 100;
 
-type EntryStatus = 'parsing' | 'error' | 'needs-mapping' | 'ready' | 'importing' | 'imported' | 'import-error';
+// 'import-error' SENGAJA tidak ada: kegagalan submit adalah kegagalan BATCH
+// gabungan (lihat handleImportAll), bukan per-file — entry kembali ke 'ready'
+// supaya tombol Import yang sama bisa dipakai retry.
+type EntryStatus = 'parsing' | 'error' | 'needs-mapping' | 'ready' | 'importing' | 'imported';
 
 type FileEntry = {
   id: string;
@@ -39,7 +42,6 @@ type FileEntry = {
   mapping?: HeaderMapping;
   mappedRows?: MappedRow[];
   error?: string;
-  result?: ImportResult;
   raw?: import('@/lib/import/types').ParsedFile;
 };
 
@@ -58,12 +60,16 @@ export function ImportClient() {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [smallConfirm, setSmallConfirm] = useState<{ entry: FileEntry; resolve: (ok: boolean) => void } | null>(null);
+  // Konfirmasi batch KECIL (<100 baris GABUNGAN, bukan per-file lagi).
+  const [smallConfirm, setSmallConfirm] = useState<{ count: number; resolve: (ok: boolean) => void } | null>(null);
+  const [batchImporting, setBatchImporting] = useState(false);
+  const [batchResult, setBatchResult] = useState<{ fileNames: string[]; result: ImportResult } | null>(null);
+  const [batchError, setBatchError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  /** Konfirmasi file kecil (<100 baris) sebelum import; resolve(true)=lanjut. */
+  /** Konfirmasi batch kecil (<100 baris gabungan) sebelum import; resolve(true)=lanjut. */
   const askProceedSmall = useCallback(
-    (entry: FileEntry) => new Promise<boolean>((resolve) => setSmallConfirm({ entry, resolve })),
+    (count: number) => new Promise<boolean>((resolve) => setSmallConfirm({ count, resolve })),
     [],
   );
 
@@ -91,6 +97,9 @@ export function ImportClient() {
     const files = Array.from(fileList);
     if (files.length === 0) return;
     const ids = files.map(() => crypto.randomUUID());
+    // Hasil/error import batch sebelumnya sudah tidak relevan begitu ada file baru.
+    setBatchResult(null);
+    setBatchError(null);
 
     setEntries((prev) => [...prev, ...files.map((f, i) => ({ id: ids[i], fileName: f.name, status: 'parsing' as const }))]);
 
@@ -146,48 +155,61 @@ export function ImportClient() {
     );
   }
 
-  async function importOne(entry: FileEntry) {
-    // Pengaman: file kecil berpotensi meng-Auto-Close banyak paket -> konfirmasi.
-    const n = entry.mappedRows?.length ?? 0;
-    if (n < SMALL_FILE_THRESHOLD) {
-      const ok = await askProceedSmall(entry);
+  /**
+   * SEMUA file siap digabung + dedup dulu (mergeAndDedup), baru dikirim sebagai
+   * SATU panggilan /api/import. WAJIB begini (bukan satu panggilan per file):
+   * Auto-Close (v1.3) mengarsipkan waybill yang "hilang dari tarikan" per
+   * import. Kalau tiap file dikirim terpisah, backend hanya melihat isi file
+   * YANG SEDANG diproses sebagai tarikan hari itu — waybill dari file
+   * sebelumnya (yang tidak ikut di file berikutnya, mis. beda DP) akan salah
+   * dianggap hilang dan diarsipkan. Menggabungkan dulu memastikan Auto-Close
+   * melihat seluruh tarikan (semua file) sekaligus.
+   */
+  async function handleImportAll() {
+    const ready = entries.filter((e) => e.status === 'ready' && e.mappedRows);
+    if (ready.length === 0) return;
+
+    const combined = mergeAndDedup(ready.map((e) => e.mappedRows!));
+    if (combined.rows.length === 0) return;
+
+    if (combined.rows.length < SMALL_FILE_THRESHOLD) {
+      const ok = await askProceedSmall(combined.rows.length);
       if (!ok) {
-        setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, status: 'ready' } : e)));
-        toast.info(`${entry.fileName}: import dibatalkan`);
+        toast.info('Import dibatalkan');
         return;
       }
     }
-    setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, status: 'importing' } : e)));
+
+    const readyIds = new Set(ready.map((e) => e.id));
+    setEntries((prev) => prev.map((e) => (readyIds.has(e.id) ? { ...e, status: 'importing' } : e)));
+    setBatchImporting(true);
+    setBatchError(null);
     try {
+      const fileNames = ready.map((e) => e.fileName);
       const res = await fetch('/api/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName: entry.fileName, rows: entry.mappedRows }),
+        body: JSON.stringify({ fileName: fileNames.join(', '), rows: combined.rows }),
       });
       const body = await res.json();
       if (!body.ok) throw new Error(body.message || body.error);
-      setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, status: 'imported', result: body.data } : e)));
       const r: ImportResult = body.data;
+      setBatchResult({ fileNames, result: r });
+      setEntries((prev) => prev.map((e) => (readyIds.has(e.id) ? { ...e, status: 'imported' } : e)));
       const closeInfo = r.closed ? `, ${r.closed} di-close` : '';
       toast.success(
-        `${entry.fileName}: ${r.inserted} baru, ${r.updated} update, ${r.needReview} perlu review, ${r.skipped} dilewati${closeInfo}`,
+        `${fileNames.length} file (${combined.rows.length} waybill unik): ${r.inserted} baru, ${r.updated} update, ${r.needReview} perlu review, ${r.skipped} dilewati${closeInfo}`,
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Gagal import';
-      setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, status: 'import-error', error: message } : e)));
-      toast.error(`${entry.fileName} gagal diimport: ${message}`);
+      setBatchError(message);
+      // Kembali ke 'ready' (bukan status error permanen) supaya tombol Import
+      // yang sama bisa dipakai untuk retry seluruh batch.
+      setEntries((prev) => prev.map((e) => (readyIds.has(e.id) ? { ...e, status: 'ready' } : e)));
+      toast.error(`Gagal import: ${message}`);
     } finally {
+      setBatchImporting(false);
       queryClient.invalidateQueries({ queryKey: ['import-history'] });
-    }
-  }
-
-  async function handleImportAll() {
-    // Setiap file diproses independen (Bagian 7.3) — kegagalan satu file
-    // tidak menghentikan file lain yang sudah siap.
-    const ready = entries.filter((e) => e.status === 'ready' && e.mappedRows);
-    for (const entry of ready) {
-      // eslint-disable-next-line no-await-in-loop
-      await importOne(entry);
     }
   }
 
@@ -250,28 +272,9 @@ export function ImportClient() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {entry.status === 'error' && <p className="text-destructive text-sm">{entry.error}</p>}
-                {entry.status === 'import-error' && (
-                  <div className="space-y-2">
-                    <p className="text-destructive text-sm">{entry.error}</p>
-                    <Button type="button" size="sm" onClick={() => importOne(entry)}>
-                      Coba Lagi
-                    </Button>
-                  </div>
-                )}
-                {entry.status === 'imported' && entry.result && (
-                  <p className="text-sm">
-                    {entry.result.inserted} baru • {entry.result.updated} update • {entry.result.needReview} perlu review •{' '}
-                    {entry.result.skipped} dilewati
-                    {entry.result.closed ? (
-                      <>
-                        {' '}
-                        • {entry.result.closed} di-close
-                        <span className="text-muted-foreground">
-                          {' '}
-                          ({entry.result.closedClearTTD ?? 0} Clear TTD, {entry.result.closedAlur ?? 0} Close Alur)
-                        </span>
-                      </>
-                    ) : null}
+                {entry.status === 'imported' && (
+                  <p className="text-muted-foreground text-sm">
+                    Sudah masuk ke batch gabungan — lihat ringkasan hasil di bawah daftar file.
                   </p>
                 )}
 
@@ -355,10 +358,40 @@ export function ImportClient() {
             <p className="text-sm">
               Total {combined.rows.length} waybill unik dari {entries.length} file ({readyCount} siap import).
             </p>
-            <Button type="button" onClick={handleImportAll} disabled={readyCount === 0}>
-              Import {readyCount > 0 ? `(${readyCount} file)` : ''}
+            <Button type="button" onClick={handleImportAll} disabled={readyCount === 0 || batchImporting}>
+              {batchImporting ? 'Mengimport…' : `Import ${readyCount > 0 ? `(${readyCount} file)` : ''}`}
             </Button>
           </div>
+
+          {batchError && (
+            <div className="border-destructive/40 bg-destructive/5 rounded-lg border p-3">
+              <p className="text-destructive text-sm font-medium">Gagal import batch</p>
+              <p className="text-muted-foreground mt-0.5 text-xs">{batchError}</p>
+              <p className="text-muted-foreground mt-1 text-xs">
+                File yang sudah dipetakan kembali ke status &quot;Siap import&quot; — klik Import lagi untuk mengulang
+                seluruh batch (semua file digabung sekaligus, bukan satu per satu).
+              </p>
+            </div>
+          )}
+
+          {batchResult && (
+            <div className="border-border bg-muted/30 rounded-lg border p-3 text-sm">
+              <p className="font-medium">
+                Hasil import gabungan — {batchResult.fileNames.length} file: {batchResult.fileNames.join(', ')}
+              </p>
+              <p className="text-muted-foreground mt-1">
+                {batchResult.result.inserted} baru • {batchResult.result.updated} update •{' '}
+                {batchResult.result.needReview} perlu review • {batchResult.result.skipped} dilewati
+                {batchResult.result.closed ? (
+                  <>
+                    {' '}
+                    • {batchResult.result.closed} di-close ({batchResult.result.closedClearTTD ?? 0} Clear TTD,{' '}
+                    {batchResult.result.closedAlur ?? 0} Close Alur)
+                  </>
+                ) : null}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -382,13 +415,13 @@ export function ImportClient() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>File kecil — konfirmasi import</DialogTitle>
+            <DialogTitle>Batch kecil — konfirmasi import</DialogTitle>
             <DialogDescription>
-              File <span className="font-medium">{smallConfirm?.entry.fileName}</span> hanya berisi{' '}
-              <span className="font-medium">{smallConfirm?.entry.mappedRows?.length ?? 0}</span> baris (&lt;{' '}
-              {SMALL_FILE_THRESHOLD}). Paket DP di file ini yang <span className="font-medium">tidak</span> tercantum akan
-              otomatis di-<span className="font-medium">Close</span> (Clear TTD / CLOSE ALUR) dan diarsipkan. Pastikan
-              file tarikan sudah lengkap sebelum melanjutkan.
+              Gabungan file yang akan diimport hanya berisi{' '}
+              <span className="font-medium">{smallConfirm?.count ?? 0}</span> waybill unik (&lt; {SMALL_FILE_THRESHOLD}).
+              Paket DP dalam batch ini yang <span className="font-medium">tidak</span> tercantum akan otomatis di-
+              <span className="font-medium">Close</span> (Clear TTD / CLOSE ALUR) dan diarsipkan. Pastikan seluruh file
+              tarikan hari ini sudah diunggah bersamaan sebelum melanjutkan.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -424,7 +457,6 @@ function StatusBadge({ status }: { status: EntryStatus }) {
     ready: 'Siap import',
     importing: 'Mengimport...',
     imported: 'Sudah diimport',
-    'import-error': 'Gagal import',
   };
   const color: Record<EntryStatus, string> = {
     parsing: 'text-muted-foreground',
@@ -433,7 +465,6 @@ function StatusBadge({ status }: { status: EntryStatus }) {
     ready: 'text-green-600 dark:text-green-500',
     importing: 'text-muted-foreground',
     imported: 'text-green-600 dark:text-green-500',
-    'import-error': 'text-destructive',
   };
   return <span className={`text-xs font-medium ${color[status]}`}>{label[status]}</span>;
 }
