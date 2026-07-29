@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import type { UserRow } from '@/lib/data/users';
 import type { DropPointRow } from '@/lib/data/drop-points';
@@ -32,9 +33,6 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 type Role = 'Admin Cabang' | 'Admin DP';
 type FormState = { nama: string; email: string; role: Role; dropPoint: string; statusAktif: boolean };
 const EMPTY: FormState = { nama: '', email: '', role: 'Admin DP', dropPoint: '', statusAktif: true };
-
-const SELECT_CLASS =
-  'border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none';
 
 export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const qc = useQueryClient();
@@ -339,15 +337,15 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="role">Role</Label>
-              <select
-                id="role"
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
-                className={SELECT_CLASS}
-              >
-                <option value="Admin DP">Admin DP</option>
-                <option value="Admin Cabang">Admin Cabang</option>
-              </select>
+              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: (v ?? 'Admin DP') as Role })}>
+                <SelectTrigger id="role" className="h-9 w-full text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Admin DP">Admin DP</SelectItem>
+                  <SelectItem value="Admin Cabang">Admin Cabang</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             {needDp && (
               <div className="space-y-1.5">
@@ -357,18 +355,18 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                     Belum ada Drop Point aktif. Tambahkan di Master Drop Point dulu.
                   </p>
                 ) : (
-                  <select
-                    id="dropPoint"
-                    value={form.dropPoint}
-                    onChange={(e) => setForm({ ...form, dropPoint: e.target.value })}
-                    className={SELECT_CLASS}
-                  >
-                    {activeDps.map((d) => (
-                      <option key={d['Kode DP']} value={d['Kode DP']}>
-                        {d['Kode DP']} — {d['Nama DP']}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={form.dropPoint} onValueChange={(v) => setForm({ ...form, dropPoint: v ?? '' })}>
+                    <SelectTrigger id="dropPoint" className="h-9 w-full text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeDps.map((d) => (
+                        <SelectItem key={d['Kode DP']} value={d['Kode DP']}>
+                          {d['Kode DP']} — {d['Nama DP']}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
                 <p className="text-muted-foreground text-[11px]">
                   Dipilih dari daftar Master Drop Point (bukan ketik bebas) supaya cocok dengan data Long Tail.
