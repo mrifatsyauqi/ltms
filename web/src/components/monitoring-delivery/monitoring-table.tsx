@@ -1,4 +1,5 @@
 import React, { forwardRef } from 'react';
+import { cn } from '@/lib/utils';
 
 export type MonitoringRow = {
   /** Nama Sprinter (mode Admin DP) atau kode Drop Point (mode Admin Cabang). */
@@ -36,10 +37,11 @@ export const MonitoringTable = forwardRef<HTMLTableElement, MonitoringTableProps
     return val.toFixed(1) + '%';
   };
 
-  // Kelas dasar sel: font lebih besar (text-base) + padding ringkas. Angka
-  // whitespace-nowrap + tabular-nums supaya kolom numerik ramping & rata.
-  const cell = 'border border-gray-400 px-2.5 py-2 text-base';
-  const numCell = `${cell} text-center whitespace-nowrap tabular-nums`;
+  // Kelas dasar sel: padding vertikal ringkas (pas dgn tinggi teks, bukan
+  // longgar). numCell satu ukuran font lebih besar drpd teks label (angka
+  // lebih menonjol/gampang dipindai) + tabular-nums biar kolom rata.
+  const cell = 'border border-gray-400 px-2.5 py-1 text-base leading-tight';
+  const numCell = cn(cell, 'text-center whitespace-nowrap tabular-nums text-lg');
 
   // ref di elemen <table> (bukan wrapper) supaya gambar hasil copy pas ukuran
   // tabel, tanpa margin/padding samping. Wrapper hanya utk scroll di layar.
