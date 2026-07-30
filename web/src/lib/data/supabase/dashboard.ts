@@ -43,6 +43,16 @@ export async function getDashboard(actorEmail: string, dp?: string): Promise<Das
   return computeDashboard(dpFilter, actor.role, actor.dropPoint || '');
 }
 
+/**
+ * Dashboard "Semua DP" TANPA auth - dipakai endpoint publik (Link Berbagi
+ * Laporan) setelah token divalidasi terpisah. Selalu agregat penuh (dpFilter
+ * null), tidak pernah menerima input scope dari luar (link publik terkunci
+ * ke "Semua DP", tak ada cara memfilter ke 1 DP dari sini).
+ */
+export async function getDashboardPublic(): Promise<DashboardData> {
+  return computeDashboard(null, 'Admin Cabang', '');
+}
+
 /** Inti agregasi Dashboard tanpa auth — dipakai getDashboard (live) & snapshot cron. */
 async function computeDashboard(dpFilter: string | null, role: string, dropPoint: string): Promise<DashboardData> {
   // Progress Hari Ini: waybill (yang masih ada, ter-scope) dengan Manual Feedback hari ini (Jakarta).

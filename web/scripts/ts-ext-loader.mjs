@@ -16,10 +16,20 @@ export async function resolve(specifier, context, nextResolve) {
   try {
     return await nextResolve(spec, context);
   } catch (err) {
-    // Import relatif tanpa ekstensi (gaya bundler) - coba tambahkan .ts.
     if (!/\.[a-zA-Z0-9]+$/.test(spec)) {
+      // Import relatif tanpa ekstensi (gaya bundler) - coba tambahkan .ts.
       try {
         return await nextResolve(`${spec}.ts`, context);
+      } catch {
+        // jatuh ke fallback berikutnya
+      }
+      // Sebagian paket (mis. next/server) mendeklarasikan subpath export
+      // yang WAJIB ekstensi eksplisit di package.json-nya sendiri ("./server.js",
+      // bukan "./server") - resolusi native Node menolak versi tanpa ekstensi
+      // walau webpack/Turbopack (yg dipakai Next.js sungguhan) menerimanya.
+      // Route handler (route.ts) diimpor apa adanya di test - coba .js jg.
+      try {
+        return await nextResolve(`${spec}.js`, context);
       } catch {
         // jatuh ke error asli di bawah
       }
