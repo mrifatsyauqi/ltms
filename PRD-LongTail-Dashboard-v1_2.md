@@ -383,8 +383,13 @@ follow-up:
     `DD/MM/YY : Feedback`, dipisah karakter newline — isi lama tidak
     pernah dihapus/ditimpa.
 3.  Sel ditulis ulang dengan gabungan teks lama + baris baru tersebut.
-4.  Kolom `Status Terakhir`, `Umur Paket`, dan `Feedback` (isian
-    terkini) pada baris yang sama ikut ter-update seperti biasa.
+4.  Kolom `Feedback` (isian terkini) pada baris yang sama ikut
+    ter-update. `Status Terakhir` **TIDAK** ikut berubah — kolom itu
+    murni data hasil tarikan Excel (Bagian 7), hanya berubah lewat
+    import berikutnya (atau Auto-Close, Bagian 7.4), tidak pernah lewat
+    submit feedback. `Umur Paket` tetap dihitung live dari `Waktu
+    Sampai` (Bagian 9.1) — feedback tidak memengaruhinya, kecuali
+    membekukannya saat Clear TTD.
 
 **Yang dilihat user:** hanya kolom `Log Feedback` di atas — rapi, satu
 sel, gampang dibaca sekilas, tanpa perlu buka sheet/tab lain.
@@ -400,7 +405,12 @@ teks di kolom `Log Feedback`. User tidak pernah membuka atau mengedit
 
 ## 9.1 Umur Paket
 
-Dihitung otomatis berdasarkan: `Hari Ini - Waktu Sampai`.
+Dihitung otomatis, **live** (bukan nilai beku dari saat import), sebagai
+selisih **tanggal kalender** (zona Jakarta/WIB) antara hari ini dan
+tanggal `Waktu Sampai` — bukan `floor(jam berlalu / 24)`. Contoh: paket
+sampai 28/07 (jam berapa pun) dan hari ini 30/07 -> Umur = 2, sejak
+tengah malam WIB tanpa perlu menunggu genap 48 jam sejak jam `Waktu
+Sampai`-nya. Umur = 0 berarti sampai hari ini.
 
 **Aturan penghentian hitungan (Baru):** perhitungan umur **berhenti**
 pada saat status diubah menjadi **Clear TTD**; nilai umur dibekukan
@@ -410,12 +420,18 @@ prioritas utama sistem (lihat Bagian 15). *(v1.3)* Umur juga dibekukan
 saat paket di-**Auto-Close** menjadi **`CLOSE ALUR`** (Bagian 7.4),
 karena paket tersebut sudah tidak *actionable*.
 
-**Nilai `Status Terakhir` (v1.3):** selain status operasional dari JMS
-(On Delivery, Reschedule, PAKET BERMASALAH, CEK, dll.) dan **`Clear
-TTD`** (diisi manual oleh admin), kini ada **`CLOSE ALUR`** — status
-final yang **diset otomatis** oleh sistem saat paket non-final hilang
-dari tarikan JMS (Bagian 7.4). Paket berstatus `Clear TTD` atau `CLOSE
-ALUR` berada di arsip, bukan di daftar kerja aktif.
+**Nilai `Status Terakhir` (direvisi):** kolom ini murni data hasil
+tarikan Excel (Bagian 7) — **hanya** berubah lewat import berikutnya
+atau lewat Auto-Close otomatis (`CLOSE ALUR`, Bagian 7.4), **tidak
+pernah** lewat submit feedback manual, termasuk saat admin menandai
+Clear TTD. Status "Clear TTD" sebuah paket dibaca dari kolom
+`Feedback` (baris mengandung kata "TTD" — lihat `isClearTTD`), bukan
+dari `Status Terakhir`; badge/warna aging & pembekuan umur mengikuti
+`Feedback`, bukan `Status Terakhir`. `CLOSE ALUR` tetap satu-satunya
+nilai yang **diset otomatis oleh sistem** ke `Status Terakhir`, khusus
+saat Auto-Close (Bagian 7.4). Paket dengan `Feedback` Clear TTD atau
+`Status Terakhir` `CLOSE ALUR` berada di arsip, bukan di daftar kerja
+aktif.
 
 ### Warna Aging
 
@@ -639,3 +655,5 @@ Untuk mengelola ekspektasi, hal berikut **tidak** termasuk dalam MVP:
 | 17 *(v1.3)* | Event Auto-Close dicatat ke `Activity_Log` & tampil di Riwayat Feedback | Paket terarsip tetap dapat ditelusuri; jejak Admin pemicu import tersimpan |
 | 18 *(v1.3)* | Multi-file upload digabung jadi satu batch submit (bukan lagi 1 panggilan server per file), Bagian 7.3 | File dikirim satu-satu membuat Auto-Close (7.4) salah mengarsipkan waybill dari file yang sudah diimport sebelumnya, seolah "hilang dari tarikan" |
 | 19 *(v1.3)* | Menghapus langkah/UI mapping manual dari wizard Import (Bagian 7.2); file yang kolom wajibnya gagal terdeteksi otomatis kini dilewati dengan peringatan, bukan diarahkan ke UI mapping | Deteksi otomatis terbukti stabil & akurat saat pemakaian nyata; langkah manual jadi beban tambahan yang tak perlu |
+| 20 *(v1.3)* | Umur Paket dihitung ulang sebagai selisih tanggal kalender Jakarta (bukan `floor(jam berlalu / 24)`), dan parsing `Waktu Sampai` diperbaiki agar selalu dibaca sbg jam dinding Jakarta (Bagian 9.1) | Umur tidak naik tepat waktu di pergantian hari — paket yg sampai kemarin sore masih terhitung "1 Hari" alih-alih "2 Hari" keesokan paginya |
+| 21 *(v1.3)* | `Status Terakhir` tidak lagi ikut ditimpa nilai `Feedback` saat submit feedback manual, termasuk saat Clear TTD (Bagian 9.0 & 9.1) | Kolom itu harus murni cerminan data tarikan Excel/Auto-Close; status Clear TTD sudah cukup dibaca dari `Feedback` (`isClearTTD`), tidak perlu menimpa `Status Terakhir` |

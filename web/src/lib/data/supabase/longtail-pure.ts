@@ -39,13 +39,60 @@ export function categorizeFeedback(feedback: unknown): string {
   return 'Lainnya';
 }
 
-/** Umur live dari waktu_sampai (hari, >=0) atau null bila tak valid. `now` bisa di-inject utk tes. */
+/**
+ * `waktu_sampai` SELALU merepresentasikan jam dinding Jakarta (WIB/UTC+7),
+ * apa pun bentuk stringnya — termasuk kasus di mana ia sudah "ternoda"
+ * penanda zona 'Z'/offset yang salah (mis. sel Excel bertipe Date: SheetJS
+ * `cellDates:true` mengonversi serial Excel jadi objek Date dengan field UTC
+ * SAMA PERSIS dengan angka yang tampil di Excel — bukan dikonversi — lalu
+ * `JSON.stringify` menambahkan 'Z' saat dikirim ke server, sehingga jam WIB
+ * asli ikut ternoda seolah UTC). Makanya di sini kita SELALU ekstrak
+ * angka tanggal/jam mentahnya dan anggap sebagai jam dinding Jakarta,
+ * baru dikonversi ke instant UTC yang benar (-7 jam) — TIDAK PERNAH
+ * mempercayai zona yang menempel di string maupun timezone server yang
+ * menjalankan kode ini.
+ */
+function parseJakartaInstant(raw: string): number | null {
+  const s = raw.trim();
+  const dt = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (dt) {
+    const [, yyyy, mo, dd, hh, mi, ss] = dt;
+    const wallUtcMs = Date.UTC(Number(yyyy), Number(mo) - 1, Number(dd), Number(hh), Number(mi), Number(ss ?? '0'));
+    return wallUtcMs - 7 * 3600 * 1000;
+  }
+  const dOnly = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dOnly) {
+    const [, yyyy, mo, dd] = dOnly;
+    const wallUtcMs = Date.UTC(Number(yyyy), Number(mo) - 1, Number(dd), 0, 0, 0);
+    return wallUtcMs - 7 * 3600 * 1000;
+  }
+  // Format lain di luar dugaan (jarang terjadi) - fallback ke parser bawaan.
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d.getTime();
+}
+
+/** Instant UTC -> tengah malam UTC yg mewakili TANGGAL kalender Jakarta-nya (utk selisih hari kalender, bukan selisih jam). */
+function jakartaCalendarDateMs(instantUtcMs: number): number {
+  const j = new Date(instantUtcMs + 7 * 3600 * 1000);
+  return Date.UTC(j.getUTCFullYear(), j.getUTCMonth(), j.getUTCDate());
+}
+
+/**
+ * Umur live dari waktu_sampai: SELISIH TANGGAL KALENDER Jakarta antara hari
+ * ini & tanggal waktu_sampai (0 = sampai hari ini, 1 = sampai kemarin, dst) —
+ * BUKAN floor(jam berlalu / 24), supaya konsisten dgn semantik agingLevel()
+ * (aging-badge.tsx: umur 0 = netral/"baru", 1 = hijau, 2 = kuning, >=3 =
+ * merah) dan berjalan live: begitu tanggal Jakarta berganti hari, semua
+ * paket aktif otomatis naik 1 angka tanpa perlu proses batch/snapshot apa
+ * pun, walau baru beberapa jam berlalu sejak tengah malam.
+ * `now` bisa di-inject utk tes.
+ */
 export function computeUmurLive(waktuSampai: string | null, now: number = Date.now()): number | null {
   const ws = String(waktuSampai ?? '').trim();
   if (!ws) return null;
-  const d = new Date(ws);
-  if (isNaN(d.getTime())) return null;
-  const diff = Math.floor((now - d.getTime()) / MS_PER_DAY);
+  const t = parseJakartaInstant(ws);
+  if (t == null) return null;
+  const diff = Math.round((jakartaCalendarDateMs(now) - jakartaCalendarDateMs(t)) / MS_PER_DAY);
   return diff < 0 ? 0 : diff;
 }
 

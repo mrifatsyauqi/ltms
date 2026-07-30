@@ -80,10 +80,10 @@ export function useSubmitFeedback() {
       const queryKeys = qc.getQueriesData<LongTailRow[]>({ queryKey: ['longtail'] });
       queryKeys.forEach(([key, old]) => {
         if (old) {
-          qc.setQueryData<LongTailRow[]>(key, 
+          qc.setQueryData<LongTailRow[]>(key,
             old.map((r) =>
               r['No. Waybill'] === vars.waybill
-                ? { ...r, Feedback: vars.feedback, 'Status Terakhir': vars.feedback }
+                ? { ...r, Feedback: vars.feedback }
                 : r,
             )
           );
