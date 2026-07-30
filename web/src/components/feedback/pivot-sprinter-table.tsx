@@ -77,10 +77,9 @@ export const PivotSprinterTable = forwardRef<HTMLTableElement, PivotSprinterTabl
         {groups.map((g) => (
           <Fragment key={g.dp}>
             <tr>
-              <td className={cn(cellBase, 'bg-gray-50 font-semibold')}>{g.dp}</td>
-              <td className={cn(cellBase, 'bg-gray-50 text-right font-semibold tabular-nums')} style={barStyle(g.total, maxCount)}>
-                {g.total}
-              </td>
+              <td className={cn(cellBase, 'bg-gray-200 font-bold')}>{g.dp}</td>
+              {/* Total per DP: TANPA bar - cukup angka bold, beda dari baris sprinter di bawahnya. */}
+              <td className={cn(cellBase, 'bg-gray-200 text-right font-bold tabular-nums')}>{g.total}</td>
             </tr>
             {g.sprinters.map((s, i) => (
               <tr key={i}>
@@ -100,8 +99,8 @@ export const PivotSprinterTable = forwardRef<HTMLTableElement, PivotSprinterTabl
           </tr>
         )}
         <tr>
-          <td className={cn(cellBase, 'bg-gray-200 font-bold')}>Grand Total</td>
-          <td className={cn(cellBase, 'bg-gray-200 text-right font-bold tabular-nums')}>{grandTotal}</td>
+          <td className={cn(cellBase, 'bg-gray-300 font-bold')}>Grand Total</td>
+          <td className={cn(cellBase, 'bg-gray-300 text-right font-bold tabular-nums')}>{grandTotal}</td>
         </tr>
       </tbody>
     </table>
