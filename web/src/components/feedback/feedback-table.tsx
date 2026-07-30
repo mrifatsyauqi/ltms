@@ -12,7 +12,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { toast } from 'sonner';
-import { History, Search, Users } from 'lucide-react';
+import { History, RefreshCw, Search, Users } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -47,6 +47,9 @@ const STICKY_POS: Record<string, string> = {
   aksi: 'sticky right-0 z-10',
 };
 
+/** LongTailRow + kunci sort Umur yg dibekukan (lihat komentar `rows` di FeedbackTable). */
+type RowWithSort = LongTailRow & { __sortUmur: number };
+
 function logLines(row: LongTailRow): string[] {
   return String(row['Log Feedback'] ?? '')
     .split('\n')
@@ -78,7 +81,7 @@ export function FeedbackTable({
   /** Preset filter DP dari URL, mis. dari 'Lihat semua' Aging Prioritas (?dp=). */
   initialDpFilter?: string;
 }) {
-  const { data, isLoading, error } = useLongTail();
+  const { data, isLoading, error, refetch, isFetching } = useLongTail();
   const options = useFeedbackOptions();
   const submit = useSubmitFeedback();
 
@@ -98,7 +101,44 @@ export function FeedbackTable({
   // akibat setQueryData). Ala spreadsheet: enter/pilih -> lompat & siap ketik.
   const pendingFocusRef = useRef<string | null>(null);
 
-  const rows = useMemo(() => data ?? [], [data]);
+  // Kunci sort "Umur" DIBEKUKAN per waybill sampai fetch ASLI berikutnya
+  // (bukan setQueryData patch dari submit feedback yg dilakukan
+  // useSubmitFeedback). Tanpa ini, submit feedback (mis. Clear TTD -> umur
+  // langsung beku di angka kecil) memicu re-sort tabel SEKETIKA krn kolom
+  // 'umur' membaca nilai live tiap render - baris yg sedang dikerjakan admin
+  // melompat jauh ke halaman lain tanpa peringatan, terasa spt "AWB hilang"
+  // walau datanya tetap ada. `isFetching` (bukan `data`) sengaja dipakai sbg
+  // sinyal "ini fetch ASLI" - setQueryData TIDAK PERNAH mengubah isFetching
+  // (ia langsung menulis cache tanpa lewat siklus fetch), jadi transisi
+  // true->false di sini murni dari initial load/refetch manual/refetch
+  // otomatis (staleTime/remount) - persis definisi "fetch asli" yg diminta.
+  // Snapshot disimpan sbg STATE (bukan ref dibaca dari accessorFn) supaya
+  // dibakukan langsung ke object row (lihat `rows` di bawah) - accessorFn
+  // react-table WAJIB murni fungsi dari row datanya sendiri, TanStack
+  // memoisasi sort berdasar identitas array `data`/`columns`, bukan tahu ada
+  // mutable ref eksternal yg berubah di baliknya.
+  const [sortSnapshot, setSortSnapshot] = useState<Map<string, number> | null>(null);
+  const recentlyUpdatedRef = useRef<Set<string>>(new Set());
+  const wasFetchingRef = useRef(isFetching);
+  useEffect(() => {
+    if (wasFetchingRef.current && !isFetching && data) {
+      setSortSnapshot(new Map(data.map((r) => [r['No. Waybill'], umurValue(r)])));
+      recentlyUpdatedRef.current = new Set();
+    }
+    wasFetchingRef.current = isFetching;
+  }, [isFetching, data]);
+
+  // __sortUmur dibakukan ke tiap row: kunci sort BEKU (dari sortSnapshot) bila
+  // ada, live sbg fallback (initial load sebelum snapshot pertama terbentuk).
+  // Cell badge Umur TETAP pakai umurValue(row) live langsung (lihat kolom
+  // 'umur' di bawah) - hanya URUTAN sort yg dibekukan, bukan tampilan datanya.
+  const rows = useMemo(() => {
+    const base = data ?? [];
+    return base.map((r) => ({
+      ...r,
+      __sortUmur: sortSnapshot?.get(r['No. Waybill']) ?? umurValue(r),
+    }));
+  }, [data, sortSnapshot]);
 
   const sprinterOptions = useMemo(
     () => Array.from(new Set(rows.map((r) => String(r['Sprinter Delivery']).trim()).filter(Boolean))).sort(),
@@ -171,6 +211,12 @@ export function FeedbackTable({
     submit.mutate(
       { waybill, feedback, baseVersion },
       {
+        onSuccess: () => {
+          // Tandai "baru diperbarui" (badge) - TIDAK menyentuh sortSnapshot,
+          // supaya posisi baris di tabel tetap seperti sebelum submit sampai
+          // fetch asli berikutnya (lihat komentar sortSnapshot di atas).
+          recentlyUpdatedRef.current.add(waybill);
+        },
         onError: (err: SubmitFeedbackError) => {
           if (err.code === 'VERSION_CONFLICT') {
             toast.warning(`${waybill}: data sudah diubah pihak lain. Baris di-refresh, cek lalu isi ulang.`);
@@ -182,7 +228,7 @@ export function FeedbackTable({
     );
   }
 
-  const columns = useMemo<ColumnDef<LongTailRow>[]>(() => {
+  const columns = useMemo<ColumnDef<RowWithSort>[]>(() => {
     return [
       {
         id: 'waybill',
@@ -210,6 +256,7 @@ export function FeedbackTable({
           const r = c.row.original;
           const wb = c.getValue<string>();
           const perluReview = String(r['Perlu Review'] ?? '').trim();
+          const justUpdated = recentlyUpdatedRef.current.has(wb);
           return (
             <div className="min-w-0">
               {/* justify-between: nomor di kiri, ikon salin rata kanan (seragam). */}
@@ -223,10 +270,23 @@ export function FeedbackTable({
                   iconClassName="size-3"
                 />
               </span>
-              {perluReview && (
-                <Badge variant="destructive" className="mt-0.5 block w-fit text-[9px]">
-                  Perlu Review
-                </Badge>
+              {(perluReview || justUpdated) && (
+                <div className="mt-0.5 flex flex-wrap gap-1">
+                  {perluReview && (
+                    <Badge variant="destructive" className="w-fit text-[9px]">
+                      Perlu Review
+                    </Badge>
+                  )}
+                  {justUpdated && (
+                    <Badge
+                      variant="outline"
+                      className="border-accent-green/30 bg-accent-green/10 text-accent-green w-fit text-[9px]"
+                      title="Perubahan tersimpan - posisi baris belum ikut pindah sampai Refresh"
+                    >
+                      Baru diperbarui
+                    </Badge>
+                  )}
+                </div>
               )}
             </div>
           );
@@ -235,7 +295,11 @@ export function FeedbackTable({
       {
         id: 'umur',
         header: 'Umur',
-        accessorFn: (r) => umurValue(r),
+        // __sortUmur (dibakukan di row, lihat komentar `rows` di atas) - BUKAN
+        // umurValue(r) live - supaya baris tak loncat posisi seketika saat
+        // submit feedback. Badge tetap menampilkan umur LIVE (di bawah),
+        // hanya urutan sort yg dibekukan.
+        accessorFn: (r) => r.__sortUmur,
         cell: (c) => <AgingBadge umur={umurValue(c.row.original)} frozen={c.row.original.__isClearTTD} />,
       },
       {
@@ -393,12 +457,23 @@ export function FeedbackTable({
           <input type="checkbox" checked={onlyBelum} onChange={(e) => setOnlyBelum(e.target.checked)} />
           Belum feedback saja
         </label>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          title="Muat ulang data terbaru dari server & urutkan ulang tabel (mis. setelah submit Clear TTD)"
+        >
+          <RefreshCw className={isFetching ? 'animate-spin' : undefined} aria-hidden />
+          <span className="sr-only sm:not-sr-only">Refresh</span>
+        </Button>
         {readOnly && (
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="ml-auto"
             onClick={() => setPivotOpen(true)}
             title="Rekap jumlah AWB per Sprinter, dikelompokkan per DP — bisa disalin sbg gambar/tabel"
           >
