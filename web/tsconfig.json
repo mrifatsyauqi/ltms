@@ -6,6 +6,11 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // Mengizinkan (bukan mewajibkan) ekstensi .ts pada import — dibutuhkan file
+    // *.test.ts yang dijalankan `node --experimental-strip-types --test` (Node
+    // ESM tak resolve ekstensi). Aman krn noEmit: true; import tanpa ekstensi
+    // di seluruh app tetap jalan seperti biasa.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
