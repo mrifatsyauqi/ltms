@@ -7,7 +7,6 @@ const STATUS_BY_CODE: Record<string, number> = {
   NOT_FOUND: 404,
   CONFLICT: 409,
   VERSION_CONFLICT: 409, // optimistic lock: data server sudah berubah (Bagian 9.4)
-  ALREADY_CLEAR_TTD: 409, // feedback dibekukan setelah Clear TTD (Bagian 9.0/9.1)
   VALIDATION_ERROR: 422,
   LOCK_TIMEOUT: 503,
 };

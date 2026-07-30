@@ -174,8 +174,6 @@ export function FeedbackTable({
         onError: (err: SubmitFeedbackError) => {
           if (err.code === 'VERSION_CONFLICT') {
             toast.warning(`${waybill}: data sudah diubah pihak lain. Baris di-refresh, cek lalu isi ulang.`);
-          } else if (err.code === 'ALREADY_CLEAR_TTD') {
-            toast.warning(`${waybill}: sudah Clear TTD, feedback dibekukan.`);
           } else {
             toast.error(`Gagal menyimpan ${waybill}: ${err.message}`);
           }

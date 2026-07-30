@@ -54,9 +54,11 @@ export async function submitFeedback(
   if (actor.role !== 'Admin Cabang' && !sameDp(current.dp_sampai, actor.dropPoint)) {
     throw new ApiError('FORBIDDEN', 'Tidak punya akses ke waybill ini');
   }
-  if (isClearTTD(current.feedback)) {
-    throw new ApiError('ALREADY_CLEAR_TTD', 'Waybill sudah Clear TTD - feedback dibekukan, tidak bisa diubah.');
-  }
+  // Baris Clear TTD di LongTail AKTIF (belum diarsipkan) TETAP BISA disubmit
+  // ulang - mis. koreksi salah tandai Clear TTD kembali ke status lain (lihat
+  // logic wasClearTTD/willBeClearTTD di bawah utk aturan freeze/resume &
+  // "Koreksi Manual"). Setelah diarsipkan (Auto-Close), baris sudah tak ada
+  // lagi di tabel ini sama sekali - findRow di atas otomatis NOT_FOUND.
 
   const serverVersion = String(current.version ?? '');
   if (baseVersion != null && String(baseVersion) !== serverVersion) {
@@ -73,9 +75,31 @@ export async function submitFeedback(
     log_feedback: newLog,
     version: Number(current.version) + 1,
   };
-  if (isClearTTD(feedback)) {
-    patch.umur_frozen = computeUmurLive(current.waktu_sampai); // beku tepat saat Clear TTD
+
+  // Transisi status Clear TTD - 3 kasus (bukan cuma "kalau feedback baru
+  // Clear TTD, freeze", supaya baris yg SUDAH Clear TTD & disubmit ulang dgn
+  // teks Clear TTD lain TIDAK ikut membekukan ulang umur_frozen di momen yg
+  // lebih baru - freeze harus tetap di momen Clear TTD PERTAMA kali):
+  const wasClearTTD = isClearTTD(current.feedback);
+  const willBeClearTTD = isClearTTD(feedback);
+  let sumber = 'Manual Feedback';
+  let dataLama = String(current.feedback ?? '');
+
+  if (!wasClearTTD && willBeClearTTD) {
+    // Transisi BARU ke Clear TTD -> freeze umur di momen ini.
+    patch.umur_frozen = computeUmurLive(current.waktu_sampai);
+  } else if (wasClearTTD && !willBeClearTTD) {
+    // Koreksi: keluar dari Clear TTD -> lepas freeze, Umur Paket resume live
+    // dari `Hari Ini - Waktu Sampai` (computeUmur di longtail-pure.ts sudah
+    // otomatis jatuh ke jalur live begitu isClearTTD(feedback) false - syarat
+    // pemicunya adalah umur_frozen di-null-kan di sini).
+    patch.umur_frozen = null;
+    sumber = 'Koreksi Manual';
+    dataLama = 'Clear TTD';
   }
+  // (wasClearTTD && willBeClearTTD) atau (!wasClearTTD && !willBeClearTTD):
+  // umur_frozen SENGAJA tidak disentuh (tetap beku di momen semula / tetap
+  // null spt biasa).
 
   // Optimistic lock di level DB: hanya update bila version masih sama.
   const { data: updatedRows, error } = await db()
@@ -99,9 +123,9 @@ export async function submitFeedback(
     dp: String(current.dp_sampai ?? ''),
     waybill,
     attempt: await nextAttempt(waybill),
-    dataLama: String(current.feedback ?? ''),
+    dataLama,
     dataBaru: feedback,
-    sumber: 'Manual Feedback',
+    sumber,
   });
 
   return decorateLongTailRow(updatedRows[0] as LongtailDbRow);
