@@ -12,9 +12,12 @@ const STEPS: { step: WizardStep; title: string; desc: string }[] = [
 ];
 
 /**
- * Header stepper 4-langkah. `maxReached` = step terjauh yang sudah valid
- * dicapai — user boleh klik mundur ke step manapun <= maxReached, tapi
- * tidak bisa lompat maju melewati validasi (dikontrol pemanggil).
+ * Header stepper 3-langkah. `maxReached` = step terjauh yang sudah valid
+ * dicapai — HANYA dipakai untuk menentukan step mana yang boleh diklik
+ * (user boleh klik mundur/maju ke step manapun <= maxReached). Ceklis
+ * "selesai" TIDAK mengikuti maxReached — itu murni step < current, supaya
+ * step berikutnya tidak langsung tampak "selesai" hanya karena datanya
+ * sudah siap sebelum benar-benar dikunjungi.
  */
 export function ImportStepper({
   current,
@@ -28,7 +31,7 @@ export function ImportStepper({
   return (
     <div className="flex items-center">
       {STEPS.map((s, i) => {
-        const done = s.step < current || (s.step <= maxReached && s.step !== current);
+        const done = s.step < current;
         const active = s.step === current;
         const clickable = s.step <= maxReached && s.step !== current;
         return (
