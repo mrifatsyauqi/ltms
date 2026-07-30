@@ -190,22 +190,74 @@ export async function importLongTail(
 
   // Tulis: upsert LongTail (onConflict no_waybill) & insert Activity_Log
   // BERSAMAAN (2 tabel independen, logs sudah lengkap dihitung di loop atas,
-  // tak butuh hasil upsert longtail), baru lanjut batch.
+  // tak butuh hasil upsert longtail).
+  //
+  // TIDAK ATOMIK: klien Supabase di sini (@supabase/supabase-js via
+  // PostgREST, lihat client.ts) tak punya BEGIN/COMMIT lintas 2 panggilan
+  // .from() berbeda - satu-satunya cara sungguhan atomik adalah RPC ke
+  // fungsi Postgres (di luar cakupan sesi ini, lihat catatan di commit
+  // message). Karena itu kegagalan salah satu sisi TIDAK dibiarkan silent:
+  // writeChunks() mengembalikan hasil (bukan throw) supaya sisi lain tetap
+  // sempat jalan penuh & kita tahu PERSIS chunk mana yang gagal di sisi
+  // mana, lalu dilaporkan eksplisit ke Admin Cabang lewat ApiError (tampil
+  // di batchError halaman Import) - bukan diam-diam lanjut ke Auto-Close/
+  // batch record seolah semua beres.
   const payload = [...finalRows.values()];
-  await Promise.all([
-    (async () => {
-      for (const chunk of chunks(payload, CHUNK)) {
-        const { error } = await db().from('longtail').upsert(chunk, { onConflict: 'no_waybill' });
-        if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+
+  const writeChunks = async <T extends { no_waybill: string } | LogInsert>(
+    rows: T[],
+    run: (chunk: T[]) => PromiseLike<{ error: { message: string } | null }>,
+    sampleKey: (row: T) => string,
+  ): Promise<{ ok: true } | { ok: false; failedAtChunk: number; totalChunks: number; sampleWaybill: string; message: string }> => {
+    const chunkList = chunks(rows, CHUNK);
+    for (let i = 0; i < chunkList.length; i++) {
+      const { error } = await run(chunkList[i]);
+      if (error) {
+        return {
+          ok: false,
+          failedAtChunk: i + 1,
+          totalChunks: chunkList.length,
+          sampleWaybill: sampleKey(chunkList[i][0]),
+          message: error.message,
+        };
       }
-    })(),
-    (async () => {
-      for (const chunk of chunks(logs, CHUNK)) {
-        const { error } = await db().from('activity_log').insert(chunk);
-        if (error) throw new ApiError('INTERNAL_ERROR', error.message);
-      }
-    })(),
+    }
+    return { ok: true };
+  };
+
+  const [longtailOutcome, activityLogOutcome] = await Promise.all([
+    writeChunks(
+      payload,
+      (chunk) => db().from('longtail').upsert(chunk, { onConflict: 'no_waybill' }),
+      (row) => row.no_waybill,
+    ),
+    writeChunks(
+      logs,
+      (chunk) => db().from('activity_log').insert(chunk),
+      (row) => row.waybill,
+    ),
   ]);
+
+  if (!longtailOutcome.ok || !activityLogOutcome.ok) {
+    const parts: string[] = [];
+    if (!longtailOutcome.ok) {
+      parts.push(
+        `Upsert longtail gagal di chunk ${longtailOutcome.failedAtChunk}/${longtailOutcome.totalChunks} ` +
+          `(mis. waybill ${longtailOutcome.sampleWaybill}): ${longtailOutcome.message}`,
+      );
+    }
+    if (!activityLogOutcome.ok) {
+      parts.push(
+        `Insert activity_log gagal di chunk ${activityLogOutcome.failedAtChunk}/${activityLogOutcome.totalChunks} ` +
+          `(mis. waybill ${activityLogOutcome.sampleWaybill}): ${activityLogOutcome.message}`,
+      );
+    }
+    parts.push(
+      'PERINGATAN: longtail & activity_log berpotensi TIDAK SINKRON utk batch ini (satu sisi bisa jadi ' +
+        'sudah/sebagian tertulis sementara sisi lain gagal) - perlu ditelusuri manual sebelum import ulang.',
+    );
+    throw new ApiError('INTERNAL_ERROR', parts.join(' | '));
+  }
 
   // === TAHAP 2 (v1.3): AUTO-CLOSE waybill yang HILANG dari tarikan ===
   // Scope per-DP: hanya DP yang muncul di file; DP lain tidak tersentuh.
