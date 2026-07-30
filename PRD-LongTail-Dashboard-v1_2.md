@@ -454,6 +454,27 @@ Default sorting berdasarkan umur paket tertua.
 -   Keyboard Friendly
 -   Highlight Baris Aktif
 -   Enter berpindah ke baris berikutnya
+-   Pivot AWB per Sprinter (Baru, khusus halaman `Data Long Tail`) —
+    lihat 9.2.1
+
+### 9.2.1 Pivot AWB per Sprinter (Baru)
+
+Di halaman `Data Long Tail` (`/feedback?view=data`), tombol **"Pivot
+AWB per Sprinter"** membuka rekap jumlah `No. Waybill` dikelompokkan
+**DP Sampai -> Sprinter Delivery**, mengikuti data & filter yang
+sedang aktif di tabel (pencarian, filter umur/alasan/sprinter, Belum
+Feedback, serta Cakupan DP di sidebar).
+
+-   Tiap grup DP diurut alfabet; di dalam grup, baris **tanpa
+    Sprinter** (kosong) SELALU ditaruh **paling atas tanpa nama**,
+    baru diikuti sprinter bernama terurut alfabet — meniru perilaku
+    Excel Pivot Table untuk grup kosong.
+-   Baris total per DP & `Grand Total` di baris terakhir.
+-   Bisa disalin sebagai **gambar** (utk chat WA/Feishu, `image/png`
+    saja) atau sebagai **tabel** (utk Excel/Spreadsheet, `text/html` +
+    `text/plain`), mengikuti pola copy-as-image/copy-as-table yang
+    sama dgn Monitoring Delivery (Bagian 9.2, komponen
+    `pivot-sprinter-dialog.tsx`).
 
 ## 9.3 Notifikasi Aging (Baru)
 
@@ -657,3 +678,4 @@ Untuk mengelola ekspektasi, hal berikut **tidak** termasuk dalam MVP:
 | 19 *(v1.3)* | Menghapus langkah/UI mapping manual dari wizard Import (Bagian 7.2); file yang kolom wajibnya gagal terdeteksi otomatis kini dilewati dengan peringatan, bukan diarahkan ke UI mapping | Deteksi otomatis terbukti stabil & akurat saat pemakaian nyata; langkah manual jadi beban tambahan yang tak perlu |
 | 20 *(v1.3)* | Umur Paket dihitung ulang sebagai selisih tanggal kalender Jakarta (bukan `floor(jam berlalu / 24)`), dan parsing `Waktu Sampai` diperbaiki agar selalu dibaca sbg jam dinding Jakarta (Bagian 9.1) | Umur tidak naik tepat waktu di pergantian hari — paket yg sampai kemarin sore masih terhitung "1 Hari" alih-alih "2 Hari" keesokan paginya |
 | 21 *(v1.3)* | `Status Terakhir` tidak lagi ikut ditimpa nilai `Feedback` saat submit feedback manual, termasuk saat Clear TTD (Bagian 9.0 & 9.1) | Kolom itu harus murni cerminan data tarikan Excel/Auto-Close; status Clear TTD sudah cukup dibaca dari `Feedback` (`isClearTTD`), tidak perlu menimpa `Status Terakhir` |
+| 22 *(v1.3)* | Menambahkan fitur "Pivot AWB per Sprinter" di halaman Data Long Tail (Bagian 9.2.1) — rekap jumlah waybill per DP -> Sprinter, bisa disalin sbg gambar/tabel | Admin butuh rekap volume per kurir tanpa export manual ke Excel Pivot Table |
