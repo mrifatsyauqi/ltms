@@ -34,9 +34,10 @@ export function FeedbackCell({ row, options, saving, onCommit, registerRef, onEn
     if (!dirtyRef.current) setValue(serverValue);
   }, [serverValue]);
 
-  if (row.__isClearTTD) {
-    return <span className="text-muted-foreground text-xs">{serverValue || '—'} (beku)</span>;
-  }
+  // Baris Clear TTD SENGAJA tetap pakai input yang sama (bukan read-only) -
+  // supaya bisa dikoreksi kembali ke status lain (lihat wasClearTTD/
+  // willBeClearTTD di submitFeedback, longtail.ts). Status beku/Clear TTD-nya
+  // sendiri sudah terlihat dari badge Umur (agingLevel frozen=__isClearTTD).
 
   // Rekomendasi: cocok dari huruf pertama (prefix), urut sesuai options.
   const q = value.trim().toLowerCase();

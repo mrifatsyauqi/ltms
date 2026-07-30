@@ -65,10 +65,31 @@ type LogInsert = {
   sumber: string;
 };
 
+/** Field tracking (non-Feedback) yang bisa berubah dari satu baris import - dipakai jalur update biasa & koreksi Clear TTD. */
+function buildTrackingPatch(row: MappedRow): { patch: Partial<LongtailUpsert>; patchLog: Record<string, unknown> } {
+  const patch: Partial<LongtailUpsert> = {};
+  const patchLog: Record<string, unknown> = {};
+  if (row.statusTerakhir) { patch.status_terakhir = s(row.statusTerakhir); patchLog['Status Terakhir'] = patch.status_terakhir; }
+  if (row.alasanBermasalah) { patch.alasan_bermasalah = s(row.alasanBermasalah); patchLog['Alasan Paket Bermasalah'] = patch.alasan_bermasalah; }
+  if (row.dpSampai) { patch.dp_sampai = s(row.dpSampai); patchLog['DP Sampai'] = patch.dp_sampai; }
+  if (row.waktuSampai) { patch.waktu_sampai = s(row.waktuSampai); patchLog['Waktu Sampai'] = patch.waktu_sampai; }
+  if (row.sprinterDelivery) { patch.sprinter_delivery = s(row.sprinterDelivery); patchLog['Sprinter Delivery'] = patch.sprinter_delivery; }
+  if (row.cod) { patch.cod = s(row.cod); patchLog['COD'] = patch.cod; }
+  if (row.deliveryAttempt !== undefined && row.deliveryAttempt !== '') { patch.delivery_attempt = toInt(row.deliveryAttempt); patchLog['Delivery Attempt'] = patch.delivery_attempt; }
+  return { patch, patchLog };
+}
+
 /**
  * Import bertahap (Bagian 7.3): satu file = satu panggilan. Untuk tiap waybill:
  *  - baru        -> insert (feedback kosong, perlu_review false)
- *  - Clear TTD   -> set perlu_review = true (feedback dibekukan, tidak diubah)
+ *  - Clear TTD tapi MUNCUL LAGI di tarikan dgn status tracking baru (bukti
+ *    kuat admin salah tandai Clear TTD sebelumnya, krn status tracking impor
+ *    tak pernah literally "Clear TTD" - itu murni klasifikasi teks Feedback
+ *    manual) -> KOREKSI OTOMATIS: timpa field tracking spt update biasa,
+ *    reset umur_frozen (resume live) DAN kosongkan Feedback (supaya
+ *    isClearTTD() ikut balik false - kalau tidak, badge/alert/Dashboard
+ *    tetap menganggap baris Clear TTD walau umur sudah resume live).
+ *    Menggantikan aturan lama "tandai perlu_review, jangan timpa" (PRD 7.1).
  *  - selain itu  -> patch field non-feedback yang berubah (Feedback/Log dijaga)
  * Menegakkan atomicity via bulk upsert; log & batch dicatat ke Supabase.
  */
@@ -91,20 +112,22 @@ export async function importLongTail(
 
   const wbList = [...new Set(items.map((i) => i.wb))];
 
-  // Ambil baris LongTail yang sudah ada (chunk .in()).
+  // Ambil baris LongTail yang sudah ada + hitung attempt dasar dari
+  // Activity_Log, PER CHUNK waybill yang sama sekaligus (2 tabel independen
+  // - longtail & activity_log tak saling butuh hasil satu sama lain, hanya
+  // dipakai terpisah di loop pemrosesan bawah) - pola sama dgn
+  // riwayat-feedback.ts, bukan lagi 2 loop chunk terpisah berurutan.
   const existingMap = new Map<string, LongtailUpsert>();
-  for (const chunk of chunks(wbList, CHUNK)) {
-    const { data, error } = await db().from('longtail').select('*').in('no_waybill', chunk);
-    if (error) throw new ApiError('INTERNAL_ERROR', error.message);
-    (data ?? []).forEach((r) => existingMap.set((r as LongtailDbRow).no_waybill, fromDb(r as LongtailDbRow)));
-  }
-
-  // Hitung attempt dasar dari Activity_Log utk waybill terkait.
   const attemptMap = new Map<string, number>();
   for (const chunk of chunks(wbList, CHUNK)) {
-    const { data, error } = await db().from('activity_log').select('waybill').in('waybill', chunk);
-    if (error) throw new ApiError('INTERNAL_ERROR', error.message);
-    (data ?? []).forEach((r) => {
+    const [ltRes, alRes] = await Promise.all([
+      db().from('longtail').select('*').in('no_waybill', chunk),
+      db().from('activity_log').select('waybill').in('waybill', chunk),
+    ]);
+    if (ltRes.error) throw new ApiError('INTERNAL_ERROR', ltRes.error.message);
+    if (alRes.error) throw new ApiError('INTERNAL_ERROR', alRes.error.message);
+    (ltRes.data ?? []).forEach((r) => existingMap.set((r as LongtailDbRow).no_waybill, fromDb(r as LongtailDbRow)));
+    (alRes.data ?? []).forEach((r) => {
       const w = s((r as { waybill: string }).waybill);
       attemptMap.set(w, (attemptMap.get(w) ?? 0) + 1);
     });
@@ -118,7 +141,7 @@ export async function importLongTail(
   const workIndex = new Map<string, LongtailUpsert>(existingMap);
   const finalRows = new Map<string, LongtailUpsert>();
   const logs: LogInsert[] = [];
-  let inserted = 0, updated = 0, needReview = 0;
+  let inserted = 0, updated = 0, koreksiOtomatis = 0;
 
   for (const { wb, row } of items) {
     const existing = workIndex.get(wb);
@@ -150,13 +173,15 @@ export async function importLongTail(
     }
 
     if (isClearTTD(existing.feedback)) {
-      const merged: LongtailUpsert = { ...existing, perlu_review: true };
+      const { patch } = buildTrackingPatch(row);
+      const statusBaru = patch.status_terakhir ?? existing.status_terakhir;
+      const merged: LongtailUpsert = { ...existing, ...patch, umur_frozen: null, feedback: '', perlu_review: false };
       finalRows.set(wb, merged);
       workIndex.set(wb, merged);
-      needReview++;
+      koreksiOtomatis++;
       logs.push({
-        user_email: actor.email, dp: existing.dp_sampai, waybill: wb, attempt_ke: nextAttempt(wb),
-        data_lama: 'Clear TTD', data_baru: 'Muncul lagi di import -> Perlu Review', sumber: 'Auto-update Import',
+        user_email: actor.email, dp: merged.dp_sampai, waybill: wb, attempt_ke: nextAttempt(wb),
+        data_lama: 'Clear TTD', data_baru: statusBaru, sumber: 'Koreksi Otomatis (tidak konsisten dengan tarikan)',
       });
       continue;
     }
@@ -166,15 +191,7 @@ export async function importLongTail(
       'Waktu Sampai': existing.waktu_sampai,
       'DP Sampai': existing.dp_sampai,
     };
-    const patch: Partial<LongtailUpsert> = {};
-    const patchLog: Record<string, unknown> = {};
-    if (row.statusTerakhir) { patch.status_terakhir = s(row.statusTerakhir); patchLog['Status Terakhir'] = patch.status_terakhir; }
-    if (row.alasanBermasalah) { patch.alasan_bermasalah = s(row.alasanBermasalah); patchLog['Alasan Paket Bermasalah'] = patch.alasan_bermasalah; }
-    if (row.dpSampai) { patch.dp_sampai = s(row.dpSampai); patchLog['DP Sampai'] = patch.dp_sampai; }
-    if (row.waktuSampai) { patch.waktu_sampai = s(row.waktuSampai); patchLog['Waktu Sampai'] = patch.waktu_sampai; }
-    if (row.sprinterDelivery) { patch.sprinter_delivery = s(row.sprinterDelivery); patchLog['Sprinter Delivery'] = patch.sprinter_delivery; }
-    if (row.cod) { patch.cod = s(row.cod); patchLog['COD'] = patch.cod; }
-    if (row.deliveryAttempt !== undefined && row.deliveryAttempt !== '') { patch.delivery_attempt = toInt(row.deliveryAttempt); patchLog['Delivery Attempt'] = patch.delivery_attempt; }
+    const { patch, patchLog } = buildTrackingPatch(row);
 
     const merged: LongtailUpsert = { ...existing, ...patch };
     finalRows.set(wb, merged);
@@ -186,15 +203,75 @@ export async function importLongTail(
     });
   }
 
-  // Tulis: upsert LongTail (onConflict no_waybill), lalu log, lalu batch.
+  // Tulis: upsert LongTail (onConflict no_waybill) & insert Activity_Log
+  // BERSAMAAN (2 tabel independen, logs sudah lengkap dihitung di loop atas,
+  // tak butuh hasil upsert longtail).
+  //
+  // TIDAK ATOMIK: klien Supabase di sini (@supabase/supabase-js via
+  // PostgREST, lihat client.ts) tak punya BEGIN/COMMIT lintas 2 panggilan
+  // .from() berbeda - satu-satunya cara sungguhan atomik adalah RPC ke
+  // fungsi Postgres (di luar cakupan sesi ini, lihat catatan di commit
+  // message). Karena itu kegagalan salah satu sisi TIDAK dibiarkan silent:
+  // writeChunks() mengembalikan hasil (bukan throw) supaya sisi lain tetap
+  // sempat jalan penuh & kita tahu PERSIS chunk mana yang gagal di sisi
+  // mana, lalu dilaporkan eksplisit ke Admin Cabang lewat ApiError (tampil
+  // di batchError halaman Import) - bukan diam-diam lanjut ke Auto-Close/
+  // batch record seolah semua beres.
   const payload = [...finalRows.values()];
-  for (const chunk of chunks(payload, CHUNK)) {
-    const { error } = await db().from('longtail').upsert(chunk, { onConflict: 'no_waybill' });
-    if (error) throw new ApiError('INTERNAL_ERROR', error.message);
-  }
-  for (const chunk of chunks(logs, CHUNK)) {
-    const { error } = await db().from('activity_log').insert(chunk);
-    if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+
+  const writeChunks = async <T extends { no_waybill: string } | LogInsert>(
+    rows: T[],
+    run: (chunk: T[]) => PromiseLike<{ error: { message: string } | null }>,
+    sampleKey: (row: T) => string,
+  ): Promise<{ ok: true } | { ok: false; failedAtChunk: number; totalChunks: number; sampleWaybill: string; message: string }> => {
+    const chunkList = chunks(rows, CHUNK);
+    for (let i = 0; i < chunkList.length; i++) {
+      const { error } = await run(chunkList[i]);
+      if (error) {
+        return {
+          ok: false,
+          failedAtChunk: i + 1,
+          totalChunks: chunkList.length,
+          sampleWaybill: sampleKey(chunkList[i][0]),
+          message: error.message,
+        };
+      }
+    }
+    return { ok: true };
+  };
+
+  const [longtailOutcome, activityLogOutcome] = await Promise.all([
+    writeChunks(
+      payload,
+      (chunk) => db().from('longtail').upsert(chunk, { onConflict: 'no_waybill' }),
+      (row) => row.no_waybill,
+    ),
+    writeChunks(
+      logs,
+      (chunk) => db().from('activity_log').insert(chunk),
+      (row) => row.waybill,
+    ),
+  ]);
+
+  if (!longtailOutcome.ok || !activityLogOutcome.ok) {
+    const parts: string[] = [];
+    if (!longtailOutcome.ok) {
+      parts.push(
+        `Upsert longtail gagal di chunk ${longtailOutcome.failedAtChunk}/${longtailOutcome.totalChunks} ` +
+          `(mis. waybill ${longtailOutcome.sampleWaybill}): ${longtailOutcome.message}`,
+      );
+    }
+    if (!activityLogOutcome.ok) {
+      parts.push(
+        `Insert activity_log gagal di chunk ${activityLogOutcome.failedAtChunk}/${activityLogOutcome.totalChunks} ` +
+          `(mis. waybill ${activityLogOutcome.sampleWaybill}): ${activityLogOutcome.message}`,
+      );
+    }
+    parts.push(
+      'PERINGATAN: longtail & activity_log berpotensi TIDAK SINKRON utk batch ini (satu sisi bisa jadi ' +
+        'sudah/sebagian tertulis sementara sisi lain gagal) - perlu ditelusuri manual sebelum import ulang.',
+    );
+    throw new ApiError('INTERNAL_ERROR', parts.join(' | '));
   }
 
   // === TAHAP 2 (v1.3): AUTO-CLOSE waybill yang HILANG dari tarikan ===
@@ -271,14 +348,14 @@ export async function importLongTail(
     admin_cabang: actor.email,
     nama_file: fileName || '',
     total_baris: incoming.length,
-    berhasil: inserted + updated + needReview,
+    berhasil: inserted + updated + koreksiOtomatis,
     gagal: skipped,
     status: skipped > 0 ? 'Sebagian' : 'Sukses',
-    keterangan: `Baru ${inserted}, Update ${updated}, Perlu Review ${needReview}, Skip ${skipped}, Close ${closed}`,
+    keterangan: `Baru ${inserted}, Update ${updated}, Koreksi Otomatis ${koreksiOtomatis}, Skip ${skipped}, Close ${closed}`,
   });
   if (batchErr) throw new ApiError('INTERNAL_ERROR', batchErr.message);
 
-  return { batchId, total: incoming.length, inserted, updated, needReview, skipped, closed, closedClearTTD, closedAlur };
+  return { batchId, total: incoming.length, inserted, updated, koreksiOtomatis, skipped, closed, closedClearTTD, closedAlur };
 }
 
 export async function listImportBatches(actorEmail: string): Promise<ImportBatchRow[]> {

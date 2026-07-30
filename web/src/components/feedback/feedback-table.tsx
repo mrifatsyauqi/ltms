@@ -12,7 +12,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { toast } from 'sonner';
-import { History, Search, Users } from 'lucide-react';
+import { History, RefreshCw, Search, Users } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -47,6 +47,9 @@ const STICKY_POS: Record<string, string> = {
   aksi: 'sticky right-0 z-10',
 };
 
+/** LongTailRow + kunci sort Umur yg dibekukan (lihat komentar `rows` di FeedbackTable). */
+type RowWithSort = LongTailRow & { __sortUmur: number };
+
 function logLines(row: LongTailRow): string[] {
   return String(row['Log Feedback'] ?? '')
     .split('\n')
@@ -78,7 +81,7 @@ export function FeedbackTable({
   /** Preset filter DP dari URL, mis. dari 'Lihat semua' Aging Prioritas (?dp=). */
   initialDpFilter?: string;
 }) {
-  const { data, isLoading, error } = useLongTail();
+  const { data, isLoading, error, refetch, isFetching } = useLongTail();
   const options = useFeedbackOptions();
   const submit = useSubmitFeedback();
 
@@ -89,6 +92,10 @@ export function FeedbackTable({
   const [alasanFilter, setAlasanFilter] = useState('');
   const [sprinterFilter, setSprinterFilter] = useState('');
   const [onlyBelum, setOnlyBelum] = useState(false);
+  // Pagination DIKONTROL sendiri (bukan initialState bawaan react-table) -
+  // lihat komentar `autoResetPageIndex: false` di useReactTable di bawah utk
+  // alasannya (bug halaman kembali ke 1 saat submit di halaman >1).
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
   const [historyRow, setHistoryRow] = useState<LongTailRow | null>(null);
   const [pivotOpen, setPivotOpen] = useState(false);
 
@@ -98,7 +105,56 @@ export function FeedbackTable({
   // akibat setQueryData). Ala spreadsheet: enter/pilih -> lompat & siap ketik.
   const pendingFocusRef = useRef<string | null>(null);
 
-  const rows = useMemo(() => data ?? [], [data]);
+  // Kunci sort "Umur" DIBEKUKAN per waybill sampai fetch ASLI berikutnya
+  // (bukan setQueryData patch dari submit feedback yg dilakukan
+  // useSubmitFeedback). Tanpa ini, submit feedback (mis. Clear TTD -> umur
+  // langsung beku di angka kecil) memicu re-sort tabel SEKETIKA krn kolom
+  // 'umur' membaca nilai live tiap render - baris yg sedang dikerjakan admin
+  // melompat jauh ke halaman lain tanpa peringatan, terasa spt "AWB hilang"
+  // walau datanya tetap ada. `isFetching` (bukan `data`) sengaja dipakai sbg
+  // sinyal "ini fetch ASLI" - setQueryData TIDAK PERNAH mengubah isFetching
+  // (ia langsung menulis cache tanpa lewat siklus fetch), jadi transisi
+  // true->false di sini murni dari initial load/refetch manual/refetch
+  // otomatis (staleTime/remount) - persis definisi "fetch asli" yg diminta.
+  // Snapshot disimpan sbg STATE (bukan ref dibaca dari accessorFn) supaya
+  // dibakukan langsung ke object row (lihat `rows` di bawah) - accessorFn
+  // react-table WAJIB murni fungsi dari row datanya sendiri, TanStack
+  // memoisasi sort berdasar identitas array `data`/`columns`, bukan tahu ada
+  // mutable ref eksternal yg berubah di baliknya.
+  const [sortSnapshot, setSortSnapshot] = useState<Map<string, number> | null>(null);
+  // Cermin `submit` TERKINI, dibaca dari dalam cell 'feedback' (lihat
+  // `columns` di bawah) TANPA menjadikan submit.isPending/variables dependency
+  // useMemo `columns` itu sendiri. WAJIB: dulu keduanya ada di deps array
+  // `columns` - tiap submit (isPending true lalu false) memaksa `columns`
+  // (dan karenanya `useReactTable({ columns, ... })`) ganti identitas array 2x
+  // per submit, memicu autoResetPageIndex bawaan TanStack Table (reset ke
+  // halaman 1 setiap kali ada baris yg disubmit, walau bukan di halaman 1) -
+  // ditemukan lewat reproduksi Playwright nyata (halaman 3 -> submit -> balik
+  // ke halaman 1). `columns` sekarang stabil selama komponen ini hidup
+  // (hanya bergantung `readOnly`, yg konstan per kunjungan halaman), cell
+  // tetap FRESH krn dipanggil ulang tiap render React (bukan di-memo per
+  // baris) - baca ref di call-time, bukan closure atas nilai lama.
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+  const wasFetchingRef = useRef(isFetching);
+  useEffect(() => {
+    if (wasFetchingRef.current && !isFetching && data) {
+      setSortSnapshot(new Map(data.map((r) => [r['No. Waybill'], umurValue(r)])));
+    }
+    wasFetchingRef.current = isFetching;
+  }, [isFetching, data]);
+
+  // __sortUmur dibakukan ke tiap row: kunci sort BEKU (dari sortSnapshot) bila
+  // ada, live sbg fallback (initial load sebelum snapshot pertama terbentuk).
+  // Cell badge Umur TETAP pakai umurValue(row) live langsung (lihat kolom
+  // 'umur' di bawah) - hanya URUTAN sort yg dibekukan, bukan tampilan datanya.
+  const rows = useMemo(() => {
+    const base = data ?? [];
+    return base.map((r) => ({
+      ...r,
+      __sortUmur: sortSnapshot?.get(r['No. Waybill']) ?? umurValue(r),
+    }));
+  }, [data, sortSnapshot]);
 
   const sprinterOptions = useMemo(
     () => Array.from(new Set(rows.map((r) => String(r['Sprinter Delivery']).trim()).filter(Boolean))).sort(),
@@ -117,14 +173,30 @@ export function FeedbackTable({
       if (alasanFilter && String(r['Alasan Paket Bermasalah']).trim() !== alasanFilter) return false;
       if (sprinterFilter && String(r['Sprinter Delivery']).trim() !== sprinterFilter) return false;
       if (onlyBelum && String(r.Feedback ?? '').trim() !== '') return false;
-      if (umurFilter) {
-        const lvl = agingLevel(umurValue(r), r.__isClearTTD);
-        if (umurFilter === 'clear' && !r.__isClearTTD) return false;
-        if (umurFilter !== 'clear' && String(lvl) !== umurFilter) return false;
+      if (umurFilter === 'clear') {
+        if (!r.__isClearTTD) return false;
+      } else if (umurFilter) {
+        // Kategori 0/1/2/3 khusus paket yg MASIH berjalan (belum Clear TTD) -
+        // exclude eksplisit, JANGAN andalkan agingLevel(umur, frozen) saja:
+        // ia mengembalikan level 0 utk SEMUA baris Clear TTD apa pun nilai
+        // umur_frozen-nya, jadi tanpa exclude ini baris Clear TTD ikut
+        // "bocor" ke kategori "0 - Baru sampai" bercampur dgn paket yg
+        // memang baru sampai hari ini.
+        if (r.__isClearTTD) return false;
+        const lvl = agingLevel(umurValue(r));
+        if (String(lvl) !== umurFilter) return false;
       }
       return true;
     });
   }, [rows, dpFilter, alasanFilter, sprinterFilter, onlyBelum, umurFilter]);
+
+  // Balik ke halaman 1 HANYA saat filter/pencarian benar2 berubah (wajar -
+  // set hasil beda, halaman lama bisa jadi kosong/di luar jangkauan) - BUKAN
+  // saat `data` berganti krn submit/refresh (autoResetPageIndex dimatikan di
+  // atas persis utk memisahkan dua kasus ini).
+  useEffect(() => {
+    setPagination((p) => (p.pageIndex === 0 ? p : { ...p, pageIndex: 0 }));
+  }, [dpFilter, umurFilter, alasanFilter, sprinterFilter, onlyBelum, globalFilter]);
 
   const aging = useMemo(() => ringkasanAging(rows), [rows]);
 
@@ -174,8 +246,6 @@ export function FeedbackTable({
         onError: (err: SubmitFeedbackError) => {
           if (err.code === 'VERSION_CONFLICT') {
             toast.warning(`${waybill}: data sudah diubah pihak lain. Baris di-refresh, cek lalu isi ulang.`);
-          } else if (err.code === 'ALREADY_CLEAR_TTD') {
-            toast.warning(`${waybill}: sudah Clear TTD, feedback dibekukan.`);
           } else {
             toast.error(`Gagal menyimpan ${waybill}: ${err.message}`);
           }
@@ -184,7 +254,7 @@ export function FeedbackTable({
     );
   }
 
-  const columns = useMemo<ColumnDef<LongTailRow>[]>(() => {
+  const columns = useMemo<ColumnDef<RowWithSort>[]>(() => {
     return [
       {
         id: 'waybill',
@@ -237,7 +307,11 @@ export function FeedbackTable({
       {
         id: 'umur',
         header: 'Umur',
-        accessorFn: (r) => umurValue(r),
+        // __sortUmur (dibakukan di row, lihat komentar `rows` di atas) - BUKAN
+        // umurValue(r) live - supaya baris tak loncat posisi seketika saat
+        // submit feedback. Badge tetap menampilkan umur LIVE (di bawah),
+        // hanya urutan sort yg dibekukan.
+        accessorFn: (r) => r.__sortUmur,
         cell: (c) => <AgingBadge umur={umurValue(c.row.original)} frozen={c.row.original.__isClearTTD} />,
       },
       {
@@ -279,7 +353,7 @@ export function FeedbackTable({
             <FeedbackCell
               row={r}
               options={options}
-              saving={submit.isPending && submit.variables?.waybill === r['No. Waybill']}
+              saving={submitRef.current.isPending && submitRef.current.variables?.waybill === r['No. Waybill']}
               onCommit={handleCommit}
               registerRef={registerRef}
               onEnterNext={focusNext}
@@ -309,20 +383,32 @@ export function FeedbackTable({
       },
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [submit.isPending, submit.variables, readOnly]);
+  }, [readOnly]);
 
   const table = useReactTable({
     data: filtered,
     columns,
-    state: { sorting, globalFilter },
+    state: { sorting, globalFilter, pagination },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
+    onPaginationChange: setPagination,
     globalFilterFn: 'includesString',
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    initialState: { pagination: { pageSize: 20 } },
+    // Default TanStack ('true') reset pageIndex ke 0 SETIAP `data` ganti
+    // referensi (row model internal recompute) - termasuk saat submit
+    // feedback patch cache in-place (Masalah 1) & klik Refresh manual, bukan
+    // cuma saat filter user benar2 berubah. Itulah penyebab bug "kembali ke
+    // halaman 1 stiap submit di halaman >1" (dibuktikan via reproduksi
+    // Playwright nyata - matikan opsi ini SAJA tak cukup lewat cara lain,
+    // sudah dicoba stabilkan `columns` dulu, tak berpengaruh krn trigger
+    // sesungguhnya `data`, bukan `columns`). Dimatikan di sini, reset ke
+    // halaman 1 saat filter berubah kini ditangani manual (lihat useEffect
+    // dpFilter/umurFilter/dst di bawah) - satu-satunya kasus yg memang masih
+    // wajar mereset halaman.
+    autoResetPageIndex: false,
   });
 
   // Sumber Pivot AWB per Sprinter: ikut SEMUA filter yang sedang aktif
@@ -370,7 +456,7 @@ export function FeedbackTable({
             { value: '2', label: '2 Hari' },
             { value: '3', label: '≥ 3 Hari' },
             { value: '0', label: 'Baru sampai (0 hari)' },
-            { value: 'clear', label: 'Sudah Clear TTD' },
+            { value: 'clear', label: 'Clear TTD' },
           ]}
         />
         <SelectFilter
@@ -395,12 +481,23 @@ export function FeedbackTable({
           <input type="checkbox" checked={onlyBelum} onChange={(e) => setOnlyBelum(e.target.checked)} />
           Belum feedback saja
         </label>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          title="Muat ulang data terbaru dari server & urutkan ulang tabel (mis. setelah submit Clear TTD)"
+        >
+          <RefreshCw className={isFetching ? 'animate-spin' : undefined} aria-hidden />
+          <span className="sr-only sm:not-sr-only">Refresh</span>
+        </Button>
         {readOnly && (
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="ml-auto"
             onClick={() => setPivotOpen(true)}
             title="Rekap jumlah AWB per Sprinter, dikelompokkan per DP — bisa disalin sbg gambar/tabel"
           >

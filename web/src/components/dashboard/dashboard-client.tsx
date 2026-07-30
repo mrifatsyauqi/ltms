@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -66,7 +66,10 @@ function pct(part: number, whole: number) {
  */
 const STAT_GRID = 'grid grid-cols-1 gap-2 @sm:grid-cols-2 @2xl:grid-cols-3 @4xl:grid-cols-5';
 
-function StatSkeleton() {
+// Diekspor (bukan lokal lagi) supaya dashboard/loading.tsx bisa pakai
+// skeleton yang SAMA PERSIS dgn yang dirender DashboardClient sendiri saat
+// isLoading, bukan bikin skeleton mirip-mirip yang gampang tak sinkron.
+export function StatSkeleton() {
   return (
     <div className={STAT_GRID}>
       {Array.from({ length: 5 }).map((_, i) => (
@@ -86,6 +89,9 @@ export function DashboardClient({ title, description }: { title: string; descrip
     // scope + asOf masuk queryKey: ganti filter/tanggal -> refetch otomatis.
     queryKey: ['dashboard', scope, asOf],
     queryFn: () => fetchDashboard(scope, isHistorical ? asOf : undefined),
+    // Ganti Cakupan/tanggal: tampilkan data scope/tanggal SEBELUMNYA dulu
+    // (bukan skeleton kosong) sambil refetch scope/tanggal baru di latar.
+    placeholderData: keepPreviousData,
   });
 
   const isCabang = data?.role === 'Admin Cabang';

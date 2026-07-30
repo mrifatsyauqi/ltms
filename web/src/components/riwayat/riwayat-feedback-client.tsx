@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { RefreshCw, Search } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { useDashboardScope, ALL_SCOPE } from '@/components/dashboard/scope-context';
@@ -96,6 +96,9 @@ export function RiwayatFeedbackClient({ isCabang }: { isCabang: boolean }) {
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['riwayat-feedback', from, to, scope],
     queryFn: () => fetchRiwayat(from, to, scope),
+    // Ganti rentang tanggal/DP: tampilkan hasil sebelumnya dulu sambil
+    // refetch rentang/DP baru di latar, bukan skeleton kosong.
+    placeholderData: keepPreviousData,
   });
 
   const rows = useMemo(() => {

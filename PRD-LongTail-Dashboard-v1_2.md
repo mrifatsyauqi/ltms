@@ -190,7 +190,7 @@ Fitur:
 -   Batch Import
 -   Riwayat Import
 
-## 7.1 Penanganan Duplikat Lintas Batch (Baru)
+## 7.1 Penanganan Duplikat Lintas Batch (direvisi)
 
 Jika waybill yang diupload sudah ada di database dari batch import
 sebelumnya (paket lama yang belum Clear TTD):
@@ -198,10 +198,36 @@ sebelumnya (paket lama yang belum Clear TTD):
 -   Sistem **tidak membuat baris baru**, melainkan meng-update field
     yang berubah (status terakhir, waktu sampai, dsb.), sambil
     mempertahankan histori feedback yang sudah ada.
--   Jika waybill sudah **Clear TTD** namun muncul lagi di file baru,
-    sistem menandai sebagai *"Perlu Review"* dan tidak menimpa status
-    Clear TTD secara otomatis.
 -   Setiap update dari proses ini dicatat di Activity Log (Bagian 12).
+
+**Anomali Clear TTD (direvisi)**: jika waybill sudah **Clear TTD**
+namun **muncul lagi** di tarikan baru dengan status tracking yang
+BUKAN Clear TTD (status tracking dari kurir tidak pernah secara
+literal "Clear TTD" — status itu murni klasifikasi dari teks Feedback
+manual admin), ini adalah **bukti kuat admin salah menandai Clear TTD**
+sebelumnya. Aturan lama ("tandai *Perlu Review*, jangan timpa") diganti
+dengan **koreksi otomatis**:
+
+-   Field tracking (Status Terakhir, Waktu Sampai, DP Sampai, Sprinter
+    Delivery, COD, Delivery Attempt, Alasan Paket Bermasalah) **ditimpa**
+    dengan data dari tarikan terbaru — persis seperti update biasa untuk
+    waybill non-Clear-TTD.
+-   `umur_frozen` **direset** (aging resume live dari Waktu Sampai
+    terbaru) — paket tidak lagi dianggap "selesai/beku".
+-   **Feedback dikosongkan.** Ini wajib, bukan opsional: seluruh
+    klasifikasi Clear TTD di sistem (badge aging, Distribusi Feedback,
+    hitungan *Sudah/Belum Clear TTD* & *Paket &gt; 3 Hari* di Dashboard)
+    dibaca dari teks Feedback, bukan dari `umur_frozen`. Kalau Feedback
+    dibiarkan berisi teks lama, baris tetap dianggap Clear TTD di
+    seluruh UI meski umurnya sudah resume — paket kembali "hilang" dari
+    radar prioritas, membatalkan tujuan koreksi ini.
+-   Dicatat ke Activity Log: **Sumber Perubahan** = *"Koreksi Otomatis
+    (tidak konsisten dengan tarikan)"*, **Data Lama** = `"Clear TTD"`,
+    **Data Baru** = status tracking baru dari tarikan.
+-   Flag `perlu_review` **tidak dipakai** untuk kasus ini (keputusan:
+    Activity Log/Riwayat Feedback sudah cukup sebagai jejak audit;
+    admin tidak perlu notifikasi tambahan karena datanya sudah otomatis
+    konsisten).
 
 ## 7.2 Auto Mapping Header (direvisi: tanpa UI mapping manual)
 
@@ -419,6 +445,28 @@ bertambah setelahnya. Ini penting karena Aging adalah indikator
 prioritas utama sistem (lihat Bagian 15). *(v1.3)* Umur juga dibekukan
 saat paket di-**Auto-Close** menjadi **`CLOSE ALUR`** (Bagian 7.4),
 karena paket tersebut sudah tidak *actionable*.
+
+**Koreksi Clear TTD (direvisi):** paket berstatus Clear TTD yang
+**masih di LongTail aktif** (belum diarsipkan Auto-Close) **tetap bisa**
+disubmit ulang feedback-nya — mis. admin salah menandai Clear TTD dan
+perlu mengembalikannya ke status operasional lain. Aturannya
+(`decideFeedbackTransition`, `longtail-pure.ts`):
+
+-   **Belum Clear TTD → jadi Clear TTD**: umur dibekukan di momen ini
+    (seperti aturan di atas).
+-   **Sudah Clear TTD → dikoreksi ke status lain (bukan Clear TTD
+    lagi)**: umur **dilepas dari beku dan lanjut menghitung LIVE**
+    dari `Hari Ini - Waktu Sampai` (bukan melanjutkan dari angka beku
+    sebelumnya) — persis seperti paket yang belum pernah Clear TTD.
+    Perubahan ini dicatat di Activity_Log dengan **Sumber Perubahan =
+    "Koreksi Manual"** (bukan "Manual Feedback" biasa) dan **Data Lama
+    = "Clear TTD"**, supaya jejaknya jelas terpisah dari edit feedback
+    rutin.
+-   **Status Clear TTD tidak berubah** (masih Clear TTD, atau
+    tetap bukan Clear TTD, mis. sekadar mengedit ulang teks) — umur
+    **tidak disentuh** sama sekali, supaya baris yang sudah beku tidak
+    ikut ter-beku ulang di momen yang lebih baru hanya karena
+    teksnya diedit.
 
 **Nilai `Status Terakhir` (direvisi):** kolom ini murni data hasil
 tarikan Excel (Bagian 7) — **hanya** berubah lewat import berikutnya
@@ -679,3 +727,5 @@ Untuk mengelola ekspektasi, hal berikut **tidak** termasuk dalam MVP:
 | 20 *(v1.3)* | Umur Paket dihitung ulang sebagai selisih tanggal kalender Jakarta (bukan `floor(jam berlalu / 24)`), dan parsing `Waktu Sampai` diperbaiki agar selalu dibaca sbg jam dinding Jakarta (Bagian 9.1) | Umur tidak naik tepat waktu di pergantian hari — paket yg sampai kemarin sore masih terhitung "1 Hari" alih-alih "2 Hari" keesokan paginya |
 | 21 *(v1.3)* | `Status Terakhir` tidak lagi ikut ditimpa nilai `Feedback` saat submit feedback manual, termasuk saat Clear TTD (Bagian 9.0 & 9.1) | Kolom itu harus murni cerminan data tarikan Excel/Auto-Close; status Clear TTD sudah cukup dibaca dari `Feedback` (`isClearTTD`), tidak perlu menimpa `Status Terakhir` |
 | 22 *(v1.3)* | Menambahkan fitur "Pivot AWB per Sprinter" di halaman Data Long Tail (Bagian 9.2.1) — rekap jumlah waybill per DP -> Sprinter, bisa disalin sbg gambar/tabel | Admin butuh rekap volume per kurir tanpa export manual ke Excel Pivot Table |
+| 23 *(v1.3)* | Membuka koreksi feedback pada baris Clear TTD yang masih di LongTail aktif — umur resume live (bukan lanjut dari angka beku) saat dikoreksi keluar dari Clear TTD, dicatat Activity_Log dgn Sumber "Koreksi Manual" (Bagian 9.1) | Sebelumnya submit feedback diblokir total begitu Clear TTD (`ALREADY_CLEAR_TTD`), sehingga salah tandai Clear TTD tak bisa dikoreksi sama sekali - ditemukan saat audit verifikasi migrasi |
+| 24 *(v1.3)* | Mengganti aturan dedup "waybill Clear TTD muncul lagi di tarikan -> tandai Perlu Review, jangan timpa" dengan **koreksi otomatis**: field tracking ditimpa data tarikan terbaru, `umur_frozen` direset (resume live), Feedback dikosongkan, dicatat Activity_Log dgn Sumber "Koreksi Otomatis (tidak konsisten dengan tarikan)" (Bagian 7.1) | Waybill Clear TTD muncul lagi di tarikan dgn status tracking baru adalah bukti kuat admin salah tandai Clear TTD sebelumnya; membiarkan datanya beku & "Perlu Review" pasif membuat paket tsb tetap hilang dari radar aging/prioritas sampai ada yg manual membuka & mengoreksinya - ditemukan saat verifikasi eksekusi nyata sebelum merge |

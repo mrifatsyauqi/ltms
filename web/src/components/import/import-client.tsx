@@ -194,7 +194,7 @@ export function ImportClient() {
       setEntries((prev) => prev.map((e) => (readyIds.has(e.id) ? { ...e, status: 'imported' } : e)));
       const closeInfo = r.closed ? `, ${r.closed} di-close` : '';
       toast.success(
-        `${fileNames.length} file (${combined.rows.length} waybill unik): ${r.inserted} baru, ${r.updated} update, ${r.needReview} perlu review, ${r.skipped} dilewati${closeInfo}`,
+        `${fileNames.length} file (${combined.rows.length} waybill unik): ${r.inserted} baru, ${r.updated} update, ${r.koreksiOtomatis} koreksi otomatis, ${r.skipped} dilewati${closeInfo}`,
       );
     } catch (err) {
       const aborted = err instanceof DOMException && err.name === 'AbortError';
@@ -628,7 +628,7 @@ function StepImport({
               {batchResult.fileNames.length} file: {batchResult.fileNames.join(', ')}
             </p>
             <p className="mt-2 text-sm">
-              {r.inserted} baru • {r.updated} update • {r.needReview} perlu review • {r.skipped} dilewati
+              {r.inserted} baru • {r.updated} update • {r.koreksiOtomatis} koreksi otomatis • {r.skipped} dilewati
               {r.closed ? (
                 <>
                   {' '}

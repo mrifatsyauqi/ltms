@@ -3,10 +3,9 @@ import { requireActor, requireRole } from './helpers';
 import { ApiError } from '@/lib/errors';
 import {
   appendActivityLog,
-  computeUmurLive,
+  decideFeedbackTransition,
   decorateLongTailRow,
   fetchLongtailScoped,
-  isClearTTD,
   jakartaNowParts,
   nextAttempt,
   type LongtailDbRow,
@@ -54,9 +53,11 @@ export async function submitFeedback(
   if (actor.role !== 'Admin Cabang' && !sameDp(current.dp_sampai, actor.dropPoint)) {
     throw new ApiError('FORBIDDEN', 'Tidak punya akses ke waybill ini');
   }
-  if (isClearTTD(current.feedback)) {
-    throw new ApiError('ALREADY_CLEAR_TTD', 'Waybill sudah Clear TTD - feedback dibekukan, tidak bisa diubah.');
-  }
+  // Baris Clear TTD di LongTail AKTIF (belum diarsipkan) TETAP BISA disubmit
+  // ulang - mis. koreksi salah tandai Clear TTD kembali ke status lain (lihat
+  // logic wasClearTTD/willBeClearTTD di bawah utk aturan freeze/resume &
+  // "Koreksi Manual"). Setelah diarsipkan (Auto-Close), baris sudah tak ada
+  // lagi di tabel ini sama sekali - findRow di atas otomatis NOT_FOUND.
 
   const serverVersion = String(current.version ?? '');
   if (baseVersion != null && String(baseVersion) !== serverVersion) {
@@ -73,9 +74,11 @@ export async function submitFeedback(
     log_feedback: newLog,
     version: Number(current.version) + 1,
   };
-  if (isClearTTD(feedback)) {
-    patch.umur_frozen = computeUmurLive(current.waktu_sampai); // beku tepat saat Clear TTD
-  }
+
+  // Keputusan freeze/resume umur & sumber Activity_Log — logic MURNI, diuji
+  // langsung tanpa DB (longtail-pure.test.ts), pola sama dgn decideAutoClose.
+  const transition = decideFeedbackTransition(current, feedback);
+  if (transition.umurFrozen !== undefined) patch.umur_frozen = transition.umurFrozen;
 
   // Optimistic lock di level DB: hanya update bila version masih sama.
   const { data: updatedRows, error } = await db()
@@ -99,9 +102,9 @@ export async function submitFeedback(
     dp: String(current.dp_sampai ?? ''),
     waybill,
     attempt: await nextAttempt(waybill),
-    dataLama: String(current.feedback ?? ''),
+    dataLama: transition.dataLama,
     dataBaru: feedback,
-    sumber: 'Manual Feedback',
+    sumber: transition.sumber,
   });
 
   return decorateLongTailRow(updatedRows[0] as LongtailDbRow);
@@ -141,12 +144,15 @@ export async function updateLongTail(
   waybill: string,
   data: UpdateLongTailInput,
 ): Promise<LongTailRow> {
-  const actor = await requireActor(actorEmail);
+  // Admin Cabang SAJA (bukan sameDp spt getLongTail/submitFeedback) - fungsi
+  // ini bisa mengubah field `dp_sampai` sendiri (lihat map di bawah), jadi
+  // TIDAK BOLEH diberikan ke Admin DP sekalipun untuk baris di DP-nya sendiri
+  // (kalau tidak, Admin DP bisa memindahkan waybill-nya keluar dari DP-nya
+  // sendiri via field itu). PRD Bagian 5: Admin DP "hanya dapat MELIHAT data
+  // sesuai DP" - tidak ada hak edit baris LongTail umum, cuma submitFeedback.
+  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
   const current = await findRow(waybill);
   if (!current) throw new ApiError('NOT_FOUND', 'Waybill tidak ditemukan');
-  if (actor.role !== 'Admin Cabang' && !sameDp(current.dp_sampai, actor.dropPoint)) {
-    throw new ApiError('FORBIDDEN', 'Tidak punya akses ke waybill ini');
-  }
   // Feedback SENGAJA tidak diubah di sini (hanya lewat submitFeedback).
   const map: Record<string, string> = {
     statusTerakhir: 'status_terakhir',

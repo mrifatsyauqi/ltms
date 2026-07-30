@@ -112,7 +112,8 @@ export type ImportResult = {
   total: number;
   inserted: number;
   updated: number;
-  needReview: number;
+  /** Waybill Clear TTD yang muncul lagi di tarikan dgn status baru - dikoreksi otomatis (PRD 7.1 revisi). */
+  koreksiOtomatis: number;
   skipped: number;
   /** Auto-Close (v1.3): jumlah waybill yang hilang dari tarikan lalu diarsipkan. */
   closed?: number;
