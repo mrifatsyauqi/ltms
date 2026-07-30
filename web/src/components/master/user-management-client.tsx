@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { SLOW_STALE_TIME } from '@/lib/query-config';
 import type { UserRow } from '@/lib/data/users';
 import type { DropPointRow } from '@/lib/data/drop-points';
 
@@ -39,11 +40,13 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['users'],
     queryFn: () => api<UserRow[]>('/api/users'),
+    staleTime: SLOW_STALE_TIME, // jarang berubah (data master)
   });
   // DP aktif untuk dropdown (requirement terkunci: bukan teks bebas).
   const { data: dps } = useQuery({
     queryKey: ['drop-points'],
     queryFn: () => api<DropPointRow[]>('/api/drop-points'),
+    staleTime: SLOW_STALE_TIME, // jarang berubah (data master)
   });
   const activeDps = useMemo(() => (dps ?? []).filter((d) => isAktif(d['Status Aktif'])), [dps]);
 

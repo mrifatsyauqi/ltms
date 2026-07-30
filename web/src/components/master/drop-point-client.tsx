@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { SLOW_STALE_TIME } from '@/lib/query-config';
 import type { DropPointRow } from '@/lib/data/drop-points';
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
@@ -35,6 +36,7 @@ export function DropPointClient() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['drop-points'],
     queryFn: () => api<DropPointRow[]>('/api/drop-points'),
+    staleTime: SLOW_STALE_TIME, // jarang berubah (data master)
   });
 
   const [q, setQ] = useState('');

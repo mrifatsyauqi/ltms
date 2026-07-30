@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDashboardScope, ALL_SCOPE } from '@/components/dashboard/scope-context';
+import { SLOW_STALE_TIME } from '@/lib/query-config';
 import type { LongTailRow } from '@/lib/data/longtail';
 import type { MasterFeedbackRow } from '@/lib/data/master-feedback';
 import type { FavoriteFeedbackRow } from '@/lib/data/favorite-feedback';
@@ -22,11 +23,19 @@ export function useLongTail() {
 }
 
 export function useMasterFeedback() {
-  return useQuery({ queryKey: ['master-feedback'], queryFn: () => getJson<MasterFeedbackRow[]>('/api/master-feedback') });
+  return useQuery({
+    queryKey: ['master-feedback'],
+    queryFn: () => getJson<MasterFeedbackRow[]>('/api/master-feedback'),
+    staleTime: SLOW_STALE_TIME, // jarang berubah (data master)
+  });
 }
 
 export function useFavoriteFeedback() {
-  return useQuery({ queryKey: ['favorite-feedback'], queryFn: () => getJson<FavoriteFeedbackRow[]>('/api/favorite-feedback') });
+  return useQuery({
+    queryKey: ['favorite-feedback'],
+    queryFn: () => getJson<FavoriteFeedbackRow[]>('/api/favorite-feedback'),
+    staleTime: SLOW_STALE_TIME, // jarang berubah (data master)
+  });
 }
 
 /**

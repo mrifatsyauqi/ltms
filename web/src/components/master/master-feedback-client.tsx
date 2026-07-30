@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { SLOW_STALE_TIME } from '@/lib/query-config';
 import type { MasterFeedbackRow } from '@/lib/data/master-feedback';
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
@@ -35,6 +36,7 @@ export function MasterFeedbackClient() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['master-feedback'],
     queryFn: () => api<MasterFeedbackRow[]>('/api/master-feedback'),
+    staleTime: SLOW_STALE_TIME, // jarang berubah (data master)
   });
 
   const [q, setQ] = useState('');

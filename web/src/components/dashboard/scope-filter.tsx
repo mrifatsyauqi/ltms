@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Building2, LayoutGrid } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ALL_SCOPE, useDashboardScope } from '@/components/dashboard/scope-context';
+import { SLOW_STALE_TIME } from '@/lib/query-config';
 import type { DropPointRow } from '@/lib/data/drop-points';
 
 async function fetchDropPoints(): Promise<DropPointRow[]> {
@@ -23,7 +24,11 @@ async function fetchDropPoints(): Promise<DropPointRow[]> {
  */
 export function ScopeFilter() {
   const { scope, setScope } = useDashboardScope();
-  const { data } = useQuery({ queryKey: ['drop-points'], queryFn: fetchDropPoints });
+  const { data } = useQuery({
+    queryKey: ['drop-points'],
+    queryFn: fetchDropPoints,
+    staleTime: SLOW_STALE_TIME, // jarang berubah (data master)
+  });
 
   const dps = [...(data ?? [])].sort((a, b) =>
     String(a['Kode DP']).localeCompare(String(b['Kode DP'])),

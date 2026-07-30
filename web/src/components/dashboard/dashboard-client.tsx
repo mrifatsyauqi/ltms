@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -86,6 +86,9 @@ export function DashboardClient({ title, description }: { title: string; descrip
     // scope + asOf masuk queryKey: ganti filter/tanggal -> refetch otomatis.
     queryKey: ['dashboard', scope, asOf],
     queryFn: () => fetchDashboard(scope, isHistorical ? asOf : undefined),
+    // Ganti Cakupan/tanggal: tampilkan data scope/tanggal SEBELUMNYA dulu
+    // (bukan skeleton kosong) sambil refetch scope/tanggal baru di latar.
+    placeholderData: keepPreviousData,
   });
 
   const isCabang = data?.role === 'Admin Cabang';
