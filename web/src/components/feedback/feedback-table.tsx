@@ -92,6 +92,10 @@ export function FeedbackTable({
   const [alasanFilter, setAlasanFilter] = useState('');
   const [sprinterFilter, setSprinterFilter] = useState('');
   const [onlyBelum, setOnlyBelum] = useState(false);
+  // Pagination DIKONTROL sendiri (bukan initialState bawaan react-table) -
+  // lihat komentar `autoResetPageIndex: false` di useReactTable di bawah utk
+  // alasannya (bug halaman kembali ke 1 saat submit di halaman >1).
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
   const [historyRow, setHistoryRow] = useState<LongTailRow | null>(null);
   const [pivotOpen, setPivotOpen] = useState(false);
 
@@ -119,6 +123,20 @@ export function FeedbackTable({
   // mutable ref eksternal yg berubah di baliknya.
   const [sortSnapshot, setSortSnapshot] = useState<Map<string, number> | null>(null);
   const recentlyUpdatedRef = useRef<Set<string>>(new Set());
+  // Cermin `submit` TERKINI, dibaca dari dalam cell 'feedback' (lihat
+  // `columns` di bawah) TANPA menjadikan submit.isPending/variables dependency
+  // useMemo `columns` itu sendiri. WAJIB: dulu keduanya ada di deps array
+  // `columns` - tiap submit (isPending true lalu false) memaksa `columns`
+  // (dan karenanya `useReactTable({ columns, ... })`) ganti identitas array 2x
+  // per submit, memicu autoResetPageIndex bawaan TanStack Table (reset ke
+  // halaman 1 setiap kali ada baris yg disubmit, walau bukan di halaman 1) -
+  // ditemukan lewat reproduksi Playwright nyata (halaman 3 -> submit -> balik
+  // ke halaman 1). `columns` sekarang stabil selama komponen ini hidup
+  // (hanya bergantung `readOnly`, yg konstan per kunjungan halaman), cell
+  // tetap FRESH krn dipanggil ulang tiap render React (bukan di-memo per
+  // baris) - baca ref di call-time, bukan closure atas nilai lama.
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
   const wasFetchingRef = useRef(isFetching);
   useEffect(() => {
     if (wasFetchingRef.current && !isFetching && data) {
@@ -173,6 +191,14 @@ export function FeedbackTable({
       return true;
     });
   }, [rows, dpFilter, alasanFilter, sprinterFilter, onlyBelum, umurFilter]);
+
+  // Balik ke halaman 1 HANYA saat filter/pencarian benar2 berubah (wajar -
+  // set hasil beda, halaman lama bisa jadi kosong/di luar jangkauan) - BUKAN
+  // saat `data` berganti krn submit/refresh (autoResetPageIndex dimatikan di
+  // atas persis utk memisahkan dua kasus ini).
+  useEffect(() => {
+    setPagination((p) => (p.pageIndex === 0 ? p : { ...p, pageIndex: 0 }));
+  }, [dpFilter, umurFilter, alasanFilter, sprinterFilter, onlyBelum, globalFilter]);
 
   const aging = useMemo(() => ringkasanAging(rows), [rows]);
 
@@ -349,7 +375,7 @@ export function FeedbackTable({
             <FeedbackCell
               row={r}
               options={options}
-              saving={submit.isPending && submit.variables?.waybill === r['No. Waybill']}
+              saving={submitRef.current.isPending && submitRef.current.variables?.waybill === r['No. Waybill']}
               onCommit={handleCommit}
               registerRef={registerRef}
               onEnterNext={focusNext}
@@ -379,20 +405,32 @@ export function FeedbackTable({
       },
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [submit.isPending, submit.variables, readOnly]);
+  }, [readOnly]);
 
   const table = useReactTable({
     data: filtered,
     columns,
-    state: { sorting, globalFilter },
+    state: { sorting, globalFilter, pagination },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
+    onPaginationChange: setPagination,
     globalFilterFn: 'includesString',
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    initialState: { pagination: { pageSize: 20 } },
+    // Default TanStack ('true') reset pageIndex ke 0 SETIAP `data` ganti
+    // referensi (row model internal recompute) - termasuk saat submit
+    // feedback patch cache in-place (Masalah 1) & klik Refresh manual, bukan
+    // cuma saat filter user benar2 berubah. Itulah penyebab bug "kembali ke
+    // halaman 1 stiap submit di halaman >1" (dibuktikan via reproduksi
+    // Playwright nyata - matikan opsi ini SAJA tak cukup lewat cara lain,
+    // sudah dicoba stabilkan `columns` dulu, tak berpengaruh krn trigger
+    // sesungguhnya `data`, bukan `columns`). Dimatikan di sini, reset ke
+    // halaman 1 saat filter berubah kini ditangani manual (lihat useEffect
+    // dpFilter/umurFilter/dst di bawah) - satu-satunya kasus yg memang masih
+    // wajar mereset halaman.
+    autoResetPageIndex: false,
   });
 
   // Sumber Pivot AWB per Sprinter: ikut SEMUA filter yang sedang aktif
