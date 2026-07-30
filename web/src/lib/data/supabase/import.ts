@@ -91,20 +91,22 @@ export async function importLongTail(
 
   const wbList = [...new Set(items.map((i) => i.wb))];
 
-  // Ambil baris LongTail yang sudah ada (chunk .in()).
+  // Ambil baris LongTail yang sudah ada + hitung attempt dasar dari
+  // Activity_Log, PER CHUNK waybill yang sama sekaligus (2 tabel independen
+  // - longtail & activity_log tak saling butuh hasil satu sama lain, hanya
+  // dipakai terpisah di loop pemrosesan bawah) - pola sama dgn
+  // riwayat-feedback.ts, bukan lagi 2 loop chunk terpisah berurutan.
   const existingMap = new Map<string, LongtailUpsert>();
-  for (const chunk of chunks(wbList, CHUNK)) {
-    const { data, error } = await db().from('longtail').select('*').in('no_waybill', chunk);
-    if (error) throw new ApiError('INTERNAL_ERROR', error.message);
-    (data ?? []).forEach((r) => existingMap.set((r as LongtailDbRow).no_waybill, fromDb(r as LongtailDbRow)));
-  }
-
-  // Hitung attempt dasar dari Activity_Log utk waybill terkait.
   const attemptMap = new Map<string, number>();
   for (const chunk of chunks(wbList, CHUNK)) {
-    const { data, error } = await db().from('activity_log').select('waybill').in('waybill', chunk);
-    if (error) throw new ApiError('INTERNAL_ERROR', error.message);
-    (data ?? []).forEach((r) => {
+    const [ltRes, alRes] = await Promise.all([
+      db().from('longtail').select('*').in('no_waybill', chunk),
+      db().from('activity_log').select('waybill').in('waybill', chunk),
+    ]);
+    if (ltRes.error) throw new ApiError('INTERNAL_ERROR', ltRes.error.message);
+    if (alRes.error) throw new ApiError('INTERNAL_ERROR', alRes.error.message);
+    (ltRes.data ?? []).forEach((r) => existingMap.set((r as LongtailDbRow).no_waybill, fromDb(r as LongtailDbRow)));
+    (alRes.data ?? []).forEach((r) => {
       const w = s((r as { waybill: string }).waybill);
       attemptMap.set(w, (attemptMap.get(w) ?? 0) + 1);
     });
@@ -186,16 +188,24 @@ export async function importLongTail(
     });
   }
 
-  // Tulis: upsert LongTail (onConflict no_waybill), lalu log, lalu batch.
+  // Tulis: upsert LongTail (onConflict no_waybill) & insert Activity_Log
+  // BERSAMAAN (2 tabel independen, logs sudah lengkap dihitung di loop atas,
+  // tak butuh hasil upsert longtail), baru lanjut batch.
   const payload = [...finalRows.values()];
-  for (const chunk of chunks(payload, CHUNK)) {
-    const { error } = await db().from('longtail').upsert(chunk, { onConflict: 'no_waybill' });
-    if (error) throw new ApiError('INTERNAL_ERROR', error.message);
-  }
-  for (const chunk of chunks(logs, CHUNK)) {
-    const { error } = await db().from('activity_log').insert(chunk);
-    if (error) throw new ApiError('INTERNAL_ERROR', error.message);
-  }
+  await Promise.all([
+    (async () => {
+      for (const chunk of chunks(payload, CHUNK)) {
+        const { error } = await db().from('longtail').upsert(chunk, { onConflict: 'no_waybill' });
+        if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+      }
+    })(),
+    (async () => {
+      for (const chunk of chunks(logs, CHUNK)) {
+        const { error } = await db().from('activity_log').insert(chunk);
+        if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+      }
+    })(),
+  ]);
 
   // === TAHAP 2 (v1.3): AUTO-CLOSE waybill yang HILANG dari tarikan ===
   // Scope per-DP: hanya DP yang muncul di file; DP lain tidak tersentuh.

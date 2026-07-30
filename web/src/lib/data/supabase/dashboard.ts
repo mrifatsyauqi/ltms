@@ -45,7 +45,25 @@ export async function getDashboard(actorEmail: string, dp?: string): Promise<Das
 
 /** Inti agregasi Dashboard tanpa auth — dipakai getDashboard (live) & snapshot cron. */
 async function computeDashboard(dpFilter: string | null, role: string, dropPoint: string): Promise<DashboardData> {
-  const rows = await fetchScoped(dpFilter);
+  // Progress Hari Ini: waybill (yang masih ada, ter-scope) dengan Manual Feedback hari ini (Jakarta).
+  const today = jakartaTodayIso();
+  let alQ = db()
+    .from('activity_log')
+    .select('waybill')
+    .eq('sumber', 'Manual Feedback')
+    .gte('created_at', `${today}T00:00:00+07:00`)
+    .lte('created_at', `${today}T23:59:59.999+07:00`);
+  if (dpFilter) alQ = alQ.eq('dp', dpFilter);
+
+  // fetchScoped() (paginasi longtail) & query activity_log di atas SALING
+  // INDEPENDEN (activity_log tak butuh hasil longtail sama sekali, baru
+  // digabung lewat currentWb SETELAH loop di bawah) -> jalankan BERSAMAAN,
+  // bukan menunggu satu selesai baru mulai yang lain. Urutan pemrosesan
+  // `rows` di loop bawah TIDAK berubah sama sekali (masih sequential,
+  // masih urutan yg sama dari fetchScoped) - yang paralel murni fetch-nya.
+  const [rows, alRes] = await Promise.all([fetchScoped(dpFilter), alQ]);
+  const { data: alData, error: alErr } = alRes;
+  if (alErr) throw new ApiError('INTERNAL_ERROR', alErr.message);
 
   const total = rows.length;
   let sudah = 0, clearTTD = 0, lebih3 = 0, paketTertua = 0, paketTertuaWb = '';
@@ -94,17 +112,6 @@ async function computeDashboard(dpFilter: string | null, role: string, dropPoint
     currentWb.add(String(r.no_waybill ?? '').trim().toLowerCase());
   }
 
-  // Progress Hari Ini: waybill (yang masih ada, ter-scope) dengan Manual Feedback hari ini (Jakarta).
-  const today = jakartaTodayIso();
-  let alQ = db()
-    .from('activity_log')
-    .select('waybill')
-    .eq('sumber', 'Manual Feedback')
-    .gte('created_at', `${today}T00:00:00+07:00`)
-    .lte('created_at', `${today}T23:59:59.999+07:00`);
-  if (dpFilter) alQ = alQ.eq('dp', dpFilter);
-  const { data: alData, error: alErr } = await alQ;
-  if (alErr) throw new ApiError('INTERNAL_ERROR', alErr.message);
   const todayWb = new Set<string>();
   (alData ?? []).forEach((a) => {
     const k = String((a as { waybill: string }).waybill ?? '').trim().toLowerCase();
