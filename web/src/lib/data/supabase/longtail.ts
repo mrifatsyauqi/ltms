@@ -144,12 +144,15 @@ export async function updateLongTail(
   waybill: string,
   data: UpdateLongTailInput,
 ): Promise<LongTailRow> {
-  const actor = await requireActor(actorEmail);
+  // Admin Cabang SAJA (bukan sameDp spt getLongTail/submitFeedback) - fungsi
+  // ini bisa mengubah field `dp_sampai` sendiri (lihat map di bawah), jadi
+  // TIDAK BOLEH diberikan ke Admin DP sekalipun untuk baris di DP-nya sendiri
+  // (kalau tidak, Admin DP bisa memindahkan waybill-nya keluar dari DP-nya
+  // sendiri via field itu). PRD Bagian 5: Admin DP "hanya dapat MELIHAT data
+  // sesuai DP" - tidak ada hak edit baris LongTail umum, cuma submitFeedback.
+  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
   const current = await findRow(waybill);
   if (!current) throw new ApiError('NOT_FOUND', 'Waybill tidak ditemukan');
-  if (actor.role !== 'Admin Cabang' && !sameDp(current.dp_sampai, actor.dropPoint)) {
-    throw new ApiError('FORBIDDEN', 'Tidak punya akses ke waybill ini');
-  }
   // Feedback SENGAJA tidak diubah di sini (hanya lewat submitFeedback).
   const map: Record<string, string> = {
     statusTerakhir: 'status_terakhir',
