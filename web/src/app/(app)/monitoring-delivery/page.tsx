@@ -15,16 +15,21 @@ export default async function MonitoringDeliveryPage() {
     redirect('/dashboard');
   }
   
+  const isCabang = session?.user.role === 'Admin Cabang';
   const dpName = session?.user.dropPoint || 'SEMUA DP';
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <PageHeader
         title="Monitoring Delivery"
-        description="Generate dan copy tabel laporan Monitoring Delivery dari file Excel JMS."
+        description={
+          isCabang
+            ? 'Generate dan copy tabel Monitoring Delivery per Drop Point dari file Excel JMS.'
+            : 'Generate dan copy tabel Monitoring Delivery per Sprinter dari file Excel JMS.'
+        }
       />
-      
-      <MonitoringClient dpName={dpName} />
+
+      <MonitoringClient dpName={dpName} isCabang={isCabang} />
     </div>
   );
 }

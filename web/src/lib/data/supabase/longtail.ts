@@ -70,7 +70,6 @@ export async function submitFeedback(
 
   const patch: Record<string, unknown> = {
     feedback,
-    status_terakhir: feedback, // Bagian 9.0
     log_feedback: newLog,
     version: Number(current.version) + 1,
   };

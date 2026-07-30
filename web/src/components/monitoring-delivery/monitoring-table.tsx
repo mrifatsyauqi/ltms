@@ -1,7 +1,9 @@
 import React, { forwardRef } from 'react';
+import { cn } from '@/lib/utils';
 
 export type MonitoringRow = {
-  sprinter: string;
+  /** Nama Sprinter (mode Admin DP) atau kode Drop Point (mode Admin Cabang). */
+  groupName: string;
   waybillDelivery: number;
   tandaTerima: number;
   belumDiterima: number;
@@ -13,9 +15,11 @@ interface MonitoringTableProps {
   data: MonitoringRow[];
   totalSampai: number;
   dpName: string;
+  /** Label kolom kelompok: 'Sprinter' (Admin DP) atau 'DP Delivery' (Admin Cabang). */
+  groupLabel: string;
 }
 
-export const MonitoringTable = forwardRef<HTMLDivElement, MonitoringTableProps>(({ data, totalSampai, dpName }, ref) => {
+export const MonitoringTable = forwardRef<HTMLTableElement, MonitoringTableProps>(({ data, totalSampai, dpName, groupLabel }, ref) => {
   // Hitung Agregat
   const totalDelivery = data.reduce((sum, row) => sum + row.waybillDelivery, 0);
   const totalTandaTerima = data.reduce((sum, row) => sum + row.tandaTerima, 0);
@@ -33,89 +37,97 @@ export const MonitoringTable = forwardRef<HTMLDivElement, MonitoringTableProps>(
     return val.toFixed(1) + '%';
   };
 
+  // Kelas dasar sel: padding vertikal ringkas (pas dgn tinggi teks, bukan
+  // longgar). numCell satu ukuran font lebih besar drpd teks label (angka
+  // lebih menonjol/gampang dipindai) + tabular-nums biar kolom rata.
+  const cell = 'border border-gray-400 px-2.5 py-0.5 text-base leading-none';
+  const numCell = cn(cell, 'text-center whitespace-nowrap tabular-nums text-lg');
+
+  // ref di elemen <table> (bukan wrapper) supaya gambar hasil copy pas ukuran
+  // tabel, tanpa margin/padding samping. Wrapper hanya utk scroll di layar.
   return (
-    <div ref={ref} className="bg-white p-4 inline-block w-full overflow-x-auto">
-      <table className="w-full border-collapse border border-gray-400 text-sm font-sans" style={{ minWidth: '800px' }}>
+    <div className="inline-block overflow-x-auto bg-white align-top">
+      <table ref={ref} className="border-collapse border border-gray-400 font-sans text-base text-black">
+        <colgroup>
+          <col style={{ width: '1%' }} />
+          <col style={{ width: '1%' }} />
+          <col style={{ width: '1%' }} />
+          <col style={{ width: '1%' }} />
+          <col style={{ width: '1%' }} />
+          <col style={{ width: '1%' }} />
+        </colgroup>
         <thead>
           <tr className="bg-[#4f6272] text-white">
-            <th colSpan={6} className="border border-gray-400 px-3 py-3 text-center align-middle font-bold text-lg uppercase tracking-wider">
+            <th colSpan={6} className="border border-gray-400 px-3 py-2.5 text-center align-middle text-lg font-bold tracking-wide uppercase whitespace-nowrap">
               MONITORING DELIVERY {dpName}
             </th>
           </tr>
           <tr className="bg-gray-100">
-            <th rowSpan={2} className="border border-gray-400 px-3 py-2 text-center align-middle font-semibold">
-              Sprinter
+            <th rowSpan={2} className={`${cell} text-left align-middle font-semibold`}>
+              {groupLabel}
             </th>
-            <th rowSpan={2} className="border border-gray-400 px-3 py-2 text-center align-middle font-semibold">
-              Jumlah Waybill Delivery
+            <th rowSpan={2} className={`${cell} text-center align-middle font-semibold`}>
+              Jumlah Waybill<br />Delivery
             </th>
-            <th rowSpan={2} className="border border-gray-400 px-3 py-2 text-center align-middle font-semibold">
-              Jumlah Tanda Terima
+            <th rowSpan={2} className={`${cell} text-center align-middle font-semibold`}>
+              Jumlah Tanda<br />Terima
             </th>
-            <th colSpan={2} className="border border-gray-400 px-3 py-2 text-center font-semibold">
+            <th colSpan={2} className={`${cell} text-center font-semibold`}>
               Belum Tanda Terima
             </th>
-            <th rowSpan={2} className="border border-gray-400 px-3 py-2 text-center align-middle font-semibold">
-              Presentase TTD
+            <th rowSpan={2} className={`${cell} text-center align-middle font-semibold`}>
+              Presentase<br />TTD
             </th>
           </tr>
           <tr className="bg-gray-100">
-            <th className="border border-gray-400 px-3 py-2 text-center font-semibold">Belum diterima</th>
-            <th className="border border-gray-400 px-3 py-2 text-center font-semibold">Paket Bermasalah</th>
+            <th className={`${cell} text-center font-semibold`}>Belum diterima</th>
+            <th className={`${cell} text-center font-semibold`}>Paket Bermasalah</th>
           </tr>
         </thead>
         <tbody>
           {data.map((row, idx) => (
             <tr key={idx}>
-              <td className="border border-gray-400 px-3 py-1.5">{row.sprinter}</td>
-              <td className="border border-gray-400 px-3 py-1.5 text-center">{row.waybillDelivery}</td>
-              <td className="border border-gray-400 px-3 py-1.5 text-center">{row.tandaTerima}</td>
-              <td className="border border-gray-400 px-3 py-1.5 text-center">{row.belumDiterima}</td>
-              <td className="border border-gray-400 px-3 py-1.5 text-center">{row.paketBermasalah}</td>
-              <td
-                className={`border border-gray-400 px-3 py-1.5 text-center font-medium ${getPercentageColor(
-                  row.presentaseTtd,
-                )}`}
-              >
+              <td className={`${cell} whitespace-nowrap`}>{row.groupName}</td>
+              <td className={numCell}>{row.waybillDelivery}</td>
+              <td className={numCell}>{row.tandaTerima}</td>
+              <td className={numCell}>{row.belumDiterima}</td>
+              <td className={numCell}>{row.paketBermasalah}</td>
+              <td className={`${numCell} font-semibold ${getPercentageColor(row.presentaseTtd)}`}>
                 {formatPercent(row.presentaseTtd)}
               </td>
             </tr>
           ))}
           {/* Row: TOTAL DELIVERY */}
           <tr className="bg-gray-50 font-bold">
-            <td className="border border-gray-400 px-3 py-1.5 uppercase">TOTAL DELIVERY</td>
-            <td className="border border-gray-400 px-3 py-1.5 text-center">{totalDelivery}</td>
-            <td className="border border-gray-400 px-3 py-1.5 text-center">{totalTandaTerima}</td>
-            <td className="border border-gray-400 px-3 py-1.5 text-center">{totalBelumDiterima}</td>
-            <td className="border border-gray-400 px-3 py-1.5 text-center">{totalPaketBermasalah}</td>
-            <td className="border border-gray-400 px-3 py-1.5 text-center bg-gray-200"></td>
+            <td className={`${cell} whitespace-nowrap uppercase`}>TOTAL DELIVERY</td>
+            <td className={numCell}>{totalDelivery}</td>
+            <td className={numCell}>{totalTandaTerima}</td>
+            <td className={numCell}>{totalBelumDiterima}</td>
+            <td className={numCell}>{totalPaketBermasalah}</td>
+            <td className={`${cell} bg-gray-200`}></td>
           </tr>
           {/* Row: PRESENTASE */}
           <tr className="bg-gray-50 font-bold">
-            <td colSpan={2} className="border border-gray-400 px-3 py-1.5 uppercase">
+            <td colSpan={2} className={`${cell} whitespace-nowrap uppercase`}>
               PRESENTASE
             </td>
-            <td className="border border-gray-400 px-3 py-1.5 text-center">
-              {formatPercent((totalTandaTerima / totalDelivery) * 100)}
-            </td>
-            <td className="border border-gray-400 px-3 py-1.5 text-center">
-              {formatPercent((totalBelumDiterima / totalDelivery) * 100)}
-            </td>
-            <td className="border border-gray-400 px-3 py-1.5 bg-gray-200"></td>
-            <td className="border border-gray-400 px-3 py-1.5 bg-gray-200"></td>
+            <td className={numCell}>{formatPercent((totalTandaTerima / totalDelivery) * 100)}</td>
+            <td className={numCell}>{formatPercent((totalBelumDiterima / totalDelivery) * 100)}</td>
+            <td className={`${cell} bg-gray-200`}></td>
+            <td className={`${cell} bg-gray-200`}></td>
           </tr>
           {/* Row: TOTAL SAMPAI */}
           <tr className="bg-gray-50 font-bold">
-            <td className="border border-gray-400 px-3 py-1.5 uppercase">TOTAL SAMPAI</td>
-            <td className="border border-gray-400 px-3 py-1.5 text-center">{totalSampai}</td>
-            <td className="border border-gray-400 px-3 py-1.5 text-center">
+            <td className={`${cell} whitespace-nowrap uppercase`}>TOTAL SAMPAI</td>
+            <td className={numCell}>{totalSampai}</td>
+            <td className={numCell}>
               {totalSampai > 0 ? formatPercent((totalTandaTerima / totalSampai) * 100) : '0.0%'}
             </td>
-            <td className="border border-gray-400 px-3 py-1.5 text-center">
+            <td className={numCell}>
               {totalSampai > 0 ? formatPercent((totalBelumDiterima / totalSampai) * 100) : '0.0%'}
             </td>
-            <td className="border border-gray-400 px-3 py-1.5 bg-gray-200"></td>
-            <td className="border border-gray-400 px-3 py-1.5 bg-gray-200"></td>
+            <td className={`${cell} bg-gray-200`}></td>
+            <td className={`${cell} bg-gray-200`}></td>
           </tr>
         </tbody>
       </table>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { KeyRound, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, KeyRound, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/layout/page-header';
 import { StatusBadge, isAktif } from '@/components/master/status-badge';
@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import type { UserRow } from '@/lib/data/users';
 import type { DropPointRow } from '@/lib/data/drop-points';
@@ -32,9 +33,6 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 type Role = 'Admin Cabang' | 'Admin DP';
 type FormState = { nama: string; email: string; role: Role; dropPoint: string; statusAktif: boolean };
 const EMPTY: FormState = { nama: '', email: '', role: 'Admin DP', dropPoint: '', statusAktif: true };
-
-const SELECT_CLASS =
-  'border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none';
 
 export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const qc = useQueryClient();
@@ -58,6 +56,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const [confirmDelete, setConfirmDelete] = useState<UserRow | null>(null);
   const [passwordFor, setPasswordFor] = useState<UserRow | null>(null);
   const [passwordValue, setPasswordValue] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -168,6 +167,11 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const canSave =
     form.nama.trim() && (editing || form.email.trim()) && (!needDp || form.dropPoint) && (!needDp || activeDps.length > 0);
 
+  // WAJIB: base-ui Select butuh peta value->label eksplisit (`items`) supaya
+  // trigger menampilkan label yang benar, bukan value mentah.
+  const roleItems: Record<string, string> = { 'Admin DP': 'Admin DP', 'Admin Cabang': 'Admin Cabang' };
+  const dpItems = Object.fromEntries(activeDps.map((d) => [d['Kode DP'], `${d['Kode DP']} — ${d['Nama DP']}`]));
+
   return (
     <>
       <PageHeader
@@ -258,6 +262,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                             onClick={() => {
                               setPasswordFor(r);
                               setPasswordValue('');
+                              setShowPassword(false);
                             }}
                             aria-label={`Set password ${r.Email}`}
                             title="Set password login manual"
@@ -337,15 +342,15 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="role">Role</Label>
-              <select
-                id="role"
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
-                className={SELECT_CLASS}
-              >
-                <option value="Admin DP">Admin DP</option>
-                <option value="Admin Cabang">Admin Cabang</option>
-              </select>
+              <Select items={roleItems} value={form.role} onValueChange={(v) => setForm({ ...form, role: (v ?? 'Admin DP') as Role })}>
+                <SelectTrigger id="role" className="h-9 w-full text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Admin DP">Admin DP</SelectItem>
+                  <SelectItem value="Admin Cabang">Admin Cabang</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             {needDp && (
               <div className="space-y-1.5">
@@ -355,18 +360,18 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                     Belum ada Drop Point aktif. Tambahkan di Master Drop Point dulu.
                   </p>
                 ) : (
-                  <select
-                    id="dropPoint"
-                    value={form.dropPoint}
-                    onChange={(e) => setForm({ ...form, dropPoint: e.target.value })}
-                    className={SELECT_CLASS}
-                  >
-                    {activeDps.map((d) => (
-                      <option key={d['Kode DP']} value={d['Kode DP']}>
-                        {d['Kode DP']} — {d['Nama DP']}
-                      </option>
-                    ))}
-                  </select>
+                  <Select items={dpItems} value={form.dropPoint} onValueChange={(v) => setForm({ ...form, dropPoint: v ?? '' })}>
+                    <SelectTrigger id="dropPoint" className="h-9 w-full text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeDps.map((d) => (
+                        <SelectItem key={d['Kode DP']} value={d['Kode DP']}>
+                          {d['Kode DP']} — {d['Nama DP']}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
                 <p className="text-muted-foreground text-[11px]">
                   Dipilih dari daftar Master Drop Point (bukan ketik bebas) supaya cocok dengan data Long Tail.
@@ -429,13 +434,24 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
           </DialogHeader>
           <div className="space-y-1.5">
             <Label htmlFor="new-password">Password baru</Label>
-            <Input
-              id="new-password"
-              type="password"
-              value={passwordValue}
-              onChange={(e) => setPasswordValue(e.target.value)}
-              autoComplete="new-password"
-            />
+            <div className="relative">
+              <Input
+                id="new-password"
+                type={showPassword ? 'text' : 'password'}
+                value={passwordValue}
+                onChange={(e) => setPasswordValue(e.target.value)}
+                autoComplete="new-password"
+                className="pr-9"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
+                title={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+              >
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPasswordFor(null)} disabled={setPasswordMut.isPending}>

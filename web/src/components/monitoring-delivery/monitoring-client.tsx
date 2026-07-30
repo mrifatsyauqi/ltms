@@ -4,22 +4,30 @@ import { useRef, useState } from 'react';
 import * as xlsx from 'xlsx';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
+import { Image as ImageIcon, Table2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MonitoringRow, MonitoringTable } from './monitoring-table';
 
-export function MonitoringClient({ dpName }: { dpName: string }) {
+type Props = {
+  dpName: string;
+  /** Menentukan sumber pengelompokan: Admin Cabang -> per Drop Point, Admin DP -> per Sprinter. */
+  isCabang: boolean;
+};
+
+export function MonitoringClient({ dpName, isCabang }: Props) {
+  const groupLabel = isCabang ? 'DP Delivery' : 'Sprinter';
   const [stagedData, setStagedData] = useState<MonitoringRow[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [totalSampai, setTotalSampai] = useState<number>(0);
   
   const [isGenerated, setIsGenerated] = useState(false);
-  const [isGeneratingImg, setIsGeneratingImg] = useState(false);
+  const [copying, setCopying] = useState<null | 'img' | 'table'>(null);
   
   const inputRef = useRef<HTMLInputElement>(null);
-  const tableRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
   const handleFileUpload = (fileList: FileList | File[]) => {
@@ -37,37 +45,20 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
         
-        const rows: any[][] = xlsx.utils.sheet_to_json(sheet, { header: 1 });
-        const dataRows = rows.slice(2);
+        const rows = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
+        const dataRows = rows.slice(2); // 2 baris header (grup + sub-kolom) di kedua format JMS
 
-        const sprinterMap = new Map<string, MonitoringRow>();
+        const groupMap = new Map<string, MonitoringRow>();
 
-        for (const row of dataRows) {
-          if (!row || row.length < 17) continue;
-
-          const rawSprinter = row[4];
-          if (typeof rawSprinter !== 'string') continue;
-
-          const sprinter = rawSprinter.trim();
-          
-          if (!sprinter.toLowerCase().startsWith('mtr')) {
-            continue;
-          }
-
-          const waybillDelivery = Number(row[5]) || 0;
-          const ttdNormalTotal = Number(row[6]) || 0;
-          const paketBermasalah = Number(row[15]) || 0;
-          
-          const tandaTerima = ttdNormalTotal;
+        function addRow(groupName: string, waybillDelivery: number, tandaTerima: number, paketBermasalah: number) {
           const belumDiterima = waybillDelivery - tandaTerima;
           const presentaseTtd = waybillDelivery > 0 ? (tandaTerima / waybillDelivery) * 100 : 0;
-
-          if (sprinterMap.has(sprinter)) {
-            const existing = sprinterMap.get(sprinter)!;
+          const existing = groupMap.get(groupName);
+          if (existing) {
             const newWaybill = existing.waybillDelivery + waybillDelivery;
             const newTandaTerima = existing.tandaTerima + tandaTerima;
-            sprinterMap.set(sprinter, {
-              sprinter,
+            groupMap.set(groupName, {
+              groupName,
               waybillDelivery: newWaybill,
               tandaTerima: newTandaTerima,
               belumDiterima: existing.belumDiterima + belumDiterima,
@@ -75,24 +66,57 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
               presentaseTtd: newWaybill > 0 ? (newTandaTerima / newWaybill) * 100 : 0,
             });
           } else {
-            sprinterMap.set(sprinter, {
-              sprinter,
-              waybillDelivery,
-              tandaTerima,
-              belumDiterima,
-              paketBermasalah,
-              presentaseTtd,
-            });
+            groupMap.set(groupName, { groupName, waybillDelivery, tandaTerima, belumDiterima, paketBermasalah, presentaseTtd });
           }
         }
 
-        const parsedData = Array.from(sprinterMap.values());
-        
+        if (isCabang) {
+          // Format JMS "per Drop Point" (Admin Cabang): tiap baris = 1 DP.
+          // Kolom: [2] DP Delivery, [3] Total Delivery, [4] TTD Normal (Total),
+          // [13] Paket Bermasalah. Baris dgn DP sama (mis. beda tanggal) dijumlahkan.
+          for (const row of dataRows) {
+            if (!row || row.length < 14) continue;
+            const rawDp = row[2];
+            if (typeof rawDp !== 'string' || !rawDp.trim()) continue;
+            const dp = rawDp.trim();
+            const waybillDelivery = Number(row[3]) || 0;
+            const tandaTerima = Number(row[4]) || 0;
+            const paketBermasalah = Number(row[13]) || 0;
+            addRow(dp, waybillDelivery, tandaTerima, paketBermasalah);
+          }
+        } else {
+          // Format JMS "per Sprinter" (Admin DP): hanya baris kurir ("Mtr…").
+          // Kolom: [4] Sprinter, [5] Total Delivery, [6] TTD Normal (Total),
+          // [15] Paket Bermasalah.
+          for (const row of dataRows) {
+            if (!row || row.length < 17) continue;
+            const rawSprinter = row[4];
+            if (typeof rawSprinter !== 'string') continue;
+            const sprinter = rawSprinter.trim();
+            if (!sprinter.toLowerCase().startsWith('mtr')) continue;
+            const waybillDelivery = Number(row[5]) || 0;
+            const tandaTerima = Number(row[6]) || 0;
+            const paketBermasalah = Number(row[15]) || 0;
+            addRow(sprinter, waybillDelivery, tandaTerima, paketBermasalah);
+          }
+        }
+
+        const parsedData = Array.from(groupMap.values());
+
         // Urutkan dari presentase TTD terbesar ke terkecil
         parsedData.sort((a, b) => b.presentaseTtd - a.presentaseTtd);
-        
+
         setStagedData(parsedData);
-        toast.success(`Berhasil memproses file. Ditemukan ${parsedData.length} sprinter.`);
+        if (parsedData.length === 0) {
+          toast.warning(
+            isCabang
+              ? 'Tidak ada baris DP Delivery yang terbaca. Pastikan file adalah laporan per-DP dari JMS.'
+              : 'Tidak ada baris Sprinter ("Mtr…") yang terbaca. Pastikan file adalah laporan per-sprinter dari JMS.',
+          );
+        } else {
+          const noun = isCabang ? 'Drop Point' : 'sprinter';
+          toast.success(`Berhasil memproses file. Ditemukan ${parsedData.length} ${noun}.`);
+        }
       } catch (error) {
         console.error('Error parsing file:', error);
         toast.error('Gagal memproses file Excel.');
@@ -109,48 +133,66 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
     setIsGenerated(true);
   };
 
+  /**
+   * Salin GAMBAR saja (image/png). Wajib format tunggal: kalau digabung dgn
+   * text/html atau text/plain, app chat (WhatsApp, Feishu) memilih teks
+   * sehingga yang ter-paste teks — bukan gambar. Dengan hanya image/png, app
+   * chat pasti menempel gambar tabel.
+   *
+   * Promise diberikan LANGSUNG ke ClipboardItem supaya navigator.clipboard.write
+   * dipanggil sinkron (user-gesture terjaga di Safari/iOS), render berat toPng
+   * berjalan di latar (fix INP).
+   */
   const handleCopyImage = async () => {
-    if (!tableRef.current) return;
+    const el = tableRef.current;
+    if (!el) return;
     try {
-      setIsGeneratingImg(true);
-      
-      const htmlString = tableRef.current.outerHTML;
-      const textString = tableRef.current.innerText;
+      setCopying('img');
+      const imagePromise = (async () => {
+        await new Promise((r) => setTimeout(r, 20)); // beri main-thread merender "Menyalin…"
+        // Tangkap LEBAR PENUH tabel (scrollWidth) + overflow visible supaya
+        // kolom tak terpotong saat tabel lebih lebar dari area layar.
+        const fullWidth = el.scrollWidth;
+        const dataUrl = await toPng(el, {
+          quality: 1,
+          pixelRatio: 2,
+          backgroundColor: '#ffffff',
+          width: fullWidth,
+          height: el.scrollHeight,
+          style: { width: `${fullWidth}px`, overflow: 'visible' },
+        });
+        return (await fetch(dataUrl)).blob();
+      })();
 
-      // Kita bungkus proses toPng yang berat di dalam Promise.
-      // Dengan memberikan Promise langsung ke ClipboardItem, pemanggilan navigator.clipboard.write
-      // terjadi secara sinkron (menjaga user-gesture), tetapi browser akan menunggu Promise ini
-      // di latar belakang. Ini memungkinkan kita menggunakan setTimeout agar UI tidak freeze (INP fix).
-      const imagePromise = new Promise<Blob>(async (resolve, reject) => {
-        try {
-          // Memberi jeda 50ms ke main thread agar browser bisa merender tulisan "Menyalin..."
-          await new Promise((r) => setTimeout(r, 50));
-          
-          const dataUrl = await toPng(tableRef.current!, { quality: 1, backgroundColor: '#ffffff' });
-          const response = await fetch(dataUrl);
-          const blob = await response.blob();
-          resolve(blob);
-        } catch (err) {
-          reject(err);
-        }
-      });
-      
-      const htmlBlob = new Blob([htmlString], { type: 'text/html' });
-      const textBlob = new Blob([textString], { type: 'text/plain' });
-      
-      const clipboardItem = new ClipboardItem({
-        'text/plain': textBlob,
-        'text/html': htmlBlob,
-        'image/png': imagePromise
-      });
-      
-      await navigator.clipboard.write([clipboardItem]);
-      toast.success('Berhasil Dicopy');
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': imagePromise })]);
+      toast.success('Gambar tabel disalin — tempel di chat (WA/Feishu).');
     } catch (error) {
-      console.error('Gagal copy image', error);
-      toast.error('Gagal menyalin. Pastikan browser tidak berada dalam Incognito dan mendukung Clipboard API.');
+      console.error('Gagal copy gambar', error);
+      toast.error('Gagal menyalin gambar. Pastikan bukan mode Incognito & browser mendukung Clipboard API.');
     } finally {
-      setIsGeneratingImg(false);
+      setCopying(null);
+    }
+  };
+
+  /**
+   * Salin TABEL (text/html + text/plain) untuk ditempel sebagai sel di
+   * Excel/Google Sheets. Sengaja TANPA image/png supaya spreadsheet menempel
+   * tabel yang bisa diedit, bukan gambar.
+   */
+  const handleCopyTable = async () => {
+    const el = tableRef.current;
+    if (!el) return;
+    try {
+      setCopying('table');
+      const htmlBlob = new Blob([el.outerHTML], { type: 'text/html' });
+      const textBlob = new Blob([el.innerText], { type: 'text/plain' });
+      await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
+      toast.success('Tabel disalin — tempel di Excel/Spreadsheet.');
+    } catch (error) {
+      console.error('Gagal copy tabel', error);
+      toast.error('Gagal menyalin tabel.');
+    } finally {
+      setCopying(null);
     }
   };
 
@@ -179,6 +221,11 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
             >
               <p className="text-sm text-muted-foreground">
                 Drag & drop file Excel Monitor Delivery dari JMS ke sini, atau
+              </p>
+              <p className="text-muted-foreground text-xs">
+                {isCabang
+                  ? 'Gunakan laporan JMS per Drop Point (kolom "DP Delivery").'
+                  : 'Gunakan laporan JMS per Sprinter (kolom Sprinter "Mtr…").'}
               </p>
               <Button type="button" variant="outline" onClick={() => inputRef.current?.click()}>
                 Pilih File Excel
@@ -225,17 +272,22 @@ export function MonitoringClient({ dpName }: { dpName: string }) {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle>2. Hasil Tabel Monitoring</CardTitle>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" onClick={() => setIsGenerated(false)}>
                 Edit Parameter
               </Button>
-              <Button onClick={handleCopyImage} disabled={isGeneratingImg}>
-                {isGeneratingImg ? 'Menyalin...' : 'Copy Tabel'}
+              <Button variant="outline" onClick={handleCopyTable} disabled={copying !== null} title="Tempel sebagai sel di Excel / Google Sheets">
+                <Table2 className="size-4" aria-hidden />
+                {copying === 'table' ? 'Menyalin…' : 'Salin Tabel (Excel)'}
+              </Button>
+              <Button onClick={handleCopyImage} disabled={copying !== null} title="Tempel sebagai gambar di WhatsApp / Feishu">
+                <ImageIcon className="size-4" aria-hidden />
+                {copying === 'img' ? 'Menyalin…' : 'Salin Gambar (Chat)'}
               </Button>
             </div>
           </CardHeader>
           <CardContent className="overflow-x-auto">
-            <MonitoringTable ref={tableRef} data={stagedData} totalSampai={totalSampai} dpName={dpName} />
+            <MonitoringTable ref={tableRef} data={stagedData} totalSampai={totalSampai} dpName={dpName} groupLabel={groupLabel} />
           </CardContent>
         </Card>
       )}
