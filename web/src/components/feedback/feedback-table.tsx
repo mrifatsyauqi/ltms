@@ -157,10 +157,18 @@ export function FeedbackTable({
       if (alasanFilter && String(r['Alasan Paket Bermasalah']).trim() !== alasanFilter) return false;
       if (sprinterFilter && String(r['Sprinter Delivery']).trim() !== sprinterFilter) return false;
       if (onlyBelum && String(r.Feedback ?? '').trim() !== '') return false;
-      if (umurFilter) {
-        const lvl = agingLevel(umurValue(r), r.__isClearTTD);
-        if (umurFilter === 'clear' && !r.__isClearTTD) return false;
-        if (umurFilter !== 'clear' && String(lvl) !== umurFilter) return false;
+      if (umurFilter === 'clear') {
+        if (!r.__isClearTTD) return false;
+      } else if (umurFilter) {
+        // Kategori 0/1/2/3 khusus paket yg MASIH berjalan (belum Clear TTD) -
+        // exclude eksplisit, JANGAN andalkan agingLevel(umur, frozen) saja:
+        // ia mengembalikan level 0 utk SEMUA baris Clear TTD apa pun nilai
+        // umur_frozen-nya, jadi tanpa exclude ini baris Clear TTD ikut
+        // "bocor" ke kategori "0 - Baru sampai" bercampur dgn paket yg
+        // memang baru sampai hari ini.
+        if (r.__isClearTTD) return false;
+        const lvl = agingLevel(umurValue(r));
+        if (String(lvl) !== umurFilter) return false;
       }
       return true;
     });
@@ -432,7 +440,7 @@ export function FeedbackTable({
             { value: '2', label: '2 Hari' },
             { value: '3', label: '≥ 3 Hari' },
             { value: '0', label: 'Baru sampai (0 hari)' },
-            { value: 'clear', label: 'Sudah Clear TTD' },
+            { value: 'clear', label: 'Clear TTD' },
           ]}
         />
         <SelectFilter
