@@ -122,7 +122,6 @@ export function FeedbackTable({
   // memoisasi sort berdasar identitas array `data`/`columns`, bukan tahu ada
   // mutable ref eksternal yg berubah di baliknya.
   const [sortSnapshot, setSortSnapshot] = useState<Map<string, number> | null>(null);
-  const recentlyUpdatedRef = useRef<Set<string>>(new Set());
   // Cermin `submit` TERKINI, dibaca dari dalam cell 'feedback' (lihat
   // `columns` di bawah) TANPA menjadikan submit.isPending/variables dependency
   // useMemo `columns` itu sendiri. WAJIB: dulu keduanya ada di deps array
@@ -141,7 +140,6 @@ export function FeedbackTable({
   useEffect(() => {
     if (wasFetchingRef.current && !isFetching && data) {
       setSortSnapshot(new Map(data.map((r) => [r['No. Waybill'], umurValue(r)])));
-      recentlyUpdatedRef.current = new Set();
     }
     wasFetchingRef.current = isFetching;
   }, [isFetching, data]);
@@ -245,12 +243,6 @@ export function FeedbackTable({
     submit.mutate(
       { waybill, feedback, baseVersion },
       {
-        onSuccess: () => {
-          // Tandai "baru diperbarui" (badge) - TIDAK menyentuh sortSnapshot,
-          // supaya posisi baris di tabel tetap seperti sebelum submit sampai
-          // fetch asli berikutnya (lihat komentar sortSnapshot di atas).
-          recentlyUpdatedRef.current.add(waybill);
-        },
         onError: (err: SubmitFeedbackError) => {
           if (err.code === 'VERSION_CONFLICT') {
             toast.warning(`${waybill}: data sudah diubah pihak lain. Baris di-refresh, cek lalu isi ulang.`);
@@ -290,7 +282,6 @@ export function FeedbackTable({
           const r = c.row.original;
           const wb = c.getValue<string>();
           const perluReview = String(r['Perlu Review'] ?? '').trim();
-          const justUpdated = recentlyUpdatedRef.current.has(wb);
           return (
             <div className="min-w-0">
               {/* justify-between: nomor di kiri, ikon salin rata kanan (seragam). */}
@@ -304,23 +295,10 @@ export function FeedbackTable({
                   iconClassName="size-3"
                 />
               </span>
-              {(perluReview || justUpdated) && (
-                <div className="mt-0.5 flex flex-wrap gap-1">
-                  {perluReview && (
-                    <Badge variant="destructive" className="w-fit text-[9px]">
-                      Perlu Review
-                    </Badge>
-                  )}
-                  {justUpdated && (
-                    <Badge
-                      variant="outline"
-                      className="border-accent-green/30 bg-accent-green/10 text-accent-green w-fit text-[9px]"
-                      title="Perubahan tersimpan - posisi baris belum ikut pindah sampai Refresh"
-                    >
-                      Baru diperbarui
-                    </Badge>
-                  )}
-                </div>
+              {perluReview && (
+                <Badge variant="destructive" className="mt-0.5 block w-fit text-[9px]">
+                  Perlu Review
+                </Badge>
               )}
             </div>
           );
