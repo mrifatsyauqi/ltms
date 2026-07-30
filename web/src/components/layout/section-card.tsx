@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 type SectionCardProps = {
+  id?: string;
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
@@ -12,6 +13,7 @@ type SectionCardProps = {
 
 /** Panel konten standar (judul + aksi opsional + isi). Dipakai semua halaman. */
 export function SectionCard({
+  id,
   title,
   description,
   actions,
@@ -20,7 +22,7 @@ export function SectionCard({
   bodyClassName,
 }: SectionCardProps) {
   return (
-    <section className={cn('bg-card border-border rounded-lg border', className)}>
+    <section id={id} className={cn('bg-card border-border rounded-lg border', className)}>
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 pt-2.5 pb-1">
         <div className="min-w-0">
           <h2 className="text-[13px] leading-tight font-semibold">{title}</h2>

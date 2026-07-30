@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { ImportBatchRow } from '@/lib/data/import';
 
-async function fetchHistory(): Promise<ImportBatchRow[]> {
+export async function fetchImportHistory(): Promise<ImportBatchRow[]> {
   const res = await fetch('/api/import/history');
   const body = await res.json();
   if (!body.ok) throw new Error(body.message || body.error);
@@ -12,7 +12,7 @@ async function fetchHistory(): Promise<ImportBatchRow[]> {
 }
 
 export function ImportHistory() {
-  const { data, isLoading, error } = useQuery({ queryKey: ['import-history'], queryFn: fetchHistory });
+  const { data, isLoading, error } = useQuery({ queryKey: ['import-history'], queryFn: fetchImportHistory });
 
   if (isLoading) return <p className="text-muted-foreground text-sm">Memuat riwayat...</p>;
   if (error) return <p className="text-destructive text-sm">Gagal memuat riwayat: {(error as Error).message}</p>;

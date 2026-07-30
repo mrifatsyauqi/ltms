@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
+import { PageHeader } from '@/components/layout/page-header';
 import { ImportClient } from '@/components/import/import-client';
 
 export default async function ImportPage() {
@@ -12,12 +13,14 @@ export default async function ImportPage() {
   if (session.user.role !== 'Admin Cabang') redirect('/');
 
   return (
-    <div className="mx-auto w-full max-w-5xl flex-1 p-6">
-      <h1 className="text-2xl font-semibold">Import Long Tail</h1>
-      <p className="text-muted-foreground mt-1 text-sm">
-        Upload satu atau beberapa file Excel dari JMS. Setiap file diproses independen — jika satu gagal, file lain tetap lanjut.
-      </p>
-      <ImportClient />
-    </div>
+    <>
+      <PageHeader
+        title="Import Long Tail"
+        description="Upload satu atau beberapa file Excel dari JMS — dibaca per file, tapi digabung jadi satu batch sebelum masuk ke data."
+      />
+      <div className="flex-1 p-4">
+        <ImportClient />
+      </div>
+    </>
   );
 }
