@@ -65,10 +65,31 @@ type LogInsert = {
   sumber: string;
 };
 
+/** Field tracking (non-Feedback) yang bisa berubah dari satu baris import - dipakai jalur update biasa & koreksi Clear TTD. */
+function buildTrackingPatch(row: MappedRow): { patch: Partial<LongtailUpsert>; patchLog: Record<string, unknown> } {
+  const patch: Partial<LongtailUpsert> = {};
+  const patchLog: Record<string, unknown> = {};
+  if (row.statusTerakhir) { patch.status_terakhir = s(row.statusTerakhir); patchLog['Status Terakhir'] = patch.status_terakhir; }
+  if (row.alasanBermasalah) { patch.alasan_bermasalah = s(row.alasanBermasalah); patchLog['Alasan Paket Bermasalah'] = patch.alasan_bermasalah; }
+  if (row.dpSampai) { patch.dp_sampai = s(row.dpSampai); patchLog['DP Sampai'] = patch.dp_sampai; }
+  if (row.waktuSampai) { patch.waktu_sampai = s(row.waktuSampai); patchLog['Waktu Sampai'] = patch.waktu_sampai; }
+  if (row.sprinterDelivery) { patch.sprinter_delivery = s(row.sprinterDelivery); patchLog['Sprinter Delivery'] = patch.sprinter_delivery; }
+  if (row.cod) { patch.cod = s(row.cod); patchLog['COD'] = patch.cod; }
+  if (row.deliveryAttempt !== undefined && row.deliveryAttempt !== '') { patch.delivery_attempt = toInt(row.deliveryAttempt); patchLog['Delivery Attempt'] = patch.delivery_attempt; }
+  return { patch, patchLog };
+}
+
 /**
  * Import bertahap (Bagian 7.3): satu file = satu panggilan. Untuk tiap waybill:
  *  - baru        -> insert (feedback kosong, perlu_review false)
- *  - Clear TTD   -> set perlu_review = true (feedback dibekukan, tidak diubah)
+ *  - Clear TTD tapi MUNCUL LAGI di tarikan dgn status tracking baru (bukti
+ *    kuat admin salah tandai Clear TTD sebelumnya, krn status tracking impor
+ *    tak pernah literally "Clear TTD" - itu murni klasifikasi teks Feedback
+ *    manual) -> KOREKSI OTOMATIS: timpa field tracking spt update biasa,
+ *    reset umur_frozen (resume live) DAN kosongkan Feedback (supaya
+ *    isClearTTD() ikut balik false - kalau tidak, badge/alert/Dashboard
+ *    tetap menganggap baris Clear TTD walau umur sudah resume live).
+ *    Menggantikan aturan lama "tandai perlu_review, jangan timpa" (PRD 7.1).
  *  - selain itu  -> patch field non-feedback yang berubah (Feedback/Log dijaga)
  * Menegakkan atomicity via bulk upsert; log & batch dicatat ke Supabase.
  */
@@ -120,7 +141,7 @@ export async function importLongTail(
   const workIndex = new Map<string, LongtailUpsert>(existingMap);
   const finalRows = new Map<string, LongtailUpsert>();
   const logs: LogInsert[] = [];
-  let inserted = 0, updated = 0, needReview = 0;
+  let inserted = 0, updated = 0, koreksiOtomatis = 0;
 
   for (const { wb, row } of items) {
     const existing = workIndex.get(wb);
@@ -152,13 +173,15 @@ export async function importLongTail(
     }
 
     if (isClearTTD(existing.feedback)) {
-      const merged: LongtailUpsert = { ...existing, perlu_review: true };
+      const { patch } = buildTrackingPatch(row);
+      const statusBaru = patch.status_terakhir ?? existing.status_terakhir;
+      const merged: LongtailUpsert = { ...existing, ...patch, umur_frozen: null, feedback: '', perlu_review: false };
       finalRows.set(wb, merged);
       workIndex.set(wb, merged);
-      needReview++;
+      koreksiOtomatis++;
       logs.push({
-        user_email: actor.email, dp: existing.dp_sampai, waybill: wb, attempt_ke: nextAttempt(wb),
-        data_lama: 'Clear TTD', data_baru: 'Muncul lagi di import -> Perlu Review', sumber: 'Auto-update Import',
+        user_email: actor.email, dp: merged.dp_sampai, waybill: wb, attempt_ke: nextAttempt(wb),
+        data_lama: 'Clear TTD', data_baru: statusBaru, sumber: 'Koreksi Otomatis (tidak konsisten dengan tarikan)',
       });
       continue;
     }
@@ -168,15 +191,7 @@ export async function importLongTail(
       'Waktu Sampai': existing.waktu_sampai,
       'DP Sampai': existing.dp_sampai,
     };
-    const patch: Partial<LongtailUpsert> = {};
-    const patchLog: Record<string, unknown> = {};
-    if (row.statusTerakhir) { patch.status_terakhir = s(row.statusTerakhir); patchLog['Status Terakhir'] = patch.status_terakhir; }
-    if (row.alasanBermasalah) { patch.alasan_bermasalah = s(row.alasanBermasalah); patchLog['Alasan Paket Bermasalah'] = patch.alasan_bermasalah; }
-    if (row.dpSampai) { patch.dp_sampai = s(row.dpSampai); patchLog['DP Sampai'] = patch.dp_sampai; }
-    if (row.waktuSampai) { patch.waktu_sampai = s(row.waktuSampai); patchLog['Waktu Sampai'] = patch.waktu_sampai; }
-    if (row.sprinterDelivery) { patch.sprinter_delivery = s(row.sprinterDelivery); patchLog['Sprinter Delivery'] = patch.sprinter_delivery; }
-    if (row.cod) { patch.cod = s(row.cod); patchLog['COD'] = patch.cod; }
-    if (row.deliveryAttempt !== undefined && row.deliveryAttempt !== '') { patch.delivery_attempt = toInt(row.deliveryAttempt); patchLog['Delivery Attempt'] = patch.delivery_attempt; }
+    const { patch, patchLog } = buildTrackingPatch(row);
 
     const merged: LongtailUpsert = { ...existing, ...patch };
     finalRows.set(wb, merged);
@@ -333,14 +348,14 @@ export async function importLongTail(
     admin_cabang: actor.email,
     nama_file: fileName || '',
     total_baris: incoming.length,
-    berhasil: inserted + updated + needReview,
+    berhasil: inserted + updated + koreksiOtomatis,
     gagal: skipped,
     status: skipped > 0 ? 'Sebagian' : 'Sukses',
-    keterangan: `Baru ${inserted}, Update ${updated}, Perlu Review ${needReview}, Skip ${skipped}, Close ${closed}`,
+    keterangan: `Baru ${inserted}, Update ${updated}, Koreksi Otomatis ${koreksiOtomatis}, Skip ${skipped}, Close ${closed}`,
   });
   if (batchErr) throw new ApiError('INTERNAL_ERROR', batchErr.message);
 
-  return { batchId, total: incoming.length, inserted, updated, needReview, skipped, closed, closedClearTTD, closedAlur };
+  return { batchId, total: incoming.length, inserted, updated, koreksiOtomatis, skipped, closed, closedClearTTD, closedAlur };
 }
 
 export async function listImportBatches(actorEmail: string): Promise<ImportBatchRow[]> {

@@ -11,98 +11,7 @@
 // --experimental-test-module-mocks yang dibutuhkan mock.module).
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-
-// ============================================================================
-// Fake query builder minimal, cukup utk method yang benar-benar dipakai
-// lib/data/supabase/*.ts (select/eq/in/gte/lte/order/range/maybeSingle/
-// update/upsert/insert/delete) - backed oleh tabel in-memory. `.then()`
-// membuatnya thenable spt PostgrestFilterBuilder asli (bisa langsung di-await
-// atau dipakai dlm Promise.all tanpa .then() eksplisit).
-// ============================================================================
-type Row = Record<string, unknown>;
-
-class FakeQuery {
-  private filters: Array<['eq' | 'in' | 'gte' | 'lte', string, unknown]> = [];
-  private mode: 'select' | 'update' | 'insert' | 'upsert' | 'delete' = 'select';
-  private payload: Row | Row[] | null = null;
-  private upsertKey: string | null = null;
-  private wantSingle = false;
-  private wantCount = false;
-  private rangeFrom: number | null = null;
-  private rangeTo: number | null = null;
-  private table: string;
-  private store: Map<string, Row[]>;
-
-  constructor(table: string, store: Map<string, Row[]>) {
-    this.table = table;
-    this.store = store;
-  }
-
-  select(_cols?: string, opts?: { count?: string; head?: boolean }) {
-    if (opts?.head) this.wantCount = true;
-    return this;
-  }
-  eq(col: string, val: unknown) { this.filters.push(['eq', col, val]); return this; }
-  in(col: string, vals: unknown[]) { this.filters.push(['in', col, vals]); return this; }
-  gte(col: string, val: unknown) { this.filters.push(['gte', col, val]); return this; }
-  lte(col: string, val: unknown) { this.filters.push(['lte', col, val]); return this; }
-  not() { return this; } // dipakai reset-longtail sbg guard "semua baris" - tak relevan di sini
-  order() { return this; }
-  range(from: number, to: number) { this.rangeFrom = from; this.rangeTo = to; return this; }
-  maybeSingle() { this.wantSingle = true; return this; }
-  update(patch: Row) { this.mode = 'update'; this.payload = patch; return this; }
-  upsert(rows: Row | Row[], opts?: { onConflict?: string }) {
-    this.mode = 'upsert'; this.payload = rows; this.upsertKey = opts?.onConflict ?? 'id'; return this;
-  }
-  insert(rows: Row | Row[]) { this.mode = 'insert'; this.payload = rows; return this; }
-  delete() { this.mode = 'delete'; return this; }
-
-  private matches(r: Row): boolean {
-    return this.filters.every(([op, col, val]) => {
-      if (op === 'eq') return String(r[col] ?? '') === String(val ?? '');
-      if (op === 'in') return (val as unknown[]).some((v) => String(v) === String(r[col]));
-      if (op === 'gte') return String(r[col]) >= String(val);
-      if (op === 'lte') return String(r[col]) <= String(val);
-      return true;
-    });
-  }
-
-  then(resolve: (v: { data: unknown; error: null; count?: number }) => void) {
-    const table = this.store.get(this.table) ?? [];
-    if (this.mode === 'select') {
-      let rows = table.filter((r) => this.matches(r));
-      if (this.rangeFrom != null) rows = rows.slice(this.rangeFrom, (this.rangeTo ?? rows.length) + 1);
-      if (this.wantCount) return resolve({ data: null, error: null, count: rows.length });
-      if (this.wantSingle) return resolve({ data: rows[0] ?? null, error: null });
-      return resolve({ data: rows, error: null });
-    }
-    if (this.mode === 'update') {
-      const matched = table.filter((r) => this.matches(r));
-      matched.forEach((r) => Object.assign(r, this.payload));
-      return resolve({ data: this.wantSingle ? (matched[0] ?? null) : matched, error: null });
-    }
-    if (this.mode === 'insert') {
-      const rows = (Array.isArray(this.payload) ? this.payload : [this.payload!]).map((r) => ({ ...r }));
-      table.push(...rows);
-      return resolve({ data: rows, error: null });
-    }
-    if (this.mode === 'upsert') {
-      const rows = Array.isArray(this.payload) ? this.payload : [this.payload!];
-      for (const r of rows) {
-        const idx = table.findIndex((t) => t[this.upsertKey!] === r[this.upsertKey!]);
-        if (idx >= 0) table[idx] = { ...table[idx], ...r };
-        else table.push({ ...r });
-      }
-      return resolve({ data: rows, error: null });
-    }
-    if (this.mode === 'delete') {
-      const matched = table.filter((r) => this.matches(r));
-      this.store.set(this.table, table.filter((r) => !matched.includes(r)));
-      return resolve({ data: matched, error: null });
-    }
-    return resolve({ data: null, error: null });
-  }
-}
+import { type Row, fakeDbFactory } from './fake-db.test-support.ts';
 
 // ============================================================================
 // Fixture: 2 user (Admin DP BATANG01, Admin Cabang), 2 DP, 2 waybill (satu di
@@ -149,7 +58,7 @@ describe('Akses per DP: batas keamanan data antar Drop Point (eksekusi nyata, fu
     // from './client' - tanpa ekstensi, konvensi app ini) - beda specifier
     // (mis. './client.ts') dianggap modul lain oleh resolver mock.module.
     mock.module('./client', {
-      namedExports: { db: () => ({ from: (table: string) => new FakeQuery(table, store) }) },
+      namedExports: { db: fakeDbFactory(() => store) },
     });
     longtail = await import('./longtail.ts');
     dashboard = await import('./dashboard.ts');
