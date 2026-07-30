@@ -1,20 +1,9 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import {
-  AlertTriangle,
-  CheckCircle2,
-  FileSpreadsheet,
-  MinusCircle,
-  RotateCcw,
-  Search,
-  Trash2,
-  UploadCloud,
-  X,
-  XCircle,
-} from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileSpreadsheet, Trash2, UploadCloud, X, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SectionCard } from '@/components/layout/section-card';
 import {
@@ -25,35 +14,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TablePager } from '@/components/ui/table-pager';
 import { StatCard } from '@/components/ui/stat-card';
 import { cn } from '@/lib/utils';
 import { parseFile } from '@/lib/import/parse';
 import { autoDetectMapping, isMappingComplete } from '@/lib/import/mapping';
 import { applyMapping, mergeAndDedup } from '@/lib/import/dedup';
-import { CANONICAL_FIELDS, CANONICAL_FIELD_LABELS, type HeaderMapping, type MappedRow, type ParsedFile } from '@/lib/import/types';
-import type { ImportResult, MappingTemplate } from '@/lib/data/import';
+import type { HeaderMapping, MappedRow, ParsedFile } from '@/lib/import/types';
+import type { ImportResult } from '@/lib/data/import';
 import { ImportHistory } from './import-history';
 import { ImportStepper, type WizardStep } from './import-stepper';
 import { ImportSummarySidebar, HISTORY_ANCHOR_ID } from './import-summary-sidebar';
 import { ImportFloatingProgress } from './import-floating-progress';
 
-const IGNORE = '__ignore__';
-// WAJIB: base-ui Select butuh peta value->label eksplisit (`items`) supaya
-// trigger (SelectValue) menampilkan label yang benar (mis. "No. Waybill"),
-// bukan value mentah (mis. "noWaybill") — merender <SelectItem> saja tak cukup.
-const mappingItems: Record<string, string> = {
-  [IGNORE]: 'Abaikan kolom ini',
-  ...Object.fromEntries(CANONICAL_FIELDS.map((f) => [f, CANONICAL_FIELD_LABELS[f]])),
-};
 /** Di bawah ambang ini, import memicu banyak Auto-Close -> minta konfirmasi (Bagian 7.4). */
 const SMALL_FILE_THRESHOLD = 100;
-const MAPPING_PAGE_SIZE = 6;
 
+// Pemetaan kolom SEPENUHNYA otomatis (autoDetectMapping) — sudah terbukti
+// stabil & akurat saat testing, jadi TIDAK ADA langkah/UI mapping manual.
+// 'needs-mapping': kolom wajib (No. Waybill) gagal terdeteksi otomatis pada
+// file tsb -> file itu dilewati dari import (ditandai di Step Upload),
+// bukan kegagalan permanen di level batch.
 // 'import-error' SENGAJA tidak ada: kegagalan submit adalah kegagalan BATCH
 // gabungan (lihat handleImportAll), bukan per-file — entry kembali ke 'ready'
 // supaya tombol Import yang sama bisa dipakai retry.
@@ -66,8 +47,6 @@ type FileEntry = {
   status: EntryStatus;
   headers?: string[];
   mapping?: HeaderMapping;
-  /** Header yang SENGAJA di-"Abaikan" oleh user (beda dari sekadar belum cocok auto-detect). */
-  ignoredHeaders?: Set<string>;
   mappedRows?: MappedRow[];
   rawRowCount?: number;
   error?: string;
@@ -84,39 +63,20 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-async function fetchTemplates(): Promise<MappingTemplate[]> {
-  const res = await fetch('/api/import/templates');
-  const body = await res.json();
-  if (!body.ok) throw new Error(body.message || body.error);
-  return body.data;
-}
-
-/** Kolom siap dilanjut (bukan sedang dibaca/gagal baca). */
+/** File sudah selesai dibaca (bukan sedang parsing/gagal baca). */
 function isParsedOk(e: FileEntry) {
   return e.status !== 'parsing' && e.status !== 'error';
 }
 
-/** Step terjauh yang valid dicapai berdasarkan kondisi entries SAAT INI (dihitung ulang tiap render, bukan ratchet satu-arah, supaya menghapus/mengubah file bisa menurunkan step lagi). */
+/** File siap ikut digabung & diimport (pemetaan otomatis lengkap). */
+function isUsable(e: FileEntry) {
+  return e.status === 'ready' || e.status === 'importing' || e.status === 'imported';
+}
+
+/** Step terjauh yang valid dicapai berdasarkan kondisi entries SAAT INI (dihitung ulang tiap render, bukan ratchet satu-arah, supaya menghapus file bisa menurunkan step lagi). */
 function computeMaxReached(entries: FileEntry[]): WizardStep {
-  const parsedOk = entries.filter(isParsedOk);
-  if (parsedOk.length === 0) return 1;
-  const allMapped = parsedOk.every((e) => e.status !== 'needs-mapping');
-  if (!allMapped) return 2;
-  return 4;
+  return entries.some(isUsable) ? 3 : 1;
 }
-
-type ColumnStatus = 'terdeteksi' | 'perlu-diperiksa' | 'dilewati';
-
-function columnStatus(entry: FileEntry, header: string): ColumnStatus {
-  if (entry.ignoredHeaders?.has(header)) return 'dilewati';
-  return entry.mapping?.[header] ? 'terdeteksi' : 'perlu-diperiksa';
-}
-
-const STATUS_META: Record<ColumnStatus, { label: string; dot: string; text: string }> = {
-  terdeteksi: { label: 'Terdeteksi', dot: 'bg-accent-green', text: 'text-accent-green' },
-  'perlu-diperiksa': { label: 'Perlu Diperiksa', dot: 'bg-accent-amber', text: 'text-accent-amber' },
-  dilewati: { label: 'Dilewati', dot: 'bg-muted-foreground', text: 'text-muted-foreground' },
-};
 
 export function ImportClient() {
   const [entries, setEntries] = useState<FileEntry[]>([]);
@@ -124,9 +84,6 @@ export function ImportClient() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [parseProgress, setParseProgress] = useState<{ done: number; total: number } | null>(null);
-  const [mappingSearch, setMappingSearch] = useState('');
-  const [mappingTab, setMappingTab] = useState<'perlu' | 'semua'>('perlu');
-  const [mappingPage, setMappingPage] = useState(0);
   // Konfirmasi batch KECIL (<100 baris GABUNGAN, bukan per-file lagi).
   const [smallConfirm, setSmallConfirm] = useState<{ count: number; resolve: (ok: boolean) => void } | null>(null);
   const [batchImporting, setBatchImporting] = useState(false);
@@ -146,26 +103,6 @@ export function ImportClient() {
     (count: number) => new Promise<boolean>((resolve) => setSmallConfirm({ count, resolve })),
     [],
   );
-
-  const templatesQuery = useQuery({ queryKey: ['import-templates'], queryFn: fetchTemplates });
-
-  const saveTemplateMutation = useMutation({
-    mutationFn: async ({ namaTemplate, mapping }: { namaTemplate: string; mapping: HeaderMapping }) => {
-      const res = await fetch('/api/import/templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ namaTemplate, mapping }),
-      });
-      const body = await res.json();
-      if (!body.ok) throw new Error(body.message || body.error);
-      return body.data;
-    },
-    onSuccess: () => {
-      toast.success('Template mapping disimpan');
-      queryClient.invalidateQueries({ queryKey: ['import-templates'] });
-    },
-    onError: (err: Error) => toast.error(`Gagal simpan template: ${err.message}`),
-  });
 
   const handleFiles = useCallback(async (fileList: FileList | File[]) => {
     const files = Array.from(fileList);
@@ -210,48 +147,6 @@ export function ImportClient() {
     }
     setParseProgress(null);
   }, []);
-
-  function updateMapping(id: string, header: string, field: string) {
-    setEntries((prev) =>
-      prev.map((e) => {
-        if (e.id !== id || !e.raw || !e.mapping) return e;
-        const mapping = { ...e.mapping, [header]: field === IGNORE ? null : (field as (typeof CANONICAL_FIELDS)[number]) };
-        const ignoredHeaders = new Set(e.ignoredHeaders);
-        if (field === IGNORE) ignoredHeaders.add(header);
-        else ignoredHeaders.delete(header);
-        const mappedRows = computeMapped(e.raw, mapping);
-        return { ...e, mapping, ignoredHeaders, mappedRows, status: isMappingComplete(mapping) ? 'ready' : 'needs-mapping' };
-      }),
-    );
-  }
-
-  function applyTemplate(id: string, template: MappingTemplate) {
-    setEntries((prev) =>
-      prev.map((e) => {
-        if (e.id !== id || !e.raw) return e;
-        const mapping: HeaderMapping = {};
-        e.raw.headers.forEach((h) => {
-          const field = template.mapping[h];
-          mapping[h] = (field as (typeof CANONICAL_FIELDS)[number]) ?? null;
-        });
-        const mappedRows = computeMapped(e.raw, mapping);
-        return { ...e, mapping, ignoredHeaders: new Set(), mappedRows, status: isMappingComplete(mapping) ? 'ready' : 'needs-mapping' };
-      }),
-    );
-  }
-
-  /** "Kembalikan Otomatis": buang override manual, kembali ke hasil autoDetectMapping utk SEMUA file. */
-  function resetAllToAuto() {
-    setEntries((prev) =>
-      prev.map((e) => {
-        if (!e.raw) return e;
-        const mapping = autoDetectMapping(e.raw.headers);
-        const mappedRows = computeMapped(e.raw, mapping);
-        return { ...e, mapping, ignoredHeaders: new Set(), mappedRows, status: isMappingComplete(mapping) ? 'ready' : 'needs-mapping' };
-      }),
-    );
-    toast.success('Pemetaan dikembalikan ke deteksi otomatis');
-  }
 
   /**
    * SEMUA file siap digabung + dedup dulu (mergeAndDedup), baru dikirim sebagai
@@ -337,28 +232,12 @@ export function ImportClient() {
   // hitung terpisah supaya widget progres tak menampilkan "0 file".
   const importingCount = entries.filter((e) => e.status === 'importing').length;
   const combined = useMemo(
-    () => mergeAndDedup(entries.filter((e) => e.mappedRows).map((e) => e.mappedRows!)),
+    () => mergeAndDedup(entries.filter(isUsable).map((e) => e.mappedRows!)),
     [entries],
   );
   const totalBaris = parsedOkEntries.reduce((sum, e) => sum + (e.rawRowCount ?? 0), 0);
   const errorCount = entries.filter((e) => e.status === 'error').length;
-
-  // Statistik agregat step Mapping (dihitung lintas SEMUA file yang berhasil dibaca).
-  const mappingStats = useMemo(() => {
-    let terdeteksi = 0, perluDiperiksa = 0, dilewati = 0, tidakDitemukan = 0;
-    for (const e of parsedOkEntries) {
-      if (!e.headers) continue;
-      for (const h of e.headers) {
-        const s = columnStatus(e, h);
-        if (s === 'terdeteksi') terdeteksi++;
-        else if (s === 'dilewati') dilewati++;
-        else perluDiperiksa++;
-      }
-      const mappedFields = new Set(Object.values(e.mapping ?? {}).filter(Boolean));
-      tidakDitemukan += CANONICAL_FIELDS.filter((f) => !mappedFields.has(f)).length;
-    }
-    return { terdeteksi, perluDiperiksa, dilewati, tidakDitemukan, totalKolom: terdeteksi + perluDiperiksa + dilewati };
-  }, [parsedOkEntries]);
+  const needsMappingCount = entries.filter((e) => e.status === 'needs-mapping').length;
 
   const isCancellableImport = batchImporting;
 
@@ -379,29 +258,11 @@ export function ImportClient() {
               totalWaybillUnik={combined.rows.length}
               duplicate={combined.duplicateCount}
               errorCount={errorCount}
-              mappingStats={mappingStats}
+              needsMappingCount={needsMappingCount}
             />
           )}
 
           {step === 2 && (
-            <StepMapping
-              entries={parsedOkEntries}
-              search={mappingSearch}
-              setSearch={setMappingSearch}
-              tab={mappingTab}
-              setTab={setMappingTab}
-              page={mappingPage}
-              setPage={setMappingPage}
-              stats={mappingStats}
-              templates={templatesQuery.data}
-              onUpdateMapping={updateMapping}
-              onApplyTemplate={applyTemplate}
-              onResetAllToAuto={resetAllToAuto}
-              onSaveTemplate={(mapping, name) => saveTemplateMutation.mutate({ namaTemplate: name, mapping })}
-            />
-          )}
-
-          {step === 3 && (
             <StepPreview
               rows={combined.rows}
               totalBaris={totalBaris}
@@ -411,9 +272,9 @@ export function ImportClient() {
             />
           )}
 
-          {step === 4 && (
+          {step === 3 && (
             <StepImport
-              fileNames={entries.filter((e) => e.status === 'ready' || e.status === 'importing' || e.status === 'imported').map((e) => e.fileName)}
+              fileNames={entries.filter(isUsable).map((e) => e.fileName)}
               totalWaybillUnik={combined.rows.length}
               batchImporting={batchImporting}
               batchResult={batchResult}
@@ -427,22 +288,18 @@ export function ImportClient() {
             <Button type="button" variant="outline" onClick={() => setStep(step > 1 ? ((step - 1) as WizardStep) : step)} disabled={step === 1}>
               Kembali
             </Button>
-            {step < 4 && (
+            {step < 3 && (
               <Button
                 type="button"
                 onClick={() => {
-                  if (step === 1 && parsedOkEntries.length === 0) {
-                    toast.error('Upload minimal satu file yang berhasil dibaca dulu');
+                  if (step === 1 && !entries.some(isUsable)) {
+                    toast.error('Upload minimal satu file dengan kolom No. Waybill yang berhasil terdeteksi otomatis');
                     return;
                   }
-                  if (step === 2 && parsedOkEntries.some((e) => e.status === 'needs-mapping')) {
-                    toast.error('Masih ada kolom wajib (No. Waybill) yang belum dipetakan');
-                    return;
-                  }
-                  setStep(step < 4 ? ((step + 1) as WizardStep) : step);
+                  setStep(step < 3 ? ((step + 1) as WizardStep) : step);
                 }}
               >
-                {step === 1 ? 'Lanjut ke Validasi & Mapping' : step === 2 ? 'Lanjut ke Preview Data' : 'Lanjut ke Import Data'}
+                {step === 1 ? 'Lanjut ke Preview Data' : 'Lanjut ke Import Data'}
               </Button>
             )}
           </div>
@@ -539,7 +396,7 @@ function StepUpload({
   totalWaybillUnik,
   duplicate,
   errorCount,
-  mappingStats,
+  needsMappingCount,
 }: {
   entries: FileEntry[];
   dragOver: boolean;
@@ -552,7 +409,7 @@ function StepUpload({
   totalWaybillUnik: number;
   duplicate: number;
   errorCount: number;
-  mappingStats: { terdeteksi: number; totalKolom: number };
+  needsMappingCount: number;
 }) {
   return (
     <div className="space-y-4">
@@ -589,7 +446,9 @@ function StepUpload({
             e.target.value = '';
           }}
         />
-        <p className="text-muted-foreground mt-1 text-xs">Bisa upload beberapa file sekaligus (5-6 file H-20) · XLSX, XLS, CSV</p>
+        <p className="text-muted-foreground mt-1 text-xs">
+          Bisa upload beberapa file sekaligus (5-6 file H-20) · XLSX, XLS, CSV · Kolom dipetakan otomatis
+        </p>
       </div>
 
       {entries.length > 0 && (
@@ -607,20 +466,28 @@ function StepUpload({
                 key={e.id}
                 className={cn(
                   'flex items-center gap-2.5 rounded-lg border p-2.5',
-                  e.status === 'error' ? 'border-destructive/40 bg-destructive/5' : 'border-border',
+                  e.status === 'error' && 'border-destructive/40 bg-destructive/5',
+                  e.status === 'needs-mapping' && 'border-accent-amber/40 bg-accent-amber/5',
+                  e.status !== 'error' && e.status !== 'needs-mapping' && 'border-border',
                 )}
               >
-                <FileSpreadsheet
-                  className={cn('size-5 shrink-0', e.status === 'error' ? 'text-destructive' : 'text-accent-green')}
-                  aria-hidden
-                />
+                {e.status === 'error' ? (
+                  <XCircle className="text-destructive size-5 shrink-0" aria-hidden />
+                ) : e.status === 'needs-mapping' ? (
+                  <AlertTriangle className="text-accent-amber size-5 shrink-0" aria-hidden />
+                ) : (
+                  <FileSpreadsheet className="text-accent-green size-5 shrink-0" aria-hidden />
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{e.fileName}</p>
                   <p className="text-muted-foreground text-xs">
                     {formatSize(e.fileSize)}
                     {e.status === 'parsing' && ' · membaca…'}
                     {e.status === 'error' && ` · ${e.error}`}
-                    {isParsedOk(e) && e.rawRowCount != null && ` · ${e.rawRowCount.toLocaleString('id-ID')} baris`}
+                    {e.status === 'needs-mapping' &&
+                      ' · Kolom No. Waybill tidak terdeteksi — file ini dilewati saat import'}
+                    {isParsedOk(e) && e.status !== 'needs-mapping' && e.rawRowCount != null &&
+                      ` · ${e.rawRowCount.toLocaleString('id-ID')} baris terpetakan otomatis`}
                   </p>
                 </div>
                 <button
@@ -643,15 +510,12 @@ function StepUpload({
             <StatCard label="Error" value={errorCount} icon={XCircle} accent="red" />
           </div>
 
-          {mappingStats.totalKolom > 0 && (
-            <div className="border-accent-green/30 bg-accent-green/5 flex items-start gap-2 rounded-lg border p-3">
-              <CheckCircle2 className="text-accent-green mt-0.5 size-4 shrink-0" aria-hidden />
+          {needsMappingCount > 0 && (
+            <div className="border-accent-amber/30 bg-accent-amber/5 flex items-start gap-2 rounded-lg border p-3">
+              <AlertTriangle className="text-accent-amber mt-0.5 size-4 shrink-0" aria-hidden />
               <p className="text-xs">
-                Sistem berhasil memetakan{' '}
-                <span className="font-semibold">
-                  {mappingStats.terdeteksi} dari {mappingStats.totalKolom} kolom
-                </span>{' '}
-                secara otomatis. Lanjut ke langkah berikutnya untuk memeriksa detailnya.
+                <span className="font-semibold">{needsMappingCount} file</span> tidak memiliki kolom No. Waybill yang
+                bisa terdeteksi otomatis dan akan dilewati. Periksa nama header pada file tersebut lalu upload ulang.
               </p>
             </div>
           )}
@@ -662,274 +526,7 @@ function StepUpload({
 }
 
 // ============================================================================
-// STEP 2 — Validasi & Mapping
-// ============================================================================
-
-function StepMapping({
-  entries,
-  search,
-  setSearch,
-  tab,
-  setTab,
-  page,
-  setPage,
-  stats,
-  templates,
-  onUpdateMapping,
-  onApplyTemplate,
-  onResetAllToAuto,
-  onSaveTemplate,
-}: {
-  entries: FileEntry[];
-  search: string;
-  setSearch: (v: string) => void;
-  tab: 'perlu' | 'semua';
-  setTab: (v: 'perlu' | 'semua') => void;
-  page: number;
-  setPage: (v: number) => void;
-  stats: { terdeteksi: number; perluDiperiksa: number; tidakDitemukan: number; dilewati: number; totalKolom: number };
-  templates: MappingTemplate[] | undefined;
-  onUpdateMapping: (id: string, header: string, field: string) => void;
-  onApplyTemplate: (id: string, template: MappingTemplate) => void;
-  onResetAllToAuto: () => void;
-  onSaveTemplate: (mapping: HeaderMapping, name: string) => void;
-}) {
-  if (entries.length === 0) {
-    return <p className="text-muted-foreground text-sm">Belum ada file yang berhasil dibaca. Kembali ke langkah Upload File.</p>;
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="border-accent-green/30 bg-accent-green/5 flex items-center gap-2 rounded-lg border p-3">
-        <CheckCircle2 className="text-accent-green size-5 shrink-0" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">Pemetaan Otomatis Berhasil</p>
-          <p className="text-muted-foreground text-xs">
-            {stats.terdeteksi} dari {stats.totalKolom} kolom berhasil dipetakan otomatis.{' '}
-            {stats.perluDiperiksa > 0 && `${stats.perluDiperiksa} kolom perlu Anda periksa.`}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 @sm:grid-cols-4">
-        <StatCard label="Kolom Terdeteksi" value={stats.terdeteksi} icon={CheckCircle2} accent="green" />
-        <StatCard label="Perlu Diperiksa" value={stats.perluDiperiksa} icon={AlertTriangle} accent="amber" />
-        <StatCard label="Tidak Ditemukan" value={stats.tidakDitemukan} icon={MinusCircle} accent="violet" />
-        <StatCard label="Dilewati" value={stats.dilewati} icon={XCircle} accent="blue" />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2" aria-hidden />
-          <Input
-            placeholder="Cari kolom file atau sistem…"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(0);
-            }}
-            className="h-8 w-64 pl-7 text-xs"
-          />
-        </div>
-        <div className="border-border inline-flex rounded-md border p-0.5">
-          <button
-            type="button"
-            onClick={() => {
-              setTab('perlu');
-              setPage(0);
-            }}
-            className={cn(
-              'rounded px-2.5 py-1 text-xs font-medium transition-colors',
-              tab === 'perlu' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
-            )}
-          >
-            Perlu Diperiksa ({stats.perluDiperiksa})
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setTab('semua');
-              setPage(0);
-            }}
-            className={cn(
-              'rounded px-2.5 py-1 text-xs font-medium transition-colors',
-              tab === 'semua' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
-            )}
-          >
-            Semua Kolom ({stats.totalKolom})
-          </button>
-        </div>
-        <Button type="button" variant="outline" size="sm" onClick={onResetAllToAuto} className="ml-auto">
-          <RotateCcw className="size-3.5" aria-hidden /> Kembalikan Otomatis
-        </Button>
-      </div>
-
-      {entries.map((entry) => (
-        <MappingFileGroup
-          key={entry.id}
-          entry={entry}
-          search={search}
-          tab={tab}
-          page={page}
-          setPage={setPage}
-          templates={templates}
-          onUpdateMapping={onUpdateMapping}
-          onApplyTemplate={onApplyTemplate}
-          onSaveTemplate={onSaveTemplate}
-        />
-      ))}
-    </div>
-  );
-}
-
-function MappingFileGroup({
-  entry,
-  search,
-  tab,
-  page,
-  setPage,
-  templates,
-  onUpdateMapping,
-  onApplyTemplate,
-  onSaveTemplate,
-}: {
-  entry: FileEntry;
-  search: string;
-  tab: 'perlu' | 'semua';
-  page: number;
-  setPage: (v: number) => void;
-  templates: MappingTemplate[] | undefined;
-  onUpdateMapping: (id: string, header: string, field: string) => void;
-  onApplyTemplate: (id: string, template: MappingTemplate) => void;
-  onSaveTemplate: (mapping: HeaderMapping, name: string) => void;
-}) {
-  const headers = entry.headers ?? [];
-  const needle = search.trim().toLowerCase();
-  const filtered = headers.filter((h) => {
-    if (tab === 'perlu' && columnStatus(entry, h) !== 'perlu-diperiksa') return false;
-    if (!needle) return true;
-    const target = entry.mapping?.[h];
-    const targetLabel = target ? CANONICAL_FIELD_LABELS[target] : '';
-    return h.toLowerCase().includes(needle) || targetLabel.toLowerCase().includes(needle);
-  });
-
-  const pageCount = Math.max(1, Math.ceil(filtered.length / MAPPING_PAGE_SIZE));
-  const safePage = Math.min(page, pageCount - 1);
-  const pageRows = filtered.slice(safePage * MAPPING_PAGE_SIZE, (safePage + 1) * MAPPING_PAGE_SIZE);
-
-  return (
-    <div className="border-border rounded-lg border">
-      <div className="border-border bg-muted/40 flex items-center justify-between border-b px-3 py-2">
-        <div className="flex items-center gap-1.5 text-sm font-medium">
-          <FileSpreadsheet className="text-muted-foreground size-4" aria-hidden />
-          {entry.fileName}
-        </div>
-        {templates && templates.length > 0 && (
-          <div className="flex items-center gap-1.5">
-            <Label className="text-muted-foreground text-xs">Muat Template:</Label>
-            <Select
-              items={Object.fromEntries(templates.map((t) => [t.namaTemplate, t.namaTemplate]))}
-              onValueChange={(v) => {
-                const t = templates.find((tpl) => tpl.namaTemplate === v);
-                if (t) onApplyTemplate(entry.id, t);
-              }}
-            >
-              <SelectTrigger size="sm" className="h-7 w-48 text-xs">
-                <SelectValue placeholder="Pilih template..." />
-              </SelectTrigger>
-              <SelectContent>
-                {templates.map((t) => (
-                  <SelectItem key={t.namaTemplate} value={t.namaTemplate}>
-                    {t.namaTemplate}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-      </div>
-
-      <div className="p-3">
-        {filtered.length === 0 ? (
-          <p className="text-muted-foreground py-6 text-center text-xs">
-            {tab === 'perlu' ? 'Semua kolom di file ini sudah beres — tidak ada yang perlu diperiksa.' : 'Tidak ada kolom yang cocok dengan pencarian.'}
-          </p>
-        ) : (
-          <>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Kolom di File (Excel)</TableHead>
-                  <TableHead className="w-8" />
-                  <TableHead>Dipetakan ke (Sistem)</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pageRows.map((header) => {
-                  const status = columnStatus(entry, header);
-                  const meta = STATUS_META[status];
-                  return (
-                    <TableRow key={header}>
-                      <TableCell className="font-mono text-xs">{header}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">→</TableCell>
-                      <TableCell>
-                        <Select
-                          items={mappingItems}
-                          value={entry.mapping?.[header] ?? IGNORE}
-                          onValueChange={(v) => onUpdateMapping(entry.id, header, v as string)}
-                        >
-                          <SelectTrigger size="sm" className="w-56">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={IGNORE}>Abaikan kolom ini</SelectItem>
-                            {CANONICAL_FIELDS.map((f) => (
-                              <SelectItem key={f} value={f}>
-                                {CANONICAL_FIELD_LABELS[f]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <span className={cn('inline-flex items-center gap-1.5 text-xs font-medium', meta.text)}>
-                          <span className={cn('size-1.5 rounded-full', meta.dot)} aria-hidden />
-                          {meta.label}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-
-            {filtered.length > MAPPING_PAGE_SIZE && (
-              <div className="mt-2">
-                <TablePager
-                  pageIndex={safePage}
-                  pageCount={pageCount}
-                  onGoto={setPage}
-                  canPrev={safePage > 0}
-                  canNext={safePage < pageCount - 1}
-                  totalRows={filtered.length}
-                  pageSize={MAPPING_PAGE_SIZE}
-                  onPageSizeChange={() => {}}
-                  pageSizeOptions={[MAPPING_PAGE_SIZE]}
-                />
-              </div>
-            )}
-          </>
-        )}
-
-        <SaveTemplateRow mapping={entry.mapping} onSave={(name) => onSaveTemplate(entry.mapping!, name)} />
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// STEP 3 — Preview Data
+// STEP 2 — Preview Data
 // ============================================================================
 
 function StepPreview({
@@ -999,7 +596,7 @@ function StepPreview({
 }
 
 // ============================================================================
-// STEP 4 — Import Data
+// STEP 3 — Import Data
 // ============================================================================
 
 function StepImport({
@@ -1076,33 +673,6 @@ function StepImport({
 
       <Button type="button" size="lg" onClick={onImport} disabled={fileNames.length === 0 || batchImporting}>
         {batchImporting ? 'Mengimport…' : 'Mulai Import'}
-      </Button>
-    </div>
-  );
-}
-
-function SaveTemplateRow({ mapping, onSave }: { mapping: HeaderMapping | undefined; onSave: (name: string) => void }) {
-  const [name, setName] = useState('');
-  if (!mapping || !isMappingComplete(mapping)) return null;
-  return (
-    <div className="mt-3 flex items-center gap-2">
-      <Input
-        placeholder="Nama template (mis. Template JMS Standar)"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="h-8 max-w-64 text-xs"
-      />
-      <Button
-        type="button"
-        size="sm"
-        variant="secondary"
-        disabled={!name.trim()}
-        onClick={() => {
-          onSave(name.trim());
-          setName('');
-        }}
-      >
-        Simpan sebagai Template
       </Button>
     </div>
   );

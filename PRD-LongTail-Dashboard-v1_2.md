@@ -158,7 +158,7 @@ Merge Data
 ↓
 Remove Duplicate Waybill (dalam file & terhadap data existing, lihat Bagian 7.1)
 ↓
-Auto Mapping Header (dengan fallback manual, lihat Bagian 7.2)
+Auto Mapping Header (sepenuhnya otomatis, lihat Bagian 7.2)
 ↓
 Preview
 ↓
@@ -203,14 +203,22 @@ sebelumnya (paket lama yang belum Clear TTD):
     Clear TTD secara otomatis.
 -   Setiap update dari proses ini dicatat di Activity Log (Bagian 12).
 
-## 7.2 Fallback Auto Mapping Header (Baru)
+## 7.2 Auto Mapping Header (direvisi: tanpa UI mapping manual)
 
--   Jika header kolom di file Excel tidak cocok dengan template yang
-    dikenali sistem, tampilkan **UI mapping manual** pada tahap
-    Preview: user memetakan kolom sumber ke kolom tujuan sebelum
-    lanjut Import.
--   Mapping manual yang dipilih dapat disimpan sebagai template baru
-    untuk import berikutnya.
+-   Pemetaan kolom **sepenuhnya otomatis** (`autoDetectMapping`,
+    alias-based) — tidak ada lagi langkah/UI mapping manual di wizard
+    Import. Keputusan ini diambil setelah deteksi otomatis terbukti
+    stabil & akurat selama pemakaian nyata, sehingga langkah manual
+    dianggap beban tambahan yang tidak perlu bagi user.
+-   Jika kolom wajib (No. Waybill) **tidak** berhasil terdeteksi
+    otomatis pada suatu file, file tersebut **dilewati** dari proses
+    gabung/import (tidak menghalangi file lain dalam batch yang sama)
+    dan ditandai dengan peringatan di langkah Upload File, meminta
+    user memeriksa nama header pada file tsb lalu mengunggah ulang.
+-   Fitur simpan/muat template mapping (backend `/api/import/templates`)
+    tetap ada di data model untuk kemungkinan pemakaian di masa depan,
+    namun tidak lagi diekspos di UI Import karena tidak ada lagi titik
+    mapping manual untuk disimpan.
 
 ## 7.3 Error Handling & Partial Failure (Baru; direvisi v1.3)
 
@@ -573,8 +581,8 @@ Untuk mengelola ekspektasi, hal berikut **tidak** termasuk dalam MVP:
 -   Login (Google Workspace SSO)
 -   Dashboard Admin Cabang
 -   Dashboard Admin DP
--   Multi Upload Excel (dengan fallback mapping manual & partial
-    failure handling)
+-   Multi Upload Excel (mapping otomatis penuh & partial failure
+    handling)
 -   Merge Data
 -   Remove Duplicate (dalam file & lintas batch)
 -   Auto Mapping Header
@@ -630,3 +638,4 @@ Untuk mengelola ekspektasi, hal berikut **tidak** termasuk dalam MVP:
 | 16 *(v1.3)* | Dialog konfirmasi import file < 100 baris (Bagian 7.4) | Mencegah Auto-Close massal akibat file tarikan tidak lengkap |
 | 17 *(v1.3)* | Event Auto-Close dicatat ke `Activity_Log` & tampil di Riwayat Feedback | Paket terarsip tetap dapat ditelusuri; jejak Admin pemicu import tersimpan |
 | 18 *(v1.3)* | Multi-file upload digabung jadi satu batch submit (bukan lagi 1 panggilan server per file), Bagian 7.3 | File dikirim satu-satu membuat Auto-Close (7.4) salah mengarsipkan waybill dari file yang sudah diimport sebelumnya, seolah "hilang dari tarikan" |
+| 19 *(v1.3)* | Menghapus langkah/UI mapping manual dari wizard Import (Bagian 7.2); file yang kolom wajibnya gagal terdeteksi otomatis kini dilewati dengan peringatan, bukan diarahkan ke UI mapping | Deteksi otomatis terbukti stabil & akurat saat pemakaian nyata; langkah manual jadi beban tambahan yang tak perlu |

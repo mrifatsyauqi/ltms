@@ -3,13 +3,12 @@
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type WizardStep = 1 | 2 | 3 | 4;
+export type WizardStep = 1 | 2 | 3;
 
 const STEPS: { step: WizardStep; title: string; desc: string }[] = [
   { step: 1, title: 'Upload File', desc: 'Pilih file Excel' },
-  { step: 2, title: 'Validasi & Mapping', desc: 'Pemetaan kolom' },
-  { step: 3, title: 'Preview Data', desc: 'Cek ringkasan data' },
-  { step: 4, title: 'Import Data', desc: 'Proses import' },
+  { step: 2, title: 'Preview Data', desc: 'Cek ringkasan data' },
+  { step: 3, title: 'Import Data', desc: 'Proses import' },
 ];
 
 /**
