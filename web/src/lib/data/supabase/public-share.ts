@@ -1,10 +1,18 @@
+import { randomBytes } from 'node:crypto';
 import { db } from './client';
+import { requireActor, requireRole } from './helpers';
 import { ApiError } from '@/lib/errors';
 
 export type PublicShareLink = {
   token: string;
   dibuatOleh: string;
   createdAt: string;
+};
+
+export type ShareLinkStats = PublicShareLink & {
+  totalDashboard: number;
+  totalDataLongtail: number;
+  akses7HariTerakhir: number;
 };
 
 type ShareLinkDbRow = {
@@ -112,4 +120,92 @@ export async function isRateLimited(
     .gte('accessed_at', since);
   if (error) throw new ApiError('INTERNAL_ERROR', error.message);
   return (count ?? 0) >= maxRequests;
+}
+
+// ============================================================================
+// UI Admin Cabang: generate/kelola link (Pengaturan). Hanya Admin Cabang
+// (requireRole) - PRD Bagian 5, Admin DP tak punya akses fitur ini sama
+// sekali.
+// ============================================================================
+
+/** Token 32 hex char via crypto random (bukan UUID sekuensial/tebakable) - cocok dgn CHECK constraint di skema. */
+function generateToken(): string {
+  return randomBytes(16).toString('hex');
+}
+
+async function countAccess(token: string, halaman?: 'dashboard' | 'data-longtail', sinceIso?: string): Promise<number> {
+  let q = db().from('public_share_access_log').select('*', { count: 'exact', head: true }).eq('token', token);
+  if (halaman) q = q.eq('halaman', halaman);
+  if (sinceIso) q = q.gte('accessed_at', sinceIso);
+  const { count, error } = await q;
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  return count ?? 0;
+}
+
+/** Statistik link aktif (UI Kelola Link Laporan) - null kalau belum pernah dibuat/sudah dicabut total. Admin Cabang saja. */
+export async function getShareLinkStats(actorEmail: string): Promise<ShareLinkStats | null> {
+  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  const link = await getActiveShareLink();
+  if (!link) return null;
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const [totalDashboard, totalDataLongtail, akses7HariTerakhir] = await Promise.all([
+    countAccess(link.token, 'dashboard'),
+    countAccess(link.token, 'data-longtail'),
+    countAccess(link.token, undefined, sevenDaysAgo),
+  ]);
+
+  return { ...link, totalDashboard, totalDataLongtail, akses7HariTerakhir };
+}
+
+/** "Buat Link Laporan" - hanya kalau BELUM ada link aktif (ditegakkan jg di DB via unique partial index). Admin Cabang saja. */
+export async function createShareLink(actorEmail: string): Promise<{ token: string }> {
+  const actor = requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  const existing = await getActiveShareLink();
+  if (existing) throw new ApiError('CONFLICT', 'Sudah ada link aktif - gunakan Regenerate untuk mengganti, atau Cabut Total dulu.');
+
+  const token = generateToken();
+  const { error } = await db().from('public_share_links').insert({ token, dibuat_oleh: actor.email, revoked: false });
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  return { token };
+}
+
+/**
+ * "Regenerate Link" - link lama bocor/tersebar ke pihak tak dimaksud: revoke
+ * lama SEKETIKA, buat token baru sekaligus. URUTAN WAJIB revoke dulu baru
+ * insert (bukan sebaliknya) - unique partial index (revoked=false) di skema
+ * akan menolak insert baru selama yg lama masih revoked=false, jadi urutan
+ * ini satu2nya yg bisa berhasil. @supabase/supabase-js (PostgREST) tak
+ * mendukung transaction sungguhan lintas 2 panggilan .from() berbeda (sama
+ * spt catatan di import.ts) - risiko: kalau insert token baru gagal SETELAH
+ * revoke lama berhasil, link jadi kosong sementara (bukan 2 link aktif
+ * sekaligus - kegagalan "aman", admin tinggal generate ulang, bukan state
+ * korup/ambigu).
+ */
+export async function regenerateShareLink(actorEmail: string): Promise<{ token: string }> {
+  const actor = requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  const existing = await getActiveShareLink();
+  if (existing) {
+    const { error: revokeErr } = await db().from('public_share_links').update({ revoked: true }).eq('token', existing.token);
+    if (revokeErr) throw new ApiError('INTERNAL_ERROR', revokeErr.message);
+  }
+
+  const token = generateToken();
+  const { error } = await db().from('public_share_links').insert({ token, dibuat_oleh: actor.email, revoked: false });
+  if (error) {
+    throw new ApiError(
+      'INTERNAL_ERROR',
+      `Link lama sudah dicabut tapi gagal membuat token baru: ${error.message}. Tidak ada link aktif sekarang - coba Buat Link Laporan lagi.`,
+    );
+  }
+  return { token };
+}
+
+/** "Cabut Total" - revoke tanpa generate baru, mematikan fitur sepenuhnya sampai dibuat ulang manual. Admin Cabang saja. */
+export async function revokeShareLink(actorEmail: string): Promise<void> {
+  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  const existing = await getActiveShareLink();
+  if (!existing) return; // tak ada apa2 utk dicabut - idempotent, bukan error.
+  const { error } = await db().from('public_share_links').update({ revoked: true }).eq('token', existing.token);
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
 }

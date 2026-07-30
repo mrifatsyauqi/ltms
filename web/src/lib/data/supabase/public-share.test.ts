@@ -9,6 +9,10 @@ import { type Row, fakeDbFactory } from './fake-db.test-support.ts';
 
 function freshStore(): Map<string, Row[]> {
   const store = new Map<string, Row[]>();
+  store.set('users', [
+    { email: 'admincabang@ltms.test', nama: 'Admin Cabang', role: 'Admin Cabang', drop_point: '', status_aktif: true },
+    { email: 'admindp@ltms.test', nama: 'Admin DP', role: 'Admin DP', drop_point: 'BATANG01', status_aktif: true },
+  ]);
   store.set('public_share_links', [
     { token: 'a'.repeat(32), dibuat_oleh: 'admincabang@ltms.test', revoked: false, created_at: '2026-07-30T00:00:00+07:00' },
     { token: 'b'.repeat(32), dibuat_oleh: 'admincabang@ltms.test', revoked: true, created_at: '2026-07-29T00:00:00+07:00' },
@@ -210,5 +214,83 @@ describe('Link Berbagi Laporan: validasi token & endpoint publik Dashboard (ekse
       params: Promise.resolve({ token: ACTIVE_TOKEN }),
     });
     assert.equal(resDashboard.status, 200, 'dashboard punya budget terpisah (0/30), tak boleh ikut terblokir');
+  });
+
+  it('createShareLink: Admin DP -> FORBIDDEN (hanya Admin Cabang, PRD Bagian 5)', async () => {
+    store.set('public_share_links', []); // tak ada link aktif - tetap harus ditolak krn role, bukan krn conflict
+    await assert.rejects(
+      () => publicShare.createShareLink('admindp@ltms.test'),
+      (err: unknown) => (err as { code?: string }).code === 'FORBIDDEN',
+    );
+  });
+
+  it('createShareLink: Admin Cabang, BELUM ada link aktif -> berhasil, token baru revoked=false', async () => {
+    store.set('public_share_links', []);
+    const { token } = await publicShare.createShareLink('admincabang@ltms.test');
+    assert.match(token, /^[0-9a-f]{32}$/);
+    const link = await publicShare.getActiveShareLink();
+    assert.equal(link?.token, token);
+  });
+
+  it('createShareLink: Admin Cabang, SUDAH ada link aktif -> CONFLICT (harus pakai Regenerate/Cabut dulu)', async () => {
+    await assert.rejects(
+      () => publicShare.createShareLink('admincabang@ltms.test'),
+      (err: unknown) => (err as { code?: string }).code === 'CONFLICT',
+    );
+  });
+
+  it('regenerateShareLink: link lama LANGSUNG revoked, token baru aktif menggantikan - link lama gagal diakses setelahnya', async () => {
+    const oldToken = ACTIVE_TOKEN;
+    const { token: newToken } = await publicShare.regenerateShareLink('admincabang@ltms.test');
+    assert.notEqual(newToken, oldToken);
+
+    const oldStillValid = await publicShare.findActiveShareLink(oldToken);
+    assert.equal(oldStillValid, null, 'token lama HARUS langsung gagal diakses setelah regenerate');
+
+    const newValid = await publicShare.findActiveShareLink(newToken);
+    assert.deepEqual(newValid, { token: newToken });
+
+    const active = await publicShare.getActiveShareLink();
+    assert.equal(active?.token, newToken, 'hanya SATU link aktif setelah regenerate, yaitu yg baru');
+  });
+
+  it('regenerateShareLink: TANPA link aktif sebelumnya -> tetap berhasil membuat token baru (setara create)', async () => {
+    store.set('public_share_links', []);
+    const { token } = await publicShare.regenerateShareLink('admincabang@ltms.test');
+    assert.match(token, /^[0-9a-f]{32}$/);
+    assert.equal((await publicShare.getActiveShareLink())?.token, token);
+  });
+
+  it('revokeShareLink ("Cabut Total"): link aktif jadi tak bisa diakses, TIDAK ada token baru', async () => {
+    await publicShare.revokeShareLink('admincabang@ltms.test');
+    assert.equal(await publicShare.findActiveShareLink(ACTIVE_TOKEN), null);
+    assert.equal(await publicShare.getActiveShareLink(), null, 'tak ada link baru dibuat - beda dari regenerate');
+  });
+
+  it('revokeShareLink: TANPA link aktif -> idempotent, tidak error', async () => {
+    store.set('public_share_links', []);
+    await publicShare.revokeShareLink('admincabang@ltms.test'); // tak boleh throw
+    assert.equal(await publicShare.getActiveShareLink(), null);
+  });
+
+  it('getShareLinkStats: belum ada link aktif -> null', async () => {
+    store.set('public_share_links', []);
+    const stats = await publicShare.getShareLinkStats('admincabang@ltms.test');
+    assert.equal(stats, null);
+  });
+
+  it('getShareLinkStats: total per halaman & akses 7 hari terakhir dihitung benar dari access log', async () => {
+    const now = new Date().toISOString();
+    const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+    store.set('public_share_access_log', [
+      { token: ACTIVE_TOKEN, halaman: 'dashboard', accessed_at: now, ip_address: null, user_agent: null },
+      { token: ACTIVE_TOKEN, halaman: 'dashboard', accessed_at: now, ip_address: null, user_agent: null },
+      { token: ACTIVE_TOKEN, halaman: 'data-longtail', accessed_at: now, ip_address: null, user_agent: null },
+      { token: ACTIVE_TOKEN, halaman: 'dashboard', accessed_at: eightDaysAgo, ip_address: null, user_agent: null }, // di luar 7 hari
+    ]);
+    const stats = await publicShare.getShareLinkStats('admincabang@ltms.test');
+    assert.equal(stats?.totalDashboard, 3, 'total per halaman TIDAK dibatasi jendela waktu - semua histori token ini');
+    assert.equal(stats?.totalDataLongtail, 1);
+    assert.equal(stats?.akses7HariTerakhir, 3, 'akses 8 hari lalu HARUS dikecualikan dari "7 hari terakhir"');
   });
 });
