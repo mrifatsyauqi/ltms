@@ -12,7 +12,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { toast } from 'sonner';
-import { History, Search } from 'lucide-react';
+import { History, Search, Users } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { SelectFilter } from '@/components/ui/select-filter';
 import { TablePager } from '@/components/ui/table-pager';
 import { TruncatedText } from '@/components/ui/truncated-text';
@@ -37,6 +38,7 @@ import {
   type SubmitFeedbackError,
 } from './feedback-hooks';
 import { FeedbackCell } from './feedback-cell';
+import { PivotSprinterDialog } from './pivot-sprinter-dialog';
 
 /** Kolom mana yang di-pin & ke sisi mana (offset kanan disetel via kelas). */
 const STICKY_POS: Record<string, string> = {
@@ -88,6 +90,7 @@ export function FeedbackTable({
   const [sprinterFilter, setSprinterFilter] = useState('');
   const [onlyBelum, setOnlyBelum] = useState(false);
   const [historyRow, setHistoryRow] = useState<LongTailRow | null>(null);
+  const [pivotOpen, setPivotOpen] = useState(false);
 
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
   const [activeWaybill, setActiveWaybill] = useState<string | null>(null);
@@ -322,6 +325,10 @@ export function FeedbackTable({
     initialState: { pagination: { pageSize: 20 } },
   });
 
+  // Sumber Pivot AWB per Sprinter: ikut SEMUA filter yang sedang aktif
+  // (termasuk pencarian teks), bukan cuma halaman yang sedang tertampil.
+  const pivotRows = table.getFilteredRowModel().rows.map((r) => r.original);
+
   if (isLoading) {
     return (
       <div className="space-y-1.5" aria-busy="true" aria-label="Memuat data Long Tail">
@@ -388,6 +395,19 @@ export function FeedbackTable({
           <input type="checkbox" checked={onlyBelum} onChange={(e) => setOnlyBelum(e.target.checked)} />
           Belum feedback saja
         </label>
+        {readOnly && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto"
+            onClick={() => setPivotOpen(true)}
+            title="Rekap jumlah AWB per Sprinter, dikelompokkan per DP — bisa disalin sbg gambar/tabel"
+          >
+            <Users className="size-3.5" aria-hidden />
+            Pivot AWB per Sprinter
+          </Button>
+        )}
         {/* Chip DP aktif dari drill-down Dashboard (?dp=) - bisa dihapus. */}
         {dpFilter && (
           <span className="bg-brand-muted text-brand inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
@@ -530,6 +550,8 @@ export function FeedbackTable({
           </ol>
         </DialogContent>
       </Dialog>
+
+      {readOnly && <PivotSprinterDialog rows={pivotRows} open={pivotOpen} onOpenChange={setPivotOpen} />}
     </div>
   );
 }
