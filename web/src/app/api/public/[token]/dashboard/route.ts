@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getDashboardPublic } from '@/lib/data/dashboard';
-import { clientIpFromHeaders, findActiveShareLink, logPublicAccess } from '@/lib/data/supabase/public-share';
+import {
+  RATE_LIMIT_DASHBOARD_MAX,
+  clientIpFromHeaders,
+  findActiveShareLink,
+  isRateLimited,
+  logPublicAccess,
+} from '@/lib/data/supabase/public-share';
 import { ApiError } from '@/lib/errors';
 import { errorResponse } from '@/lib/api-response';
 
@@ -8,13 +14,18 @@ import { errorResponse } from '@/lib/api-response';
  * Endpoint publik (Link Berbagi Laporan) - TANPA NextAuth session, validasi
  * murni via token di `public_share_links`. Pesan generik saat gagal (tak
  * bedakan "token tak ada" vs "sudah di-revoke") - lihat findActiveShareLink.
- * Data SELALU real-time (query fresh, tak ada cache/snapshot).
+ * Data SELALU real-time (query fresh, tak ada cache/snapshot). Rate limit
+ * per token (isRateLimited) - pengaman lebih penting krn link tak pernah
+ * expired otomatis, cegah scraping berkelanjutan jangka panjang.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   try {
     const link = await findActiveShareLink(token);
     if (!link) throw new ApiError('NOT_FOUND', 'Link tidak valid atau sudah tidak aktif.');
+    if (await isRateLimited(token, 'dashboard', RATE_LIMIT_DASHBOARD_MAX)) {
+      throw new ApiError('RATE_LIMITED', 'Terlalu banyak permintaan, coba lagi nanti.');
+    }
 
     const data = await getDashboardPublic();
     await logPublicAccess(token, 'dashboard', {

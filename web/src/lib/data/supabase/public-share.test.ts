@@ -159,4 +159,56 @@ describe('Link Berbagi Laporan: validasi token & endpoint publik Dashboard (ekse
     assert.equal(logs.filter((l) => l.halaman === 'dashboard').length, 1);
     assert.equal(logs.filter((l) => l.halaman === 'data-longtail').length, 2);
   });
+
+  it('rate limit: request ke-16 (melebihi RATE_LIMIT_LONGTAIL_MAX=15) dalam 1 menit -> 429, tak tercatat ke access log', async () => {
+    const now = new Date().toISOString();
+    // 14 akses "berhasil" sebelumnya (dlm jendela 1 menit) - request BERIKUT
+    // ini (ke-15) masih harus lolos (14 < 15), baru request SETELAHNYA ditolak.
+    store.set(
+      'public_share_access_log',
+      Array.from({ length: 14 }, () => ({ token: ACTIVE_TOKEN, halaman: 'data-longtail', accessed_at: now, ip_address: null, user_agent: null })),
+    );
+
+    const req = () => longtailRoute.GET(new Request(`http://localhost/api/public/${ACTIVE_TOKEN}/longtail`), { params: Promise.resolve({ token: ACTIVE_TOKEN }) });
+
+    const res15 = await req(); // akses ke-15 total - masih di bawah limit (15), harus lolos
+    assert.equal(res15.status, 200, 'akses ke-15 (persis di batas) masih harus berhasil');
+    assert.equal(store.get('public_share_access_log')!.length, 15);
+
+    const res16 = await req(); // akses ke-16 - melebihi limit
+    assert.equal(res16.status, 429);
+    const body16 = await res16.json();
+    assert.equal(body16.ok, false);
+    assert.equal(body16.message, 'Terlalu banyak permintaan, coba lagi nanti.');
+    assert.equal(store.get('public_share_access_log')!.length, 15, 'request yg ditolak rate limit TIDAK ikut tercatat sbg akses berhasil');
+  });
+
+  it('rate limit: akses lama (di luar jendela 1 menit) TIDAK ikut dihitung', async () => {
+    const oldTimestamp = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // 5 menit lalu
+    store.set(
+      'public_share_access_log',
+      Array.from({ length: 50 }, () => ({ token: ACTIVE_TOKEN, halaman: 'data-longtail', accessed_at: oldTimestamp, ip_address: null, user_agent: null })),
+    );
+    const res = await longtailRoute.GET(new Request(`http://localhost/api/public/${ACTIVE_TOKEN}/longtail`), {
+      params: Promise.resolve({ token: ACTIVE_TOKEN }),
+    });
+    assert.equal(res.status, 200, '50 akses LAMA di luar jendela tak boleh memblokir akses baru');
+  });
+
+  it('rate limit: dashboard & data-longtail punya budget TERPISAH (bukan gabungan) - limit longtail penuh tak memblokir dashboard', async () => {
+    const now = new Date().toISOString();
+    store.set(
+      'public_share_access_log',
+      Array.from({ length: 15 }, () => ({ token: ACTIVE_TOKEN, halaman: 'data-longtail', accessed_at: now, ip_address: null, user_agent: null })),
+    );
+    const resLongtail = await longtailRoute.GET(new Request(`http://localhost/api/public/${ACTIVE_TOKEN}/longtail`), {
+      params: Promise.resolve({ token: ACTIVE_TOKEN }),
+    });
+    assert.equal(resLongtail.status, 429, 'longtail sudah penuh (15/15)');
+
+    const resDashboard = await dashboardRoute.GET(new Request(`http://localhost/api/public/${ACTIVE_TOKEN}/dashboard`), {
+      params: Promise.resolve({ token: ACTIVE_TOKEN }),
+    });
+    assert.equal(resDashboard.status, 200, 'dashboard punya budget terpisah (0/30), tak boleh ikut terblokir');
+  });
 });

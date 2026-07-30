@@ -9,6 +9,7 @@ const STATUS_BY_CODE: Record<string, number> = {
   VERSION_CONFLICT: 409, // optimistic lock: data server sudah berubah (Bagian 9.4)
   VALIDATION_ERROR: 422,
   LOCK_TIMEOUT: 503,
+  RATE_LIMITED: 429, // Link Berbagi Laporan (public share) - lihat public-share.ts isRateLimited
 };
 
 export function unauthenticated() {

@@ -63,6 +63,10 @@ export async function logPublicAccess(
       halaman,
       ip_address: meta.ipAddress,
       user_agent: meta.userAgent,
+      // Eksplisit (bukan andalkan default now() Postgres) - isRateLimited
+      // butuh nilai ini SEGERA (query .gte() berikutnya bisa terjadi dlm
+      // request yg sama/berdekatan), jangan bergantung ke round-trip DB.
+      accessed_at: new Date().toISOString(),
     });
   } catch {
     // Diamkan sengaja - lihat komentar fungsi.
@@ -74,4 +78,38 @@ export function clientIpFromHeaders(headers: Headers): string | null {
   const fwd = headers.get('x-forwarded-for');
   if (fwd) return fwd.split(',')[0].trim();
   return headers.get('x-real-ip');
+}
+
+/** Default endpoint agregat (Dashboard). */
+export const RATE_LIMIT_DASHBOARD_MAX = 30;
+/** Lebih ketat drpd Dashboard - data per-baris (Data Long Tail) jauh lebih besar volumenya per request. */
+export const RATE_LIMIT_LONGTAIL_MAX = 15;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+
+/**
+ * Rate limit PER TOKEN, dihitung dari `public_share_access_log` yg SUDAH ADA
+ * (khusus baris `halaman` yg cocok - dashboard & data-longtail dihitung
+ * TERPISAH, masing2 endpoint punya limit sendiri, bukan budget gabungan)
+ * - bukan penyimpanan baru (Redis/KV dll, proyek ini tak punya dependency
+ * itu, dan in-memory per-proses TIDAK bisa diandalkan di Vercel serverless
+ * krn tiap invocation bisa lompat ke instance berbeda; hitung dari DB
+ * memberi jendela geser yg benar lintas instance). Hanya akses yg BERHASIL
+ * dicatat (invalid-token/rate-limited sebelumnya tak pernah masuk log -
+ * lihat findActiveShareLink/logPublicAccess), jadi window otomatis
+ * "mengoreksi diri" tiap request baru.
+ */
+export async function isRateLimited(
+  token: string,
+  halaman: 'dashboard' | 'data-longtail',
+  maxRequests: number,
+): Promise<boolean> {
+  const since = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
+  const { count, error } = await db()
+    .from('public_share_access_log')
+    .select('*', { count: 'exact', head: true })
+    .eq('token', token)
+    .eq('halaman', halaman)
+    .gte('accessed_at', since);
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  return (count ?? 0) >= maxRequests;
 }
