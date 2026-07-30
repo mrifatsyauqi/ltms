@@ -66,7 +66,10 @@ function pct(part: number, whole: number) {
  */
 const STAT_GRID = 'grid grid-cols-1 gap-2 @sm:grid-cols-2 @2xl:grid-cols-3 @4xl:grid-cols-5';
 
-function StatSkeleton() {
+// Diekspor (bukan lokal lagi) supaya dashboard/loading.tsx bisa pakai
+// skeleton yang SAMA PERSIS dgn yang dirender DashboardClient sendiri saat
+// isLoading, bukan bikin skeleton mirip-mirip yang gampang tak sinkron.
+export function StatSkeleton() {
   return (
     <div className={STAT_GRID}>
       {Array.from({ length: 5 }).map((_, i) => (
