@@ -420,6 +420,28 @@ prioritas utama sistem (lihat Bagian 15). *(v1.3)* Umur juga dibekukan
 saat paket di-**Auto-Close** menjadi **`CLOSE ALUR`** (Bagian 7.4),
 karena paket tersebut sudah tidak *actionable*.
 
+**Koreksi Clear TTD (direvisi):** paket berstatus Clear TTD yang
+**masih di LongTail aktif** (belum diarsipkan Auto-Close) **tetap bisa**
+disubmit ulang feedback-nya — mis. admin salah menandai Clear TTD dan
+perlu mengembalikannya ke status operasional lain. Aturannya
+(`decideFeedbackTransition`, `longtail-pure.ts`):
+
+-   **Belum Clear TTD → jadi Clear TTD**: umur dibekukan di momen ini
+    (seperti aturan di atas).
+-   **Sudah Clear TTD → dikoreksi ke status lain (bukan Clear TTD
+    lagi)**: umur **dilepas dari beku dan lanjut menghitung LIVE**
+    dari `Hari Ini - Waktu Sampai` (bukan melanjutkan dari angka beku
+    sebelumnya) — persis seperti paket yang belum pernah Clear TTD.
+    Perubahan ini dicatat di Activity_Log dengan **Sumber Perubahan =
+    "Koreksi Manual"** (bukan "Manual Feedback" biasa) dan **Data Lama
+    = "Clear TTD"**, supaya jejaknya jelas terpisah dari edit feedback
+    rutin.
+-   **Status Clear TTD tidak berubah** (masih Clear TTD, atau
+    tetap bukan Clear TTD, mis. sekadar mengedit ulang teks) — umur
+    **tidak disentuh** sama sekali, supaya baris yang sudah beku tidak
+    ikut ter-beku ulang di momen yang lebih baru hanya karena
+    teksnya diedit.
+
 **Nilai `Status Terakhir` (direvisi):** kolom ini murni data hasil
 tarikan Excel (Bagian 7) — **hanya** berubah lewat import berikutnya
 atau lewat Auto-Close otomatis (`CLOSE ALUR`, Bagian 7.4), **tidak
@@ -679,3 +701,4 @@ Untuk mengelola ekspektasi, hal berikut **tidak** termasuk dalam MVP:
 | 20 *(v1.3)* | Umur Paket dihitung ulang sebagai selisih tanggal kalender Jakarta (bukan `floor(jam berlalu / 24)`), dan parsing `Waktu Sampai` diperbaiki agar selalu dibaca sbg jam dinding Jakarta (Bagian 9.1) | Umur tidak naik tepat waktu di pergantian hari — paket yg sampai kemarin sore masih terhitung "1 Hari" alih-alih "2 Hari" keesokan paginya |
 | 21 *(v1.3)* | `Status Terakhir` tidak lagi ikut ditimpa nilai `Feedback` saat submit feedback manual, termasuk saat Clear TTD (Bagian 9.0 & 9.1) | Kolom itu harus murni cerminan data tarikan Excel/Auto-Close; status Clear TTD sudah cukup dibaca dari `Feedback` (`isClearTTD`), tidak perlu menimpa `Status Terakhir` |
 | 22 *(v1.3)* | Menambahkan fitur "Pivot AWB per Sprinter" di halaman Data Long Tail (Bagian 9.2.1) — rekap jumlah waybill per DP -> Sprinter, bisa disalin sbg gambar/tabel | Admin butuh rekap volume per kurir tanpa export manual ke Excel Pivot Table |
+| 23 *(v1.3)* | Membuka koreksi feedback pada baris Clear TTD yang masih di LongTail aktif — umur resume live (bukan lanjut dari angka beku) saat dikoreksi keluar dari Clear TTD, dicatat Activity_Log dgn Sumber "Koreksi Manual" (Bagian 9.1) | Sebelumnya submit feedback diblokir total begitu Clear TTD (`ALREADY_CLEAR_TTD`), sehingga salah tandai Clear TTD tak bisa dikoreksi sama sekali - ditemukan saat audit verifikasi migrasi |

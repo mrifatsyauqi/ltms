@@ -106,6 +106,44 @@ export function computeUmur(r: LongtailDbRow): number | '' {
   return r.umur_frozen != null ? Number(r.umur_frozen) : '';
 }
 
+export type FeedbackTransition = {
+  /** undefined = jangan sentuh kolom umur_frozen sama sekali (biarkan apa adanya). null = lepas freeze (resume live). number = freeze baru di nilai ini. */
+  umurFrozen: number | null | undefined;
+  sumber: 'Manual Feedback' | 'Koreksi Manual';
+  /** Nilai "Data Lama" utk Activity_Log. */
+  dataLama: string;
+};
+
+/**
+ * Tentukan efek submit feedback baru terhadap freeze Umur Paket & sumber
+ * Activity_Log, berdasarkan transisi status Clear TTD antara feedback lama
+ * & baru — dipakai submitFeedback (longtail.ts). Tiga kasus:
+ *  - belum Clear TTD -> jadi Clear TTD : freeze umur di momen ini (spt biasa).
+ *  - SUDAH Clear TTD -> BUKAN lagi     : KOREKSI - lepas freeze (computeUmur
+ *    otomatis jatuh ke jalur live begitu umur_frozen di-null-kan & feedback
+ *    baru bukan Clear TTD), sumber "Koreksi Manual", dataLama = "Clear TTD".
+ *  - status Clear TTD tak berubah (tetap/masih bukan) : umur_frozen SENGAJA
+ *    tak disentuh — mencegah bug laten "re-freeze di momen lebih baru" kalau
+ *    admin sekadar mengedit teks Clear TTD tanpa benar-benar mengoreksi status.
+ */
+export function decideFeedbackTransition(
+  current: Pick<LongtailDbRow, 'feedback' | 'waktu_sampai'>,
+  newFeedback: string,
+  now: number = Date.now(),
+): FeedbackTransition {
+  const wasClearTTD = isClearTTD(current.feedback);
+  const willBeClearTTD = isClearTTD(newFeedback);
+  const dataLamaDefault = String(current.feedback ?? '');
+
+  if (!wasClearTTD && willBeClearTTD) {
+    return { umurFrozen: computeUmurLive(current.waktu_sampai, now), sumber: 'Manual Feedback', dataLama: dataLamaDefault };
+  }
+  if (wasClearTTD && !willBeClearTTD) {
+    return { umurFrozen: null, sumber: 'Koreksi Manual', dataLama: 'Clear TTD' };
+  }
+  return { umurFrozen: undefined, sumber: 'Manual Feedback', dataLama: dataLamaDefault };
+}
+
 /** Baris DB -> bentuk lama + field turunan (Umur, __isClearTTD, __version). */
 export function decorateLongTailRow(r: LongtailDbRow): LongTailRow {
   return {
