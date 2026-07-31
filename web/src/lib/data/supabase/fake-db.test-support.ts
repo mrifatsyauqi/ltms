@@ -14,6 +14,8 @@ export class FakeQuery {
   private wantCount = false;
   private rangeFrom: number | null = null;
   private rangeTo: number | null = null;
+  private orderBy: { col: string; ascending: boolean } | null = null;
+  private limitCount: number | null = null;
   private table: string;
   private store: Map<string, Row[]>;
 
@@ -31,7 +33,11 @@ export class FakeQuery {
   gte(col: string, val: unknown) { this.filters.push(['gte', col, val]); return this; }
   lte(col: string, val: unknown) { this.filters.push(['lte', col, val]); return this; }
   not() { return this; } // dipakai reset-longtail sbg guard "semua baris" - tak relevan di test
-  order() { return this; }
+  order(col: string, opts?: { ascending?: boolean }) {
+    this.orderBy = { col, ascending: opts?.ascending !== false };
+    return this;
+  }
+  limit(n: number) { this.limitCount = n; return this; }
   range(from: number, to: number) { this.rangeFrom = from; this.rangeTo = to; return this; }
   maybeSingle() { this.wantSingle = true; return this; }
   update(patch: Row) { this.mode = 'update'; this.payload = patch; return this; }
@@ -55,7 +61,16 @@ export class FakeQuery {
     const table = this.store.get(this.table) ?? [];
     if (this.mode === 'select') {
       let rows = table.filter((r) => this.matches(r));
+      if (this.orderBy) {
+        const { col, ascending } = this.orderBy;
+        rows = [...rows].sort((a, b) => {
+          const av = String(a[col] ?? '');
+          const bv = String(b[col] ?? '');
+          return ascending ? (av < bv ? -1 : av > bv ? 1 : 0) : (av > bv ? -1 : av < bv ? 1 : 0);
+        });
+      }
       if (this.rangeFrom != null) rows = rows.slice(this.rangeFrom, (this.rangeTo ?? rows.length) + 1);
+      if (this.limitCount != null) rows = rows.slice(0, this.limitCount);
       if (this.wantCount) return resolve({ data: null, error: null, count: rows.length });
       if (this.wantSingle) return resolve({ data: rows[0] ?? null, error: null });
       return resolve({ data: rows, error: null });

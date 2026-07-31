@@ -140,8 +140,9 @@ export type MappingTemplate = {
 };
 
 // ---- Meta -------------------------------------------------------------------
+/** Waktu import Data Long Tail terakhir (bukan aktivitas feedback manual) - lihat getLastUpdate. */
 export type LastUpdate =
-  | { hasUpdate: true; tanggal: string; jam: string; sumber: string }
+  | { hasUpdate: true; tanggal: string; jam: string }
   | { hasUpdate: false };
 
 // ---- Riwayat Feedback -------------------------------------------------------

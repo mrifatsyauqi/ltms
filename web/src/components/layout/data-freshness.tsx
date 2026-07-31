@@ -12,9 +12,10 @@ async function fetchLastUpdate(): Promise<LastUpdate> {
 }
 
 /**
- * Baris info kecil di bawah header: kapan data ditampilkan terakhir berubah
- * (import/feedback). Dipakai di halaman berdata statistik (Dashboard, Feedback
- * & Data Long Tail). Berlaku untuk Admin Cabang & Admin DP (di-scope server).
+ * Baris info kecil di bawah header: kapan Data Long Tail terakhir DI-IMPORT
+ * (bukan aktivitas feedback manual) - lihat getLastUpdate. Dipakai di
+ * halaman berdata statistik (Dashboard, Feedback & Data Long Tail). Sama
+ * untuk Admin Cabang & Admin DP (import bersifat global, tak di-scope per DP).
  */
 export function DataFreshness() {
   const { data, isLoading } = useQuery({ queryKey: ['last-update'], queryFn: fetchLastUpdate });
@@ -23,9 +24,9 @@ export function DataFreshness() {
   if (!isLoading && data) {
     if (data.hasUpdate) {
       const jam = data.jam.slice(0, 5).replace(':', '.'); // HH:mm:ss -> HH.mm
-      text = `Data berdasarkan pembaruan terakhir: ${data.tanggal} pukul ${jam}`;
+      text = `Data Long Tail terakhir di-import: ${data.tanggal} pukul ${jam}`;
     } else {
-      text = 'Belum ada pembaruan data.';
+      text = 'Belum ada data Long Tail yang di-import.';
     }
   }
 
