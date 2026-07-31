@@ -1,26 +1,56 @@
 import { db } from './client';
 import { ApiError } from '@/lib/errors';
 
-export type Actor = { email: string; role: string; dropPoint: string };
+export type Actor = {
+  email: string;
+  role: string;
+  dropPoint: string;
+  /** NIK login (migrasi auth Google->NIK); '' kalau belum diisi (user lama). */
+  nik: string;
+  /** Nama utk atribusi Activity_Log: akun individual = nama orang, akun
+   *  general = "DP <KODE_DP>" (lihat attributionName di bawah). */
+  namaTampilan: string;
+  tipeAkun: 'individual' | 'general';
+};
 
 /**
  * Resolusi + validasi aktor dari tabel users (ganti requireActor_ Apps Script).
- * Email disimpan & dibandingkan lowercase (hindari wildcard ilike). Menolak
- * user yang tidak ada atau nonaktif.
+ * Identitas pasca-login SELALU email (primary key users, termasuk akun
+ * General yang punya email placeholder) — NIK hanya dipakai saat LOGIN untuk
+ * mencari baris user (lihat findUserRowByIdentifier di supabase/auth.ts),
+ * bukan di sini. Email disimpan & dibandingkan lowercase. Menolak user yang
+ * tidak ada atau nonaktif.
  */
 export async function requireActor(email: string | null | undefined): Promise<Actor> {
   const e = String(email ?? '').trim().toLowerCase();
   if (!e) throw new ApiError('UNAUTHENTICATED', 'Email kosong');
   const { data, error } = await db()
     .from('users')
-    .select('email, role, drop_point, status_aktif')
+    .select('email, nik, nama, nama_tampilan, tipe_akun, role, drop_point, status_aktif')
     .eq('email', e)
     .maybeSingle();
   if (error) throw new ApiError('INTERNAL_ERROR', error.message);
   if (!data || data.status_aktif !== true) {
     throw new ApiError('UNAUTHENTICATED', `User "${e}" tidak dikenali atau nonaktif di tabel users Supabase`);
   }
-  return { email: String(data.email), role: String(data.role), dropPoint: String(data.drop_point ?? '') };
+  return {
+    email: String(data.email),
+    role: String(data.role),
+    dropPoint: String(data.drop_point ?? ''),
+    nik: String(data.nik ?? ''),
+    namaTampilan: String(data.nama_tampilan ?? data.nama ?? ''),
+    tipeAkun: data.tipe_akun === 'general' ? 'general' : 'individual',
+  };
+}
+
+/**
+ * Nama yang ditulis ke Activity_Log/Log Feedback (kolom "Admin"). Akun
+ * General -> nama_tampilan ("DP <KODE_DP>"), BUKAN email placeholder-nya.
+ * Akun individual -> tetap email seperti sebelumnya (tidak mengubah histori
+ * yang sudah ada).
+ */
+export function attributionName(actor: Actor): string {
+  return actor.tipeAkun === 'general' ? actor.namaTampilan : actor.email;
 }
 
 export function requireRole(actor: Actor, roles: string[]): Actor {

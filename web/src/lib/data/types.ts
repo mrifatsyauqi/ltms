@@ -53,7 +53,15 @@ export type UpdateUserInput = Partial<{
   dropPoint: string;
   statusAktif: boolean;
 }>;
-export type CredentialsUser = { nama: string; email: string; role: string; dropPoint: string };
+export type CredentialsUser = {
+  nama: string;
+  namaTampilan: string;
+  email: string;
+  nik: string;
+  tipeAkun: 'individual' | 'general';
+  role: string;
+  dropPoint: string;
+};
 
 /** Resolusi role + Drop Point dari tabel users (untuk NextAuth). */
 export type AuthUser = {

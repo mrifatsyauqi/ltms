@@ -1,5 +1,5 @@
 import { db } from './client';
-import { requireActor, requireRole } from './helpers';
+import { attributionName, requireActor, requireRole } from './helpers';
 import { ApiError } from '@/lib/errors';
 import {
   appendActivityLog,
@@ -36,7 +36,7 @@ export async function listLongTail(actorEmail: string, dpFilter?: string): Promi
  * di jalur ini sama sekali.
  */
 export async function listLongTailPublic(): Promise<LongTailRow[]> {
-  const rows = await fetchLongtailScoped({ email: '', role: 'Admin Cabang', dropPoint: '' });
+  const rows = await fetchLongtailScoped({ email: '', role: 'Admin Cabang', dropPoint: '', nik: '', namaTampilan: '', tipeAkun: 'individual' });
   return rows.map(decorateLongTailRow);
 }
 
@@ -111,7 +111,7 @@ export async function submitFeedback(
   }
 
   await appendActivityLog({
-    user: actor.email,
+    user: attributionName(actor),
     dp: String(current.dp_sampai ?? ''),
     waybill,
     attempt: await nextAttempt(waybill),
@@ -199,7 +199,7 @@ export async function deleteLongTail(actorEmail: string, waybill: string): Promi
   if (!target) throw new ApiError('NOT_FOUND', 'Waybill tidak ditemukan');
 
   await appendActivityLog({
-    user: actor.email,
+    user: attributionName(actor),
     dp: String(target.dp_sampai ?? ''),
     waybill,
     attempt: await nextAttempt(waybill),

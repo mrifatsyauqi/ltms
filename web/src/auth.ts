@@ -13,24 +13,33 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         params: ALLOWED_DOMAIN ? { hd: ALLOWED_DOMAIN } : {},
       },
     }),
-    // Login manual (username/password) - alternatif selain Google, dikelola
-    // Admin Cabang lewat User Management. Password di-hash (scrypt) di sisi
-    // Next.js, sheet Users cuma menyimpan hash-nya (lihat lib/password.ts).
+    // Login manual - alternatif selain Google, dikelola Admin Cabang lewat
+    // User Management. Password di-hash (scrypt) di sisi Next.js, tabel users
+    // cuma menyimpan hash-nya (lihat lib/password.ts).
+    //
+    // Migrasi auth Google->NIK (dual-mode, Tahap 2): field wire tetap
+    // bernama "email" (form UI/server action BELUM diubah — itu Tahap 3),
+    // TAPI isinya sekarang diterima sbg identifier bebas: NIK (user baru)
+    // ATAU email (user lama) — verifyCredentials() coba NIK dulu, fallback
+    // email. Jadi form yang ada saat ini SUDAH bisa menerima NIK meski
+    // labelnya masih "Email" sampai UI di-update.
     Credentials({
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        const email = typeof credentials?.email === 'string' ? credentials.email.trim() : '';
+        const identifier = typeof credentials?.email === 'string' ? credentials.email.trim() : '';
         const password = typeof credentials?.password === 'string' ? credentials.password : '';
-        if (!email || !password) return null;
+        if (!identifier || !password) return null;
 
-        const user = await verifyCredentials(email, password);
+        const user = await verifyCredentials(identifier, password);
         if (!user) return null;
 
         // Bawa role/dropPoint dari sini supaya jwt callback tak perlu query lagi.
-        return { id: user.email, email: user.email, name: user.nama, role: user.role, dropPoint: user.dropPoint };
+        // name = namaTampilan: utk akun General ini "DP <KODE_DP>" (tak ada
+        // nama personal) — sudah benar dipakai apa adanya di sidebar/session.
+        return { id: user.email, email: user.email, name: user.namaTampilan, role: user.role, dropPoint: user.dropPoint };
       },
     }),
   ],
