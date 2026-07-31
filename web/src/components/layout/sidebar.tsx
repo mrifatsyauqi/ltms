@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { ChevronLeft, LogOut, Package } from 'lucide-react';
+import { ChevronLeft, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { navForRole } from '@/lib/nav';
 import { signOutAction } from '@/app/actions/auth';
@@ -38,10 +38,13 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
         collapsed ? 'w-[68px]' : 'w-[200px]',
       )}
     >
-      {/* Logo. Collapsed: mark ikon LTMS resmi (logo-icon-master.png). Expanded
-          MASIH placeholder lama (Package + teks) sampai logo-horizontal.png
-          (ikon+wordmark sejajar) tersedia - lihat catatan rebranding. */}
-      <div className="flex items-center gap-2.5 px-4 py-3">
+      {/* Logo. Collapsed: mark ikon saja (logo-icon-master.png). Expanded:
+          ikon+wordmark+tagline sejajar horizontal (logo-horizontal.png) -
+          sudah mengandung teks "LTMS"/tagline sendiri, tak perlu label
+          teks terpisah lagi spt sebelumnya (Package + "LTMS"/"LongTail
+          System"). Tinggi disamakan dgn tinggi konten lama (~40px) supaya
+          tinggi total header sidebar tidak berubah. */}
+      <div className="flex items-center px-4 py-3">
         {collapsed ? (
           <Image
             src="/branding/logo-icon-master.png"
@@ -51,15 +54,13 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
             className="size-9 shrink-0 rounded-lg"
           />
         ) : (
-          <div className="bg-sidebar-primary text-sidebar-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-lg">
-            <Package className="size-5" aria-hidden />
-          </div>
-        )}
-        {!collapsed && (
-          <div className="min-w-0">
-            <div className="truncate text-base leading-tight font-semibold text-sidebar-accent-foreground">LTMS</div>
-            <div className="truncate text-[11px] leading-tight opacity-70">LongTail System</div>
-          </div>
+          <Image
+            src="/branding/logo-horizontal.png"
+            alt="LTMS - Longtail Monitoring System"
+            width={121}
+            height={40}
+            className="h-10 w-auto"
+          />
         )}
       </div>
 

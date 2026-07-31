@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -19,7 +20,13 @@ export function PublicShareTabs({ token }: { token: string }) {
 
   return (
     <nav className="border-border bg-card flex items-center gap-1 border-b px-3 py-2">
-      <span className="text-muted-foreground mr-2 text-xs font-medium">Laporan LTMS</span>
+      <Image
+        src="/branding/logo-horizontal.png"
+        alt="LTMS - Longtail Monitoring System"
+        width={85}
+        height={28}
+        className="mr-2 h-7 w-auto"
+      />
       {tabs.map((t) => {
         const active = pathname === t.href;
         return (
