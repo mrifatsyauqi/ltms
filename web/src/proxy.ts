@@ -8,6 +8,10 @@ export default auth((req) => {
 });
 
 export const config = {
-  // Lindungi semua route kecuali halaman login, endpoint auth, dan aset statis.
-  matcher: ['/((?!login|api/auth|_next/static|_next/image|favicon.ico).*)'],
+  // Lindungi semua route kecuali halaman login, endpoint auth, aset statis,
+  // dan Link Berbagi Laporan (/public/[token]/*, /api/public/[token]/*) -
+  // route publik itu SENGAJA tanpa session sama sekali, keamanannya
+  // ditegakkan sendiri lewat validasi token (lihat public-share.ts), bukan
+  // NextAuth.
+  matcher: ['/((?!login|api/auth|_next/static|_next/image|favicon.ico|public|api/public).*)'],
 };

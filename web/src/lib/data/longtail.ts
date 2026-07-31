@@ -1,6 +1,7 @@
 import * as supa from './supabase/longtail';
 
 export const listLongTail = supa.listLongTail;
+export const listLongTailPublic = supa.listLongTailPublic;
 export const getLongTail = supa.getLongTail;
 export const submitFeedback = supa.submitFeedback;
 export const createLongTail = supa.createLongTail;

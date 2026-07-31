@@ -27,6 +27,19 @@ export async function listLongTail(actorEmail: string, dpFilter?: string): Promi
   return rows.map(decorateLongTailRow);
 }
 
+/**
+ * Semua baris LongTail TANPA auth, selalu "Semua DP" - dipakai endpoint
+ * publik (Link Berbagi Laporan) setelah token divalidasi terpisah. Aktor
+ * sintetis ('Admin Cabang', dropPoint kosong) hanya utk lolos syarat
+ * `fetchLongtailScoped` (role !== 'Admin Cabang' -> scope ke 1 DP) - tak
+ * pernah benar2 dipakai utk otorisasi krn tak ada requireActor/requireRole
+ * di jalur ini sama sekali.
+ */
+export async function listLongTailPublic(): Promise<LongTailRow[]> {
+  const rows = await fetchLongtailScoped({ email: '', role: 'Admin Cabang', dropPoint: '' });
+  return rows.map(decorateLongTailRow);
+}
+
 export async function getLongTail(actorEmail: string, waybill: string): Promise<LongTailRow> {
   const actor = await requireActor(actorEmail);
   const row = await findRow(waybill);
