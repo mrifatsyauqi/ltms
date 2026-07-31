@@ -12,7 +12,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { toast } from 'sonner';
-import { History, RefreshCw, Search, Users } from 'lucide-react';
+import { Download, History, Loader2, RefreshCw, Search, Users } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -31,6 +31,8 @@ import { AGING_ROW_CLASS, AGING_STICKY_BG, AgingBadge, agingLevel } from '@/comp
 import { cn } from '@/lib/utils';
 import type { LongTailRow } from '@/lib/data/longtail';
 import { formatWaktuSampai, umurValue } from '@/lib/feedback-format';
+import { ALL_SCOPE, useDashboardScope } from '@/components/dashboard/scope-context';
+import { downloadLongTailExcel } from '@/lib/export-longtail-excel';
 import {
   useFeedbackOptions,
   useLongTail,
@@ -72,18 +74,23 @@ function ringkasanAging(rows: LongTailRow[]) {
 
 export function FeedbackTable({
   readOnly = false,
+  isCabang = false,
   initialUmurFilter = '',
   initialDpFilter = '',
 }: {
   readOnly?: boolean;
+  /** Tombol Download Excel (readOnly saja) hanya utk Admin Cabang. */
+  isCabang?: boolean;
   /** Preset filter umur dari URL, mis. dari alert Notifikasi Aging (?umur=3). */
   initialUmurFilter?: string;
   /** Preset filter DP dari URL, mis. dari 'Lihat semua' Aging Prioritas (?dp=). */
   initialDpFilter?: string;
 }) {
   const { data, isLoading, error, refetch, isFetching } = useLongTail();
+  const { scope } = useDashboardScope();
   const options = useFeedbackOptions();
   const submit = useSubmitFeedback();
+  const [exporting, setExporting] = useState(false);
 
   const [sorting, setSorting] = useState<SortingState>([{ id: 'umur', desc: true }]); // umur tertua di atas (Bagian 9.1)
   const [globalFilter, setGlobalFilter] = useState('');
@@ -411,9 +418,27 @@ export function FeedbackTable({
     autoResetPageIndex: false,
   });
 
-  // Sumber Pivot AWB per Sprinter: ikut SEMUA filter yang sedang aktif
-  // (termasuk pencarian teks), bukan cuma halaman yang sedang tertampil.
+  // Sumber Pivot AWB per Sprinter & Download Excel: ikut SEMUA filter yang
+  // sedang aktif (termasuk pencarian teks), bukan cuma halaman yang sedang
+  // tertampil - getFilteredRowModel() TIDAK dibatasi pagination client, dan
+  // useLongTail() sendiri sudah menarik SELURUH baris sesuai Cakupan DP
+  // dalam satu fetch (paginasi 1000-baris Supabase ditangani server-side),
+  // jadi tidak perlu fetch tambahan apa pun utk export.
   const pivotRows = table.getFilteredRowModel().rows.map((r) => r.original);
+
+  async function handleExportExcel() {
+    setExporting(true);
+    try {
+      // Biar tombol sempat kepaint dlm keadaan loading dulu sebelum generate
+      // (sinkron, bisa terasa "macet" sesaat kalau baris banyak).
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      downloadLongTailExcel(pivotRows, scope === ALL_SCOPE ? 'SemuaDP' : scope);
+    } catch (err) {
+      toast.error(`Gagal membuat file Excel: ${(err as Error).message}`);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -503,6 +528,19 @@ export function FeedbackTable({
           >
             <Users className="size-3.5" aria-hidden />
             Pivot AWB per Sprinter
+          </Button>
+        )}
+        {readOnly && isCabang && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleExportExcel}
+            disabled={exporting}
+            title="Unduh seluruh baris yang cocok filter saat ini (bukan cuma halaman yg tampil) sbg file Excel"
+          >
+            {exporting ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Download className="size-3.5" aria-hidden />}
+            {exporting ? 'Menyiapkan…' : 'Download Excel'}
           </Button>
         )}
         {/* Chip DP aktif dari drill-down Dashboard (?dp=) - bisa dihapus. */}
