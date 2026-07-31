@@ -345,7 +345,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
             <DialogDescription>
               {editing
                 ? 'Email tidak bisa diubah (identitas unik akun). NIK dipakai untuk login utama.'
-                : 'Email jadi identitas unik akun (juga dipakai login Google/fallback). NIK dipakai untuk login utama.'}
+                : 'Email jadi identitas unik akun. NIK dipakai untuk login utama.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

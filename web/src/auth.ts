@@ -1,27 +1,21 @@
 import NextAuth from 'next-auth';
-import Google from 'next-auth/providers/google';
 import Credentials from 'next-auth/providers/credentials';
-import { getUserByEmail, verifyCredentials } from '@/lib/data/auth';
+import { verifyCredentials } from '@/lib/data/auth';
 
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60; // 8 jam idle (PRD Bagian 4)
-const ALLOWED_DOMAIN = process.env.ALLOWED_GOOGLE_DOMAIN;
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
-    Google({
-      authorization: {
-        params: ALLOWED_DOMAIN ? { hd: ALLOWED_DOMAIN } : {},
-      },
-    }),
-    // Login manual - alternatif selain Google, dikelola Admin Cabang lewat
-    // User Management. Password di-hash (scrypt) di sisi Next.js, tabel users
-    // cuma menyimpan hash-nya (lihat lib/password.ts).
+    // Login manual - satu-satunya provider sejak migrasi Google->NIK selesai
+    // (semua user existing terkonfirmasi punya NIK+password, lihat rencana
+    // rollout). Dikelola Admin Cabang lewat User Management. Password
+    // di-hash (scrypt) di sisi Next.js, tabel users cuma menyimpan hash-nya
+    // (lihat lib/password.ts).
     //
-    // Migrasi auth Google->NIK (dual-mode): SATU field "identifier" menerima
-    // NIK (user baru, migrasi selesai) ATAU email (user lama, belum diisi
-    // NIK) — verifyCredentials() coba NIK dulu, fallback email. type:'text'
-    // (BUKAN 'email') supaya NIK yang bukan format email tidak diblokir
-    // validasi HTML5 bawaan browser.
+    // SATU field "identifier" menerima NIK (user baru) ATAU email (user
+    // lama peninggalan era Google, belum diisi NIK) — verifyCredentials()
+    // coba NIK dulu, fallback email. type:'text' (BUKAN 'email') supaya NIK
+    // yang bukan format email tidak diblokir validasi HTML5 bawaan browser.
     Credentials({
       credentials: {
         identifier: { label: 'NIK / Email', type: 'text' },
@@ -51,46 +45,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     updateAge: 60 * 60, // refresh sliding expiry setiap request lewat 1 jam sejak update terakhir
   },
   callbacks: {
-    async signIn({ user, account, profile }) {
-      // Login Credentials SUDAH divalidasi penuh di authorize() (email+password+
+    async signIn() {
+      // Login SUDAH divalidasi penuh di authorize() (identifier+password+
       // status aktif). Jangan query ulang di sini — panggilan DB berlebih yang
       // bisa gagal setelah cookie sempat terbentuk = sumber bug "error tapi masuk".
-      if (account?.provider === 'credentials') return true;
-
-      // Login Google: email HARUS terdaftar & aktif di tabel users.
-      const email = user?.email ?? profile?.email;
-      if (!email) return false;
-      if (ALLOWED_DOMAIN && profile && profile.hd !== ALLOWED_DOMAIN) {
-        return false;
-      }
-      try {
-        const found = await getUserByEmail(email);
-        return found !== null;
-      } catch {
-        // Error DB saat validasi -> tolak (jangan loloskan sesi setengah jadi).
-        return false;
-      }
+      return true;
     },
-    async jwt({ token, user, account, trigger }) {
+    async jwt({ token, user, trigger }) {
       if (trigger === 'signIn' && user?.email) {
-        if (account?.provider === 'credentials') {
-          // role/dropPoint sudah dibawa dari authorize() — tanpa query lagi.
-          const u = user as { role?: string; dropPoint?: string; name?: string | null };
-          token.role = u.role;
-          token.dropPoint = u.dropPoint;
-          token.nama = u.name ?? undefined;
-        } else {
-          try {
-            const found = await getUserByEmail(user.email);
-            if (found) {
-              token.role = found.role;
-              token.dropPoint = found.dropPoint;
-              token.nama = found.nama;
-            }
-          } catch {
-            /* biarkan token tanpa role -> di-gate di layout/login */
-          }
-        }
+        // role/dropPoint sudah dibawa dari authorize() — tanpa query lagi.
+        const u = user as { role?: string; dropPoint?: string; name?: string | null };
+        token.role = u.role;
+        token.dropPoint = u.dropPoint;
+        token.nama = u.name ?? undefined;
       }
       return token;
     },

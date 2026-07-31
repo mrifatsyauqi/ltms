@@ -1,7 +1,6 @@
 import Image from 'next/image';
 import { redirect } from 'next/navigation';
-import { auth, signIn } from '@/auth';
-import { Button } from '@/components/ui/button';
+import { auth } from '@/auth';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { CredentialsLoginForm } from '@/components/auth/credentials-login-form';
 
@@ -28,28 +27,7 @@ export default async function LoginPage() {
           />
         </CardHeader>
         <CardContent>
-          {/* NIK+Password = jalur utama (migrasi Google->NIK, masa transisi
-              dual-mode). Google didemosikan jadi opsi sekunder di bawah -
-              dipertahankan sampai SEMUA user existing terkonfirmasi punya
-              NIK+password (lihat rencana rollout migrasi auth). */}
           <CredentialsLoginForm />
-
-          <div className="my-4 flex items-center gap-2">
-            <div className="bg-border h-px flex-1" />
-            <span className="text-muted-foreground text-xs">atau</span>
-            <div className="bg-border h-px flex-1" />
-          </div>
-
-          <form
-            action={async () => {
-              'use server';
-              await signIn('google', { redirectTo: '/' });
-            }}
-          >
-            <Button type="submit" variant="outline" className="w-full">
-              Sign in with Google
-            </Button>
-          </form>
         </CardContent>
       </Card>
     </div>
