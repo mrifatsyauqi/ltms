@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { PageHeader } from '@/components/layout/page-header';
 import { auth } from '@/auth';
 import { MonitoringClient } from '@/components/monitoring-delivery/monitoring-client';
+import { MonitoringRefineClient } from '@/components/monitoring-delivery/monitoring-refine-client';
 
 export const metadata = {
   title: 'Monitoring Delivery - LTMS',
@@ -9,12 +10,12 @@ export const metadata = {
 
 export default async function MonitoringDeliveryPage() {
   const session = await auth();
-  
+
   // Fitur ini ditujukan untuk Admin Cabang dan Admin DP
   if (session?.user.role !== 'Admin Cabang' && session?.user.role !== 'Admin DP' && session?.user.role !== 'Admin Pusat') {
     redirect('/dashboard');
   }
-  
+
   const isCabang = session?.user.role === 'Admin Cabang';
   const dpName = session?.user.dropPoint || 'SEMUA DP';
 
@@ -24,12 +25,12 @@ export default async function MonitoringDeliveryPage() {
         title="Monitoring Delivery"
         description={
           isCabang
-            ? 'Generate dan copy tabel Monitoring Delivery per Drop Point dari file Excel JMS.'
+            ? 'Generate dan copy tabel Monitoring Delivery per Drop Point (Refine Total) dari file Excel JMS.'
             : 'Generate dan copy tabel Monitoring Delivery per Sprinter dari file Excel JMS.'
         }
       />
 
-      <MonitoringClient dpName={dpName} isCabang={isCabang} />
+      {isCabang ? <MonitoringRefineClient dpName={dpName} /> : <MonitoringClient dpName={dpName} isCabang={false} />}
     </div>
   );
 }
