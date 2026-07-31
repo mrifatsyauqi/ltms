@@ -32,8 +32,8 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 type Role = 'Admin Cabang' | 'Admin DP';
-type FormState = { nama: string; email: string; role: Role; dropPoint: string; statusAktif: boolean };
-const EMPTY: FormState = { nama: '', email: '', role: 'Admin DP', dropPoint: '', statusAktif: true };
+type FormState = { nama: string; email: string; nik: string; role: Role; dropPoint: string; statusAktif: boolean };
+const EMPTY: FormState = { nama: '', email: '', nik: '', role: 'Admin DP', dropPoint: '', statusAktif: true };
 
 export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const qc = useQueryClient();
@@ -69,6 +69,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
       (r) =>
         String(r.Nama).toLowerCase().includes(needle) ||
         String(r.Email).toLowerCase().includes(needle) ||
+        String(r.NIK).toLowerCase().includes(needle) ||
         String(r.Role).toLowerCase().includes(needle) ||
         String(r['Drop Point']).toLowerCase().includes(needle),
     );
@@ -86,6 +87,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
         body: JSON.stringify({
           nama: f.nama.trim(),
           email: f.email.trim(),
+          nik: f.nik.trim(),
           role: f.role,
           dropPoint: f.role === 'Admin DP' ? f.dropPoint : '',
         }),
@@ -105,6 +107,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nama: f.nama.trim(),
+          nik: f.nik.trim(),
           role: f.role,
           // Admin Cabang -> DP dikosongkan (dijaga juga di backend).
           dropPoint: f.role === 'Admin DP' ? f.dropPoint : '',
@@ -154,6 +157,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
     setForm({
       nama: r.Nama,
       email: r.Email,
+      nik: r.NIK,
       role: (r.Role as Role) === 'Admin Cabang' ? 'Admin Cabang' : 'Admin DP',
       dropPoint: r['Drop Point'] || activeDps[0]?.['Kode DP'] || '',
       statusAktif: isAktif(r['Status Aktif']),
@@ -168,7 +172,11 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const saving = createMut.isPending || updateMut.isPending;
   const needDp = form.role === 'Admin DP';
   const canSave =
-    form.nama.trim() && (editing || form.email.trim()) && (!needDp || form.dropPoint) && (!needDp || activeDps.length > 0);
+    form.nama.trim() &&
+    (editing || form.email.trim()) &&
+    form.nik.trim() &&
+    (!needDp || form.dropPoint) &&
+    (!needDp || activeDps.length > 0);
 
   // WAJIB: base-ui Select butuh peta value->label eksplisit (`items`) supaya
   // trigger menampilkan label yang benar, bukan value mentah.
@@ -223,6 +231,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                   <tr>
                     <th className="h-8 border-b px-3 text-left font-medium">Nama</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Email</th>
+                    <th className="h-8 border-b px-3 text-left font-medium">NIK</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Role</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Drop Point</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Status</th>
@@ -232,8 +241,18 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                 <tbody>
                   {pageRows.map((r) => (
                     <tr key={r.Email} className="border-b last:border-0">
-                      <td className="px-3 py-1.5 font-medium">{r.Nama}</td>
+                      <td className="px-3 py-1.5 font-medium">
+                        <span className="inline-flex items-center gap-1.5">
+                          {r.Nama}
+                          {r['Tipe Akun'] === 'general' && (
+                            <span className="bg-accent-blue/12 text-accent-blue rounded px-1.5 py-0.5 text-[10px] font-medium">
+                              General
+                            </span>
+                          )}
+                        </span>
+                      </td>
                       <td className="text-muted-foreground px-3 py-1.5">{r.Email}</td>
+                      <td className="text-muted-foreground px-3 py-1.5 font-mono">{r.NIK || '—'}</td>
                       <td className="px-3 py-1.5">
                         <span
                           className={cn(
@@ -293,7 +312,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                   ))}
                   {pageRows.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="text-muted-foreground py-10 text-center">
+                      <td colSpan={7} className="text-muted-foreground py-10 text-center">
                         {q ? 'Tidak ada user yang cocok.' : 'Belum ada user. Klik “Tambah User”.'}
                       </td>
                     </tr>
@@ -324,7 +343,9 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit User' : 'Tambah User'}</DialogTitle>
             <DialogDescription>
-              {editing ? 'Email tidak bisa diubah (jadi identitas login SSO).' : 'Email harus akun Google yang dipakai login.'}
+              {editing
+                ? 'Email tidak bisa diubah (identitas unik akun). NIK dipakai untuk login utama.'
+                : 'Email jadi identitas unik akun (juga dipakai login Google/fallback). NIK dipakai untuk login utama.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -333,7 +354,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
               <Input id="nama" value={form.nama} onChange={(e) => setForm({ ...form, nama: e.target.value })} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email (akun Google)</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -341,6 +362,16 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                 disabled={!!editing}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 placeholder="nama@gmail.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="nik">NIK</Label>
+              <Input
+                id="nik"
+                value={form.nik}
+                onChange={(e) => setForm({ ...form, nik: e.target.value })}
+                placeholder="Nomor Induk Karyawan"
+                className="font-mono"
               />
             </div>
             <div className="space-y-1.5">

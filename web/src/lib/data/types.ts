@@ -37,6 +37,8 @@ export type FavoriteFeedbackRow = {
 export type UserRow = {
   Nama: string;
   Email: string;
+  NIK: string;
+  'Tipe Akun': 'individual' | 'general';
   Role: string;
   'Drop Point': string;
   'Status Aktif': string;
@@ -44,15 +46,23 @@ export type UserRow = {
 export type CreateUserInput = {
   nama: string;
   email: string;
+  nik: string;
   role: 'Admin Cabang' | 'Admin DP';
   dropPoint?: string;
 };
 export type UpdateUserInput = Partial<{
   nama: string;
+  nik: string;
   role: 'Admin Cabang' | 'Admin DP';
   dropPoint: string;
   statusAktif: boolean;
 }>;
+/** Akun General satu per Drop Point (dibuat dari halaman Master Drop Point). */
+export type CreateGeneralAccountResult = {
+  email: string;
+  nik: string;
+  namaTampilan: string;
+};
 export type CredentialsUser = {
   nama: string;
   namaTampilan: string;

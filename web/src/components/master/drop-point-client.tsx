@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Pencil, Plus, Search, Trash2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/layout/page-header';
 import { StatusBadge, isAktif } from '@/components/master/status-badge';
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { TablePager } from '@/components/ui/table-pager';
+import { CopyButton } from '@/components/ui/copy-button';
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { SLOW_STALE_TIME } from '@/lib/query-config';
 import type { DropPointRow } from '@/lib/data/drop-points';
+import type { CreateGeneralAccountResult, UserRow } from '@/lib/data/users';
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -38,6 +40,17 @@ export function DropPointClient() {
     queryFn: () => api<DropPointRow[]>('/api/drop-points'),
     staleTime: SLOW_STALE_TIME, // jarang berubah (data master)
   });
+  // Dipakai HANYA utk tahu DP mana yg sudah punya akun General (tombol
+  // dinonaktifkan) - lihat generalDpSet di bawah.
+  const { data: users } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => api<UserRow[]>('/api/users'),
+    staleTime: SLOW_STALE_TIME,
+  });
+  const generalDpSet = useMemo(
+    () => new Set((users ?? []).filter((u) => u['Tipe Akun'] === 'general').map((u) => u['Drop Point'])),
+    [users],
+  );
 
   const [q, setQ] = useState('');
   const [pageIndex, setPageIndex] = useState(0);
@@ -46,6 +59,10 @@ export function DropPointClient() {
   const [editing, setEditing] = useState<DropPointRow | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [confirmDelete, setConfirmDelete] = useState<DropPointRow | null>(null);
+  const [generalFor, setGeneralFor] = useState<DropPointRow | null>(null);
+  const [generalPassword, setGeneralPassword] = useState('');
+  const [showGeneralPassword, setShowGeneralPassword] = useState(false);
+  const [generalResult, setGeneralResult] = useState<CreateGeneralAccountResult | null>(null);
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -104,6 +121,31 @@ export function DropPointClient() {
     },
     onError: (e: Error) => toast.error(`Gagal menghapus: ${e.message}`),
   });
+
+  const createGeneralMut = useMutation({
+    mutationFn: ({ kodeDp, password }: { kodeDp: string; password: string }) =>
+      api<CreateGeneralAccountResult>(`/api/drop-points/${encodeURIComponent(kodeDp)}/general-account`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      }),
+    onSuccess: (result) => {
+      setGeneralResult(result); // dialog beralih ke tampilan konfirmasi NIK
+      qc.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (e: Error) => toast.error(`Gagal membuat akun General: ${e.message}`),
+  });
+
+  function openGeneral(r: DropPointRow) {
+    setGeneralFor(r);
+    setGeneralPassword('');
+    setShowGeneralPassword(false);
+    setGeneralResult(null);
+  }
+  function closeGeneral() {
+    setGeneralFor(null);
+    setGeneralResult(null);
+  }
 
   function openCreate() {
     setEditing(null);
@@ -180,7 +222,7 @@ export function DropPointClient() {
                     <th className="h-8 border-b px-3 text-left font-medium">Nama DP</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Wilayah/Cabang</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Status</th>
-                    <th className="h-8 w-24 border-b px-3 text-right font-medium">Aksi</th>
+                    <th className="h-8 w-32 border-b px-3 text-right font-medium">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -194,6 +236,20 @@ export function DropPointClient() {
                       </td>
                       <td className="px-3 py-1.5">
                         <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openGeneral(r)}
+                            disabled={generalDpSet.has(r['Kode DP'])}
+                            aria-label={`Buat Akun General ${r['Kode DP']}`}
+                            title={
+                              generalDpSet.has(r['Kode DP'])
+                                ? 'Akun General sudah ada untuk DP ini'
+                                : 'Buat Akun General untuk DP ini'
+                            }
+                            className="hover:bg-muted rounded-md p-1.5 transition-colors disabled:opacity-30"
+                          >
+                            <UserPlus className="size-3.5" aria-hidden />
+                          </button>
                           <button
                             type="button"
                             onClick={() => openEdit(r)}
@@ -317,6 +373,75 @@ export function DropPointClient() {
               {deleteMut.isPending ? 'Menghapus…' : 'Hapus'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Buat Akun General - satu per DP, tanpa identitas personal (login via NIK). */}
+      <Dialog open={!!generalFor} onOpenChange={(o) => !o && closeGeneral()}>
+        <DialogContent className="max-w-sm">
+          {generalResult ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Akun General dibuat</DialogTitle>
+                <DialogDescription>
+                  Catat NIK ini — dipakai staff DP {generalFor?.['Kode DP']} untuk login (bukan email).
+                </DialogDescription>
+              </DialogHeader>
+              <div className="bg-muted flex items-center justify-between gap-2 rounded-lg border p-3">
+                <div>
+                  <p className="text-muted-foreground text-[11px]">NIK Login</p>
+                  <p className="font-mono text-sm font-semibold">{generalResult.nik}</p>
+                </div>
+                <CopyButton text={generalResult.nik} title="Salin NIK" successMessage="NIK disalin" className="p-1.5" />
+              </div>
+              <DialogFooter>
+                <Button onClick={closeGeneral}>Tutup</Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Buat Akun General</DialogTitle>
+                <DialogDescription>
+                  Satu akun bersama untuk staff DP <span className="font-mono">{generalFor?.['Kode DP']}</span> —
+                  aktivitasnya tercatat sebagai nama DP, bukan nama personal. NIK login dibuat otomatis (format
+                  GENERAL-{generalFor?.['Kode DP']}). Set password awal, minimal 8 karakter.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-1.5">
+                <Label htmlFor="general-password">Password awal</Label>
+                <div className="relative">
+                  <Input
+                    id="general-password"
+                    type={showGeneralPassword ? 'text' : 'password'}
+                    value={generalPassword}
+                    onChange={(e) => setGeneralPassword(e.target.value)}
+                    autoComplete="new-password"
+                    className="pr-9"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowGeneralPassword((v) => !v)}
+                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
+                    title={showGeneralPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                  >
+                    {showGeneralPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeGeneral} disabled={createGeneralMut.isPending}>
+                  Batal
+                </Button>
+                <Button
+                  onClick={() => generalFor && createGeneralMut.mutate({ kodeDp: generalFor['Kode DP'], password: generalPassword })}
+                  disabled={generalPassword.length < 8 || createGeneralMut.isPending}
+                >
+                  {createGeneralMut.isPending ? 'Membuat…' : 'Buat Akun'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </>
