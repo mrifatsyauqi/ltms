@@ -1,7 +1,8 @@
+import Image from 'next/image';
 import { redirect } from 'next/navigation';
 import { auth, signIn } from '@/auth';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { CredentialsLoginForm } from '@/components/auth/credentials-login-form';
 
 export default async function LoginPage() {
@@ -16,9 +17,15 @@ export default async function LoginPage() {
   return (
     <div className="flex flex-1 items-center justify-center p-4">
       <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>LTMS</CardTitle>
-          <CardDescription>LongTail Dashboard Management System</CardDescription>
+        <CardHeader className="flex justify-center">
+          <Image
+            src="/branding/logo-full-tagline.png"
+            alt="LTMS - Longtail Monitoring System"
+            width={210}
+            height={181}
+            priority
+            className="h-auto w-[210px]"
+          />
         </CardHeader>
         <CardContent>
           <form

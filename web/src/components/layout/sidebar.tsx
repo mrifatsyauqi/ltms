@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { ChevronLeft, LogOut, Package } from 'lucide-react';
@@ -37,11 +38,23 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
         collapsed ? 'w-[68px]' : 'w-[200px]',
       )}
     >
-      {/* Logo */}
+      {/* Logo. Collapsed: mark ikon LTMS resmi (logo-icon-master.png). Expanded
+          MASIH placeholder lama (Package + teks) sampai logo-horizontal.png
+          (ikon+wordmark sejajar) tersedia - lihat catatan rebranding. */}
       <div className="flex items-center gap-2.5 px-4 py-3">
-        <div className="bg-sidebar-primary text-sidebar-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <Package className="size-5" aria-hidden />
-        </div>
+        {collapsed ? (
+          <Image
+            src="/branding/logo-icon-master.png"
+            alt="LTMS - Longtail Monitoring System"
+            width={36}
+            height={36}
+            className="size-9 shrink-0 rounded-lg"
+          />
+        ) : (
+          <div className="bg-sidebar-primary text-sidebar-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-lg">
+            <Package className="size-5" aria-hidden />
+          </div>
+        )}
         {!collapsed && (
           <div className="min-w-0">
             <div className="truncate text-base leading-tight font-semibold text-sidebar-accent-foreground">LTMS</div>
