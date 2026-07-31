@@ -16,6 +16,7 @@ import { ProgressGauge } from '@/components/charts/progress-gauge';
 import { Pkt3HariChart, Pkt3HariSummary } from '@/components/charts/pkt3hari-chart';
 import { PageHeader } from '@/components/layout/page-header';
 import { DataFreshness } from '@/components/layout/data-freshness';
+import { ImportStaleBanner } from '@/components/layout/import-stale-banner';
 import { SectionCard } from '@/components/layout/section-card';
 import { PaketPrioritas } from '@/components/dashboard/paket-prioritas';
 import { AgingAlert } from '@/components/dashboard/aging-alert';
@@ -118,6 +119,7 @@ export function DashboardClient({ title, description }: { title: string; descrip
         }
       />
       {!isHistorical && <DataFreshness />}
+      {!isHistorical && <ImportStaleBanner isCabang={isCabang} />}
 
       <div className="space-y-2.5 p-3" aria-busy={isLoading}>
         {isHistorical && (
