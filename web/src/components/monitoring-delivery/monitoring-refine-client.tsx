@@ -12,10 +12,6 @@ import { SLOW_STALE_TIME } from '@/lib/query-config';
 import type { DropPointRow } from '@/lib/data/drop-points';
 import { MonitoringRefineTable, RefineRow } from './monitoring-refine-table';
 
-type Props = {
-  dpName: string;
-};
-
 async function fetchDropPoints(): Promise<DropPointRow[]> {
   const res = await fetch('/api/drop-points');
   const body = await res.json();
@@ -25,7 +21,7 @@ async function fetchDropPoints(): Promise<DropPointRow[]> {
 
 const normalize = (s: string) => s.trim().toLowerCase();
 
-export function MonitoringRefineClient({ dpName }: Props) {
+export function MonitoringRefineClient() {
   const { data: dropPoints } = useQuery({
     queryKey: ['drop-points'],
     queryFn: fetchDropPoints,
@@ -35,6 +31,7 @@ export function MonitoringRefineClient({ dpName }: Props) {
   const [stagedData, setStagedData] = useState<RefineRow[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [isGenerated, setIsGenerated] = useState(false);
+  const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
   const [copying, setCopying] = useState<null | 'img' | 'table'>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -231,7 +228,14 @@ export function MonitoringRefineClient({ dpName }: Props) {
 
             {stagedData.length > 0 && (
               <div className="p-4 border rounded-lg bg-slate-50">
-                <Button onClick={() => setIsGenerated(true)}>Tampilkan Tabel</Button>
+                <Button
+                  onClick={() => {
+                    setGeneratedAt(new Date());
+                    setIsGenerated(true);
+                  }}
+                >
+                  Tampilkan Tabel
+                </Button>
               </div>
             )}
           </CardContent>
@@ -257,7 +261,7 @@ export function MonitoringRefineClient({ dpName }: Props) {
             </div>
           </CardHeader>
           <CardContent className="overflow-x-auto">
-            <MonitoringRefineTable ref={tableRef} data={stagedData} dpName={dpName} />
+            {generatedAt && <MonitoringRefineTable ref={tableRef} data={stagedData} generatedAt={generatedAt} />}
           </CardContent>
         </Card>
       )}

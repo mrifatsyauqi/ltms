@@ -30,7 +30,7 @@ export default async function MonitoringDeliveryPage() {
         }
       />
 
-      {isCabang ? <MonitoringRefineClient dpName={dpName} /> : <MonitoringClient dpName={dpName} isCabang={false} />}
+      {isCabang ? <MonitoringRefineClient /> : <MonitoringClient dpName={dpName} isCabang={false} />}
     </div>
   );
 }

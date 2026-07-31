@@ -21,7 +21,13 @@ export type RefineRow = {
 
 interface MonitoringRefineTableProps {
   data: RefineRow[];
-  dpName: string;
+  generatedAt: Date;
+}
+
+const BRANCH_LABEL = 'BATANG (BGG)';
+
+function formatGeneratedAt(d: Date) {
+  return d.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' });
 }
 
 // Ambang beda dari tabel Rekap Standar: hijau >=95%, kuning 85-94,99%, merah <85%.
@@ -43,7 +49,7 @@ function rasioTtd(row: { ttdNormalTotal: number; scanRetorTotal: number; totalDe
   return row.totalDelivery > 0 ? ((row.ttdNormalTotal + row.scanRetorTotal) / row.totalDelivery) * 100 : 0;
 }
 
-export const MonitoringRefineTable = forwardRef<HTMLTableElement, MonitoringRefineTableProps>(({ data, dpName }, ref) => {
+export const MonitoringRefineTable = forwardRef<HTMLTableElement, MonitoringRefineTableProps>(({ data, generatedAt }, ref) => {
   const totals = data.reduce(
     (acc, row) => ({
       totalDelivery: acc.totalDelivery + row.totalDelivery,
@@ -85,7 +91,7 @@ export const MonitoringRefineTable = forwardRef<HTMLTableElement, MonitoringRefi
         <thead>
           <tr className="bg-[#4f6272] text-white">
             <th colSpan={16} className="border border-gray-400 px-3 py-2.5 text-center align-middle text-lg font-bold tracking-wide uppercase whitespace-nowrap">
-              MONITORING DELIVERY {dpName} — REKAP LENGKAP
+              MONITORING DELIVERY {BRANCH_LABEL} {formatGeneratedAt(generatedAt)}
             </th>
           </tr>
           <tr className="bg-gray-100">
