@@ -28,6 +28,7 @@ drop table if exists import_batch      cascade;
 drop table if exists import_mapping    cascade;
 drop table if exists master_feedback   cascade;
 drop table if exists master_drop_point cascade;
+drop table if exists login_attempts    cascade;
 drop table if exists users             cascade;
 drop function if exists set_updated_at cascade;
 
@@ -41,10 +42,19 @@ $$ language plpgsql;
 
 -- ---------------------------------------------------------------------------
 -- USERS (store login; NextAuth resolve role + drop_point dari sini)
+--
+-- Migrasi auth NIK+password (dual-mode): `email` DIPERTAHANKAN sebagai PK &
+-- login Google selama transisi; `nik` UNIQUE = identifier login baru
+-- (Credentials). Untuk setup produksi yang sudah live, pakai file additive
+-- supabase/auth_nik_migration.sql (bukan schema.sql yang destruktif).
 -- ---------------------------------------------------------------------------
 create table users (
   email         text primary key,
+  nik           text,                       -- identifier login baru; nullable selama migrasi
   nama          text not null,
+  nama_tampilan text,                        -- yg ditulis ke Activity_Log; general = "DP <KODE_DP>"
+  tipe_akun     text not null default 'individual'
+                check (tipe_akun in ('individual', 'general')),
   role          text not null check (role in ('Admin Cabang', 'Admin DP')),
   drop_point    text,                       -- kode DP; kosong utk Admin Cabang
   password_hash text,                       -- scrypt "salt:hash"; kosong = hanya Google
@@ -52,8 +62,21 @@ create table users (
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
+create unique index users_nik_unique_idx on users (nik) where nik is not null;
 create trigger users_updated before update on users
   for each row execute function set_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- LOGIN_ATTEMPTS (rate limiting login per NIK — anti brute-force; berbasis DB
+-- supaya konsisten lintas instance serverless). Max 5 gagal/15 menit -> kunci
+-- sementara via `locked_until`; login sukses me-reset baris. Penegakan di API.
+-- ---------------------------------------------------------------------------
+create table login_attempts (
+  nik          text primary key,
+  failed_count int         not null default 0,
+  locked_until timestamptz,
+  updated_at   timestamptz not null default now()
+);
 
 -- ---------------------------------------------------------------------------
 -- MASTER DROP POINT
