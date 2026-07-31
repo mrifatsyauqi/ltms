@@ -17,19 +17,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     // User Management. Password di-hash (scrypt) di sisi Next.js, tabel users
     // cuma menyimpan hash-nya (lihat lib/password.ts).
     //
-    // Migrasi auth Google->NIK (dual-mode, Tahap 2): field wire tetap
-    // bernama "email" (form UI/server action BELUM diubah — itu Tahap 3),
-    // TAPI isinya sekarang diterima sbg identifier bebas: NIK (user baru)
-    // ATAU email (user lama) — verifyCredentials() coba NIK dulu, fallback
-    // email. Jadi form yang ada saat ini SUDAH bisa menerima NIK meski
-    // labelnya masih "Email" sampai UI di-update.
+    // Migrasi auth Google->NIK (dual-mode): SATU field "identifier" menerima
+    // NIK (user baru, migrasi selesai) ATAU email (user lama, belum diisi
+    // NIK) — verifyCredentials() coba NIK dulu, fallback email. type:'text'
+    // (BUKAN 'email') supaya NIK yang bukan format email tidak diblokir
+    // validasi HTML5 bawaan browser.
     Credentials({
       credentials: {
-        email: { label: 'Email', type: 'email' },
+        identifier: { label: 'NIK / Email', type: 'text' },
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        const identifier = typeof credentials?.email === 'string' ? credentials.email.trim() : '';
+        const identifier = typeof credentials?.identifier === 'string' ? credentials.identifier.trim() : '';
         const password = typeof credentials?.password === 'string' ? credentials.password : '';
         if (!identifier || !password) return null;
 

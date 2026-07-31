@@ -28,16 +28,11 @@ export default async function LoginPage() {
           />
         </CardHeader>
         <CardContent>
-          <form
-            action={async () => {
-              'use server';
-              await signIn('google', { redirectTo: '/' });
-            }}
-          >
-            <Button type="submit" className="w-full">
-              Sign in with Google
-            </Button>
-          </form>
+          {/* NIK+Password = jalur utama (migrasi Google->NIK, masa transisi
+              dual-mode). Google didemosikan jadi opsi sekunder di bawah -
+              dipertahankan sampai SEMUA user existing terkonfirmasi punya
+              NIK+password (lihat rencana rollout migrasi auth). */}
+          <CredentialsLoginForm />
 
           <div className="my-4 flex items-center gap-2">
             <div className="bg-border h-px flex-1" />
@@ -45,7 +40,16 @@ export default async function LoginPage() {
             <div className="bg-border h-px flex-1" />
           </div>
 
-          <CredentialsLoginForm />
+          <form
+            action={async () => {
+              'use server';
+              await signIn('google', { redirectTo: '/' });
+            }}
+          >
+            <Button type="submit" variant="outline" className="w-full">
+              Sign in with Google
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>
