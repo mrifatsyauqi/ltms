@@ -63,7 +63,15 @@ function SelectContent({
   sideOffset = 4,
   align = "center",
   alignOffset = 0,
-  alignItemWithTrigger = true,
+  // false (bukan default base-ui `true`): mode default base-ui menumpangi
+  // trigger supaya teks item terpilih sejajar dgn trigger - popup bisa
+  // meluas ke ATAS *dan* BAWAH trigger tanpa batas jelas, jadi menutupi
+  // konten sekitarnya (nav sidebar, kolom tabel) alih-alih tampil sbg
+  // dropdown biasa yg nongol tepat di bawah trigger (bug: "dropdown
+  // menutupi kolom utama"). Semua Select di app ini (filter tabel, filter
+  // cakupan DP, form role/DP) berperilaku sbg dropdown filter/menu biasa,
+  // bukan <select> native - jadi false lebih sesuai utk semuanya.
+  alignItemWithTrigger = false,
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<
