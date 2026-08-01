@@ -19,6 +19,30 @@ export type UpdateDropPointInput = Partial<{
   statusAktif: boolean;
 }>;
 
+// ---- Cabang (Kota) ------------------------------------------------------------
+// Manager Kota/Asisten Manager = LABEL ORGANISASI, bukan role otorisasi -
+// menunjuk ke akun users existing manapun (users.id), tak mengubah hak akses
+// login akun tsb. Field kosong ('') = belum ditunjuk.
+export type CabangRow = {
+  'Kode Kota': string;
+  'Nama Kota': string;
+  'Manager Kota': string;
+  'Manager Kota Nama': string;
+  'Asisten Manager': string;
+  'Asisten Manager Nama': string;
+};
+export type CreateCabangInput = {
+  kodeKota: string;
+  namaKota: string;
+  managerKotaUserId?: string | null;
+  asistenManagerUserId?: string | null;
+};
+export type UpdateCabangInput = Partial<{
+  namaKota: string;
+  managerKotaUserId: string | null;
+  asistenManagerUserId: string | null;
+}>;
+
 // ---- Master Feedback --------------------------------------------------------
 export type MasterFeedbackRow = {
   ID: number;
@@ -35,6 +59,8 @@ export type FavoriteFeedbackRow = {
 
 // ---- Users ------------------------------------------------------------------
 export type UserRow = {
+  /** users.id (uuid) - identitas stabil lepas dari email/NIK, dipakai FK Cabang/SPV. */
+  Id: string;
   Nama: string;
   Email: string;
   NIK: string;

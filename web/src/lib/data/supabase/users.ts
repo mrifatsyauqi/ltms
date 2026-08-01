@@ -3,9 +3,10 @@ import { aktifText, assertDropPointActive, requireActor, requireRole } from './h
 import { ApiError } from '@/lib/errors';
 import type { CreateGeneralAccountResult, CreateUserInput, UpdateUserInput, UserRow } from '@/lib/data/types';
 
-const SELECT_COLUMNS = 'nama, email, nik, nama_tampilan, tipe_akun, role, drop_point, status_aktif';
+const SELECT_COLUMNS = 'id, nama, email, nik, nama_tampilan, tipe_akun, role, drop_point, status_aktif';
 
 type DbRow = {
+  id: string;
   nama: string;
   email: string;
   nik: string | null;
@@ -19,6 +20,7 @@ type DbRow = {
 /** Tanpa password_hash — sengaja tidak pernah dikirim ke client. */
 function toRow(r: DbRow): UserRow {
   return {
+    Id: String(r.id ?? ''),
     Nama: String(r.nama ?? ''),
     Email: String(r.email ?? ''),
     NIK: String(r.nik ?? ''),

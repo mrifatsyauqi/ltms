@@ -1,5 +1,6 @@
 import { auth } from '@/auth';
 import { PageHeader } from '@/components/layout/page-header';
+import { CabangClient } from '@/components/master/cabang-client';
 
 export default async function Page() {
   const session = await auth();
@@ -14,13 +15,5 @@ export default async function Page() {
     );
   }
 
-  // Placeholder — menunggu migrasi skema `cabang` dijalankan di Supabase
-  // sebelum CRUD Kota (Nama/Kode Kota, Manager Kota, Asisten Manager)
-  // diimplementasikan di sini.
-  return (
-    <>
-      <PageHeader title="Cabang" description="Kelola struktur organisasi Kota & Drop Point." />
-      <div className="text-muted-foreground p-6 text-sm">Halaman Pengaturan Cabang segera hadir.</div>
-    </>
-  );
+  return <CabangClient />;
 }
