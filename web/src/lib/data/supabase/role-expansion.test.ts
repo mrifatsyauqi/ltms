@@ -403,4 +403,28 @@ describe('Langkah 3 - Perluasan Role: full access & SPV Drop Point (eksekusi nya
     const sumSudah = dash.monitoringDp.reduce((acc, d) => acc + d.sudah, 0);
     assert.equal(sumSudah, dash.summary.progressHariIni);
   });
+
+  it('37. getDashboard: activity_log hari ini HARUS dipaginasi - entry DP yang jatuh di luar 1000 baris pertama tetap terhitung penuh (regresi bug BATANG01 tampil 66 padahal 278)', async () => {
+    const today = jakartaTodayIso();
+    const longtailRows = store.get('longtail')!;
+    const activityRows: Row[] = [];
+    const PAGE = 1000;
+    for (let i = 0; i < PAGE + 5; i++) {
+      const wb = `WB-FILL-${i}`;
+      longtailRows.push({ no_waybill: wb, status_terakhir: 'KIRIM', alasan_bermasalah: '', dp_sampai: 'BANDAR01', waktu_sampai: '2026-07-27 09:00:00', umur_frozen: null, sprinter_delivery: '', cod: 'NONCOD', delivery_attempt: 0, feedback: '', log_feedback: '', perlu_review: false, version: 1 });
+      activityRows.push({ waybill: wb, user_email: ADMIN_CABANG, dp: 'BANDAR01', attempt_ke: 1, data_baru: 'On Delivery', sumber: 'Manual Feedback', created_at: `${today}T08:00:00+07:00` });
+    }
+    // Activity_log WB-BATANG SENGAJA ditaruh PALING TERAKHIR dlm urutan insert
+    // supaya kalau query lupa dipaginasi (cuma ambil 1000 baris pertama), entry
+    // ini yang pertama hilang - persis pola bug BATANG01 di produksi.
+    activityRows.push({ waybill: 'WB-BATANG', user_email: ADMIN_CABANG, dp: 'BATANG01', attempt_ke: 1, data_baru: 'On Delivery', sumber: 'Manual Feedback', created_at: `${today}T09:00:00+07:00` });
+    store.set('activity_log', activityRows);
+
+    const dash = await dashboard.getDashboard(ADMIN_CABANG);
+    const byDp = Object.fromEntries(dash.monitoringDp.map((d) => [d.dp, d]));
+    assert.equal(byDp['BATANG01'].sudah, 1, 'entry di luar 1000 baris pertama harus tetap terhitung (butuh paginasi activity_log)');
+    assert.equal(byDp['BANDAR01'].sudah, PAGE + 5, 'BANDAR01 sendiri sudah >1000 baris - butuh paginasi utk lengkap juga');
+    const sumSudah = dash.monitoringDp.reduce((acc, d) => acc + d.sudah, 0);
+    assert.equal(sumSudah, dash.summary.progressHariIni, 'INVARIANT tetap terjaga walau volume aktivitas hari ini besar (>1000 baris)');
+  });
 });

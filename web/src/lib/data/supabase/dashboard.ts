@@ -31,6 +31,37 @@ async function fetchScoped(dpFilter: DpFilter): Promise<LongtailDbRow[]> {
   return out;
 }
 
+/** Ambil SEMUA baris Activity_Log "Manual Feedback" hari ini (Jakarta) ter-scope
+ *  DP - HARUS dipaginasi spt fetchScoped() di atas, krn PostgREST/Supabase
+ *  default memotong response unbounded di 1000 baris: kalau total aktivitas
+ *  "Manual Feedback" hari ini (system-wide, tanpa filter dp utk full access)
+ *  lebih dari 1000, select tanpa .range() diam-diam terpotong -> DP tertentu
+ *  bisa under-count parah walau Total (dari fetchScoped, sudah dipaginasi)
+ *  tetap benar. Bug nyata yg ditemukan: BATANG01 punya 278 feedback hari ini
+ *  tapi cuma 66 yang muncul, krn query lama sekali fetch tanpa batas. */
+async function fetchTodayActivityLog(dpFilter: DpFilter, today: string): Promise<{ waybill: string }[]> {
+  const PAGE = 1000;
+  const out: { waybill: string }[] = [];
+  for (let from = 0; ; from += PAGE) {
+    let q = db()
+      .from('activity_log')
+      .select('waybill')
+      .eq('sumber', 'Manual Feedback')
+      .gte('created_at', `${today}T00:00:00+07:00`)
+      .lte('created_at', `${today}T23:59:59.999+07:00`)
+      .order('id')
+      .range(from, from + PAGE - 1);
+    if (Array.isArray(dpFilter)) q = q.in('dp', dpFilter);
+    else if (dpFilter) q = q.eq('dp', dpFilter);
+    const { data, error } = await q;
+    if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+    const batch = (data ?? []) as { waybill: string }[];
+    out.push(...batch);
+    if (batch.length < PAGE) break;
+  }
+  return out;
+}
+
 /**
  * Semua angka dihitung & di-scope server-side (Admin DP hanya DP-nya, SPV
  * Drop Point semua DP yang disupervisi - atau 1 DP tunggal kalau `dp` diisi
@@ -77,24 +108,16 @@ export async function getDashboardPublic(): Promise<DashboardData> {
 async function computeDashboard(dpFilter: DpFilter, role: string, dropPoint: string): Promise<DashboardData> {
   // Progress Hari Ini: waybill (yang masih ada, ter-scope) dengan Manual Feedback hari ini (Jakarta).
   const today = jakartaTodayIso();
-  let alQ = db()
-    .from('activity_log')
-    .select('waybill')
-    .eq('sumber', 'Manual Feedback')
-    .gte('created_at', `${today}T00:00:00+07:00`)
-    .lte('created_at', `${today}T23:59:59.999+07:00`);
-  if (Array.isArray(dpFilter)) alQ = alQ.in('dp', dpFilter);
-  else if (dpFilter) alQ = alQ.eq('dp', dpFilter);
 
-  // fetchScoped() (paginasi longtail) & query activity_log di atas SALING
-  // INDEPENDEN (activity_log tak butuh hasil longtail sama sekali, baru
-  // digabung lewat currentWb SETELAH loop di bawah) -> jalankan BERSAMAAN,
-  // bukan menunggu satu selesai baru mulai yang lain. Urutan pemrosesan
-  // `rows` di loop bawah TIDAK berubah sama sekali (masih sequential,
-  // masih urutan yg sama dari fetchScoped) - yang paralel murni fetch-nya.
-  const [rows, alRes] = await Promise.all([fetchScoped(dpFilter), alQ]);
-  const { data: alData, error: alErr } = alRes;
-  if (alErr) throw new ApiError('INTERNAL_ERROR', alErr.message);
+  // fetchScoped() (longtail) & fetchTodayActivityLog() (activity_log) di atas
+  // SALING INDEPENDEN (activity_log tak butuh hasil longtail sama sekali,
+  // baru digabung lewat currentWb SETELAH loop di bawah) -> jalankan
+  // BERSAMAAN, bukan menunggu satu selesai baru mulai yang lain. Urutan
+  // pemrosesan `rows` di loop bawah TIDAK berubah sama sekali (masih
+  // sequential, masih urutan yg sama dari fetchScoped) - yang paralel murni
+  // fetch-nya. Keduanya sudah dipaginasi masing-masing (lihat komentar
+  // fetchTodayActivityLog).
+  const [rows, alData] = await Promise.all([fetchScoped(dpFilter), fetchTodayActivityLog(dpFilter, today)]);
 
   const total = rows.length;
   let sudah = 0, clearTTD = 0, lebih3 = 0, paketTertua = 0, paketTertuaWb = '';
@@ -156,8 +179,8 @@ async function computeDashboard(dpFilter: DpFilter, role: string, dropPoint: str
   // berpindah DP sejak event dicatat.
   const todayWb = new Set<string>();
   const perDpTodayWb: Record<string, Set<string>> = {};
-  (alData ?? []).forEach((a) => {
-    const k = String((a as { waybill: string }).waybill ?? '').trim().toLowerCase();
+  alData.forEach((a) => {
+    const k = String(a.waybill ?? '').trim().toLowerCase();
     if (!currentWb.has(k)) return;
     todayWb.add(k);
     const dpKey = wbToDpKey[k];
