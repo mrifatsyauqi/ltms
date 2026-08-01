@@ -4,8 +4,9 @@
 // (tanpa DB), test langsung.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { filterNavByAccess, navForRole } from './nav.ts';
+import { filterNavByAccess, navForRole, type NavGroup } from './nav.ts';
 import { MENU_KEYS, type MenuKey } from './data/supabase/permissions.ts';
+import { GATED_ROLES, isGatedRole } from './data/permissions.ts';
 
 /** Semua 15 menu_key = true, dgn override opsional - hindari mengulang
  *  daftar lengkap di tiap test (cuma yang relevan yg perlu disebut eksplisit). */
@@ -15,8 +16,8 @@ function access(overrides: Partial<Record<MenuKey, boolean>> = {}): Record<MenuK
 }
 
 describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya dimatikan', () => {
-  it('1. access null (full access) -> groups dikembalikan APA ADANYA, tak pernah difilter', () => {
-    const groups = navForRole('Admin Cabang');
+  it('1. access null (Super Admin / role tak dikenal) -> groups dikembalikan APA ADANYA, tak difilter', () => {
+    const groups = navForRole('Super Admin');
     assert.deepEqual(filterNavByAccess(groups, null), groups);
   });
 
@@ -70,9 +71,143 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
     }
   });
 
-  it('7. Monitoring Delivery utk full access (Admin Cabang) pakai menu_key "monitoring_delivery_cabang" - punya menuKey (bukan lagi selalu-tampil tanpa menuKey), walau saat ini belum benar2 difilter krn access selalu null utk role ini (lihat layout.tsx)', () => {
+  it('7. Monitoring Delivery utk full access (Admin Cabang) pakai menu_key "monitoring_delivery_cabang" - punya menuKey (bukan lagi selalu-tampil tanpa menuKey)', () => {
     const groups = navForRole('Admin Cabang');
     const item = groups.flatMap((g) => g.items).find((i) => i.label === 'Monitoring Delivery');
     assert.equal(item?.menuKey, 'monitoring_delivery_cabang');
+  });
+
+  // --------------------------------------------------------------------------
+  // CHECKPOINT 1: sidebar role full access (SELAIN Super Admin) SEKARANG ikut
+  // difilter. Sebelumnya layout.tsx cuma menghitung menuAccess utk 2 role DP
+  // -> access selalu null utk Admin Cabang dkk -> TIDAK ADA item yang pernah
+  // hilang, padahal backend-nya sudah FORBIDDEN (mis.
+  // monitoring_delivery_cabang). Super Admin TETAP null (bypass permanen).
+  // --------------------------------------------------------------------------
+
+  it('8. Admin Cabang (full access, non Super Admin) dgn monitoring_delivery_cabang=false -> item Monitoring Delivery HILANG, item lain utuh', () => {
+    const groups = navForRole('Admin Cabang');
+    const filtered = filterNavByAccess(groups, access({ monitoring_delivery_cabang: false }));
+    const labels = filtered.flatMap((g) => g.items.map((i) => i.label));
+    assert.ok(!labels.includes('Monitoring Delivery'), 'harus hilang - backend-nya sudah FORBIDDEN utk role ini');
+    assert.ok(labels.includes('Dashboard'));
+    assert.ok(labels.includes('Feedback Long Tail'));
+    assert.ok(labels.includes('Data Long Tail'));
+    assert.ok(labels.includes('Cabang'));
+    assert.ok(labels.includes('Riwayat Feedback'));
+    assert.ok(labels.includes('Profile'));
+  });
+
+  it('9. REGRESI: full access dgn SEMUA menu_key true (kondisi seed produksi) -> nav SAMA PERSIS spt tak difilter (nol perubahan perilaku hari ini)', () => {
+    for (const role of ['Admin Cabang', 'Manager Kota', 'Asisten Manager Kota', 'Super Admin']) {
+      const groups = navForRole(role);
+      assert.deepEqual(filterNavByAccess(groups, access()), groups, `${role}: seed all-true tak boleh menghilangkan apa pun`);
+    }
+  });
+
+  it('10. Dashboard/Feedback Long Tail/Riwayat Feedback di menu full access punya menuKey (penegakan backend-nya SUDAH ada) - dimatikan -> hilang', () => {
+    const groups = navForRole('Admin Cabang');
+    const byLabel = new Map(groups.flatMap((g) => g.items).map((i) => [i.label, i]));
+    assert.equal(byLabel.get('Dashboard')?.menuKey, 'dashboard');
+    assert.equal(byLabel.get('Feedback Long Tail')?.menuKey, 'feedback_longtail_view');
+    assert.equal(byLabel.get('Riwayat Feedback')?.menuKey, 'riwayat_feedback');
+
+    const filtered = filterNavByAccess(groups, access({ dashboard: false, feedback_longtail_view: false, riwayat_feedback: false }));
+    const labels = filtered.flatMap((g) => g.items.map((i) => i.label));
+    assert.ok(!labels.includes('Dashboard'));
+    assert.ok(!labels.includes('Feedback Long Tail'));
+    assert.ok(!labels.includes('Riwayat Feedback'));
+    assert.ok(labels.includes('Data Long Tail'), 'menu_key lain (belum digating backend) tak ikut hilang');
+  });
+
+  it('11. GUARD: item full access yang backend-nya BELUM digating SENGAJA masih tanpa menuKey (dipasang nanti barengan gate page + endpoint-nya)', () => {
+    const groups = navForRole('Admin Cabang');
+    const all = groups.flatMap((g) => [...g.items, ...(g.items.flatMap((i) => i.children ?? []))]);
+    const belumDigating = ['Data Long Tail', 'Import Long Tail', 'Cabang', 'Drop Point', 'Master Feedback', 'User Management', 'Role & Akses', 'Riwayat Import', 'Pengaturan'];
+    for (const label of belumDigating) {
+      const item = all.find((i) => i.label === label);
+      assert.ok(item, `item "${label}" harus ada di nav full access`);
+      assert.equal(item!.menuKey, undefined, `"${label}" belum punya penegakan backend - JANGAN pasang menuKey duluan`);
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // filterNavByAccess() dulu cuma memfilter group.items, TIDAK pernah masuk ke
+  // item.children (submenu "Drop Point" di bawah "Cabang"). Belum berefek hari
+  // ini (children-nya belum ada yang bermenuKey), diperbaiki DULUAN sbg fix
+  // struktural supaya begitu menuKey-nya dipasang nanti, filternya sudah benar.
+  // --------------------------------------------------------------------------
+
+  const icon = navForRole('Admin Cabang')[0].items[0].icon;
+  /** Tiruan struktur "Cabang > Drop Point" dgn menuKey terpasang (nav asli
+   *  belum punya - lihat test 11). */
+  function nested(): NavGroup[] {
+    return [
+      {
+        label: 'Master Data',
+        items: [
+          {
+            label: 'Cabang',
+            href: '/master/cabang',
+            icon,
+            menuKey: 'master_cabang',
+            children: [
+              { label: 'Drop Point', href: '/master/drop-point', icon, menuKey: 'master_drop_point' },
+              { label: 'Anak Tanpa Gating', href: '/master/lain', icon },
+            ],
+          },
+        ],
+      },
+    ];
+  }
+
+  it('12. children ikut difilter per menu_key-nya sendiri: master_drop_point=false -> submenu "Drop Point" hilang, parent "Cabang" TETAP tampil', () => {
+    const filtered = filterNavByAccess(nested(), access({ master_drop_point: false }));
+    const parent = filtered[0].items[0];
+    assert.equal(parent.label, 'Cabang', 'parent tetap tampil krn menuKey-nya sendiri masih true');
+    assert.deepEqual(parent.children?.map((c) => c.label), ['Anak Tanpa Gating']);
+  });
+
+  it('13. parent mati -> SELURUH subtree hilang (children tak boleh "menyelamatkan" parent yang menuKey-nya false)', () => {
+    const filtered = filterNavByAccess(nested(), access({ master_cabang: false }));
+    assert.deepEqual(filtered, [], 'grup jadi kosong -> ikut dibuang');
+  });
+
+  it('14. semua children mati tapi parent hidup -> parent tetap tampil TANPA properti children (bukan array kosong - Sidebar merender chevron submenu berdasar item.children truthy)', () => {
+    const filtered = filterNavByAccess(nested(), access({ master_drop_point: false }));
+    const parent = filtered[0].items[0];
+    assert.ok(parent.children, 'masih ada 1 anak yang lolos');
+
+    const semuaAnakMati = nested();
+    semuaAnakMati[0].items[0].children![1].menuKey = 'master_feedback';
+    const hasil = filterNavByAccess(semuaAnakMati, access({ master_drop_point: false, master_feedback: false }));
+    const parent2 = hasil[0].items[0];
+    assert.equal(parent2.label, 'Cabang');
+    assert.equal('children' in parent2, false, 'properti children HARUS dibuang, bukan disisakan []');
+  });
+
+  it('15. children semua lolos -> hasil identik dgn input (regresi: filter tak boleh mengubah bentuk saat tak ada yang dimatikan)', () => {
+    const groups = nested();
+    assert.deepEqual(filterNavByAccess(groups, access()), groups);
+  });
+});
+
+// ----------------------------------------------------------------------------
+// Keputusan "siapa dapat menuAccess terhitung vs null" di app/(app)/layout.tsx.
+// Server Component tak bisa di-unit-test langsung di setup ini, tapi
+// predikatnya (isGatedRole) diekstrak & dipakai apa adanya di sana -> logic
+// pemilihan role-nya tetap teruji, dan TIDAK BISA drift dari otorisasi runtime
+// (hasPermission/getEffectiveMenuAccess memakai predikat yang sama persis).
+// ----------------------------------------------------------------------------
+describe('layout.tsx: role mana yang menuAccess-nya dihitung (isGatedRole)', () => {
+  it('16. 5 role gated (termasuk Admin Cabang/Manager Kota/Asisten Manager Kota) -> menuAccess DIHITUNG, bukan null lagi spt sebelumnya (dulu cuma 2 role DP)', () => {
+    assert.deepEqual([...GATED_ROLES].sort(), ['Admin Cabang', 'Admin DP', 'Asisten Manager Kota', 'Manager Kota', 'SPV Drop Point']);
+    for (const role of GATED_ROLES) assert.equal(isGatedRole(role), true, `${role} harus dihitung akses menunya`);
+  });
+
+  it('17. Super Admin & role tak dikenal (legacy "Admin Pusat") -> BUKAN gated -> menuAccess null -> sidebar tak difilter sama sekali', () => {
+    assert.equal(isGatedRole('Super Admin'), false, 'bypass permanen - query DB sengaja dilewati, akses efektifnya toh all-true');
+    assert.equal(isGatedRole('Admin Pusat'), false);
+    assert.equal(isGatedRole(''), false);
   });
 });

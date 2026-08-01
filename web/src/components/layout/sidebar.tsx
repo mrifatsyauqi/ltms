@@ -17,8 +17,10 @@ type SidebarProps = {
   role?: string;
   nama?: string;
   dropPoint?: string;
-  /** Akses efektif per menu_key (Role & Akses) - null utk actor full access
-   *  (tak pernah difilter, lihat filterNavByAccess). Dihitung SEKALI di
+  /** Akses efektif per menu_key (Role & Akses) - diisi utk SEMUA role gated
+   *  (GATED_ROLES, 5 role termasuk Admin Cabang/Manager Kota/Asisten Manager
+   *  Kota); null HANYA utk Super Admin & role tak dikenal (tak difilter,
+   *  lihat filterNavByAccess & app/(app)/layout.tsx). Dihitung SEKALI di
    *  Server Component (AppLayout) sebelum render, bukan fetch client-side -
    *  supaya menu yang dimatikan tak pernah sempat "kelihatan lalu hilang". */
   menuAccess?: Record<MenuKey, boolean> | null;

@@ -24,10 +24,14 @@ export type NavItem = {
   icon: LucideIcon;
   children?: NavItem[];
   /** Menu_key Role & Akses (lib/data/supabase/permissions.ts) yang menentukan
-   *  TAMPIL/TIDAKnya item ini utk SPV Drop Point/Admin DP (lihat
-   *  filterNavByAccess) - undefined = SELALU tampil (mis. Monitoring
-   *  Delivery/Profil Saya, atau item apa pun di menu full access yg tak
-   *  pernah masuk matrix ini). */
+   *  TAMPIL/TIDAKnya item ini utk SEMUA role gated (GATED_ROLES: Admin
+   *  Cabang/Manager Kota/Asisten Manager Kota/SPV Drop Point/Admin DP - bukan
+   *  cuma 2 role DP spt sebelumnya) - lihat filterNavByAccess. undefined =
+   *  SELALU tampil, dipakai utk (a) item yg memang di luar matrix (Profil
+   *  Saya) dan (b) item yg menu_key-nya BELUM punya penegakan backend
+   *  (requirePermission/gate di page) - SENGAJA: memasang menuKey sebelum
+   *  backend-nya menegakkan = menu hilang dari sidebar tapi isinya masih bisa
+   *  dibuka lewat URL. Pasang menuKey BARENGAN wiring backend-nya. */
   menuKey?: MenuKey;
 };
 
@@ -51,11 +55,19 @@ export type NavGroup = {
  */
 export function navForRole(role: string | undefined): NavGroup[] {
   if (hasFullAccess(role)) {
+    // menuKey di cabang ini SENGAJA baru dipasang utk menu_key yang penegakan
+    // backend-nya SUDAH ADA (dashboard, feedback_longtail_view,
+    // riwayat_feedback, monitoring_delivery_cabang). Sisanya (data_longtail,
+    // import_longtail, master_*, user_management, riwayat_import, pengaturan,
+    // role_akses) BELUM digating di backend - menuKey-nya dipasang nanti
+    // BARENGAN gate page + requirePermission() endpoint-nya, jangan dipasang
+    // duluan (menu hilang tapi URL-nya masih bisa dibuka = false sense of
+    // security).
     return [
       {
         items: [
-          { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-          { label: 'Feedback Long Tail', href: '/feedback', icon: MessageSquareText },
+          { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, menuKey: 'dashboard' },
+          { label: 'Feedback Long Tail', href: '/feedback', icon: MessageSquareText, menuKey: 'feedback_longtail_view' },
           { label: 'Data Long Tail', href: '/feedback?view=data', icon: Table2 },
           { label: 'Import Long Tail', href: '/import', icon: Upload },
           { label: 'Monitoring Delivery', href: '/monitoring-delivery', icon: Truck, menuKey: 'monitoring_delivery_cabang' },
@@ -79,7 +91,7 @@ export function navForRole(role: string | undefined): NavGroup[] {
         label: 'Laporan',
         items: [
           { label: 'Riwayat Import', href: '/riwayat-import', icon: FileClock },
-          { label: 'Riwayat Feedback', href: '/riwayat-feedback', icon: History },
+          { label: 'Riwayat Feedback', href: '/riwayat-feedback', icon: History, menuKey: 'riwayat_feedback' },
         ],
       },
       {
@@ -113,20 +125,45 @@ export function navForRole(role: string | undefined): NavGroup[] {
   ];
 }
 
+/** Filter satu level item + REKURSIF ke `children` (submenu, mis. "Drop
+ *  Point" di bawah "Cabang"). Parent yang KEHABISAN seluruh children-nya
+ *  tapi lolos menuKey-nya sendiri TETAP tampil, hanya properti `children`-nya
+ *  DIHAPUS (bukan disisakan array kosong) - Sidebar merender tombol chevron
+ *  submenu berdasar `item.children` truthy, jadi array kosong akan bikin
+ *  chevron yang membuka submenu kosong. */
+function filterItems(items: NavItem[], access: Record<MenuKey, boolean>): NavItem[] {
+  return items.flatMap((item) => {
+    if (item.menuKey && !access[item.menuKey]) return [];
+    if (!item.children) return [item];
+    const children = filterItems(item.children, access);
+    if (children.length > 0) return [{ ...item, children }];
+    const parentOnly: NavItem = { ...item };
+    delete parentOnly.children;
+    return [parentOnly];
+  });
+}
+
 /**
  * Sembunyikan TOTAL item nav yang menu_key-nya enabled=false utk actor ini -
  * bukan cuma memblokir isinya setelah diklik (lihat lib/data/supabase/
- * permissions.ts, requirePermission() di endpoint). `access` null = actor
- * full access (Super Admin/Admin Cabang/Manager Kota/Asisten Manager Kota)
- * - TIDAK PERNAH difilter, kembalikan `groups` apa adanya (mereka given dari
- * Langkah 3, di luar cakupan matrix Role & Akses). Item tanpa `menuKey`
- * (Monitoring Delivery/Profil Saya) selalu tampil apa pun isi `access`.
- * Grup yang kehabisan seluruh item-nya ikut dibuang (tak ada saat ini krn
- * grup Admin DP/SPV Drop Point cuma 1, tapi dijaga generik).
+ * permissions.ts, requirePermission() di endpoint). Berlaku utk SEMUA role
+ * gated (GATED_ROLES = 5 role, termasuk Admin Cabang/Manager Kota/Asisten
+ * Manager Kota sejak bypass hasPermission() dihapus) - BUKAN cuma SPV Drop
+ * Point/Admin DP.
+ *
+ * `access` null = JANGAN filter, kembalikan `groups` apa adanya. Sekarang itu
+ * cuma dipakai utk Super Admin (bypass permanen, akses efektifnya toh
+ * all-true) dan role tak dikenal (legacy 'Admin Pusat') - lihat app/(app)/
+ * layout.tsx yang menentukan null vs terhitung lewat isGatedRole().
+ *
+ * Item tanpa `menuKey` (Profil Saya, plus item yang backend-nya belum
+ * digating) selalu tampil apa pun isi `access`. Children ikut difilter per
+ * menu_key-nya sendiri (lihat filterItems). Grup yang kehabisan seluruh
+ * item-nya ikut dibuang.
  */
 export function filterNavByAccess(groups: NavGroup[], access: Record<MenuKey, boolean> | null): NavGroup[] {
   if (!access) return groups;
   return groups
-    .map((group) => ({ ...group, items: group.items.filter((item) => !item.menuKey || access[item.menuKey]) }))
+    .map((group) => ({ ...group, items: filterItems(group.items, access) }))
     .filter((group) => group.items.length > 0);
 }
