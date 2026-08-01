@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { ChevronDown, ChevronLeft, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { navForRole, type NavItem } from '@/lib/nav';
+import { filterNavByAccess, navForRole, type NavItem } from '@/lib/nav';
 import { hasFullAccess } from '@/lib/roles';
+import type { MenuKey } from '@/lib/data/supabase/permissions';
 import { signOutAction } from '@/app/actions/auth';
 import { ScopeFilter } from '@/components/dashboard/scope-filter';
 import { SupervisedScopeBox } from '@/components/dashboard/supervised-scope-box';
@@ -16,9 +17,14 @@ type SidebarProps = {
   role?: string;
   nama?: string;
   dropPoint?: string;
+  /** Akses efektif per menu_key (Role & Akses) - null utk actor full access
+   *  (tak pernah difilter, lihat filterNavByAccess). Dihitung SEKALI di
+   *  Server Component (AppLayout) sebelum render, bukan fetch client-side -
+   *  supaya menu yang dimatikan tak pernah sempat "kelihatan lalu hilang". */
+  menuAccess?: Record<MenuKey, boolean> | null;
 };
 
-export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
+export function Sidebar({ role, nama, dropPoint, menuAccess = null }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   // Override manual per item (toggle chevron). Tanpa override, submenu ikut
   // status default (kebuka otomatis kalau lagi ada di salah satu halaman
@@ -26,7 +32,7 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
   const [manualExpand, setManualExpand] = useState<Map<string, boolean>>(new Map());
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const groups = navForRole(role);
+  const groups = filterNavByAccess(navForRole(role), menuAccess);
   const currentView = searchParams.get('view');
 
   function isActive(href: string) {

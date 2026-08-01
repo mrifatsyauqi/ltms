@@ -211,4 +211,57 @@ describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fu
       assert.ok(Array.isArray(log), `${email} tetap bisa akses Riwayat Feedback`);
     }
   });
+
+  // --------------------------------------------------------------------------
+  // Fix bug: Sidebar menampilkan menu yang menu_key-nya sudah dimatikan
+  // (cuma isinya yg diblokir backend, itemnya sendiri tetap kelihatan &
+  // bisa diklik). getEffectiveMenuAccess()/getMyMenuAccess() HARUS pakai
+  // resolusi PERSIS SAMA dgn hasPermission() (fetchGatedPermissionMap
+  // dibagi bersama) supaya sidebar & backend tak pernah beda pendapat.
+  // --------------------------------------------------------------------------
+
+  it('13. getEffectiveMenuAccess: full access (termasuk Super Admin) -> semua 4 menu true TANPA butuh baris matrix sama sekali', async () => {
+    store.set('role_permissions', []);
+    store.set('user_permissions', []);
+    for (const email of [ADMIN_CABANG, MANAGER_KOTA, ASISTEN_MANAGER, SUPER_ADMIN]) {
+      const actor = await helpers.requireActor(email);
+      const access = await permissions.getEffectiveMenuAccess(actor);
+      assert.deepEqual(access, {
+        dashboard: true,
+        feedback_longtail_view: true,
+        feedback_longtail_edit: true,
+        riwayat_feedback: true,
+      });
+    }
+  });
+
+  it('14. getEffectiveMenuAccess: SPV Drop Point - hasil PERSIS SAMA dgn hasPermission() per menu_key, termasuk campuran default+override', async () => {
+    store.get('role_permissions')!.find((r) => r.role === 'SPV Drop Point' && r.menu_key === 'feedback_longtail_view')!.enabled = false;
+    store.get('user_permissions')!.push({ user_id: SPV_ID, menu_key: 'riwayat_feedback', enabled: false });
+
+    const spv = await helpers.requireActor(SPV);
+    const access = await permissions.getEffectiveMenuAccess(spv);
+    for (const key of permissions.MENU_KEYS) {
+      assert.equal(access[key], await permissions.hasPermission(spv, key), `access.${key} harus sinkron dgn hasPermission(spv, '${key}')`);
+    }
+    assert.equal(access.feedback_longtail_view, false, 'default role dimatikan');
+    assert.equal(access.riwayat_feedback, false, 'override akun dimatikan');
+    assert.equal(access.dashboard, true, 'menu lain tak ikut terpengaruh');
+  });
+
+  it('15. CHECKPOINT bug sidebar: getMyMenuAccess(SPV) - matikan Feedback Long Tail (Lihat) -> feedback_longtail_view=false (menu HARUS hilang dari sidebar), lalu nyalakan lagi -> true (muncul lagi)', async () => {
+    store.get('role_permissions')!.find((r) => r.role === 'SPV Drop Point' && r.menu_key === 'feedback_longtail_view')!.enabled = false;
+    const offAccess = await permissions.getMyMenuAccess(SPV);
+    assert.equal(offAccess.feedback_longtail_view, false, 'sidebar HARUS menyembunyikan item Feedback Long Tail, bukan cuma isinya diblokir');
+
+    store.get('role_permissions')!.find((r) => r.role === 'SPV Drop Point' && r.menu_key === 'feedback_longtail_view')!.enabled = true;
+    const onAccess = await permissions.getMyMenuAccess(SPV);
+    assert.equal(onAccess.feedback_longtail_view, true, 'dinyalakan lagi -> item harus muncul kembali di sidebar');
+  });
+
+  it('16. getMyMenuAccess: role di luar 6 yang dikenal (data korup, seharusnya mustahil krn CHECK constraint) -> semua menu false, bukan throw', async () => {
+    store.get('users')!.push({ id: 'u-aneh', email: 'aneh@ltms.test', nama: 'Role Aneh', role: 'Role Tidak Dikenal', drop_point: '', status_aktif: true });
+    const access = await permissions.getMyMenuAccess('aneh@ltms.test');
+    assert.ok(Object.values(access).every((v) => v === false));
+  });
 });
