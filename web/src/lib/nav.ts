@@ -1,4 +1,5 @@
 import {
+  Building2,
   ClipboardList,
   Database,
   FileClock,
@@ -18,6 +19,7 @@ export type NavItem = {
   label: string;
   href: string;
   icon: LucideIcon;
+  children?: NavItem[];
 };
 
 export type NavGroup = {
@@ -31,6 +33,8 @@ export type NavGroup = {
  * - Admin Cabang: menu utama + grup Master Data, Laporan, Pengaturan.
  * "Data Long Tail" & "Feedback Long Tail" memakai halaman yang sama (/feedback)
  * dengan view berbeda lewat query param.
+ * "Drop Point" nested sbg children di bawah "Cabang" (struktur organisasi
+ * Kota -> Drop Point) - lihat rendering submenu expand/collapse di Sidebar.
  */
 export function navForRole(role: string | undefined): NavGroup[] {
   if (role === 'Admin Cabang') {
@@ -47,7 +51,12 @@ export function navForRole(role: string | undefined): NavGroup[] {
       {
         label: 'Master Data',
         items: [
-          { label: 'Drop Point', href: '/master/drop-point', icon: Database },
+          {
+            label: 'Cabang',
+            href: '/master/cabang',
+            icon: Building2,
+            children: [{ label: 'Drop Point', href: '/master/drop-point', icon: Database }],
+          },
           { label: 'Master Feedback', href: '/master/feedback', icon: ClipboardList },
           { label: 'User Management', href: '/master/users', icon: UserCog },
         ],

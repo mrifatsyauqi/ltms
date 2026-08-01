@@ -28,6 +28,7 @@ drop table if exists import_batch      cascade;
 drop table if exists import_mapping    cascade;
 drop table if exists master_feedback   cascade;
 drop table if exists master_drop_point cascade;
+drop table if exists cabang            cascade;
 drop table if exists login_attempts    cascade;
 drop table if exists users             cascade;
 drop function if exists set_updated_at cascade;
@@ -49,6 +50,10 @@ $$ language plpgsql;
 -- supabase/auth_nik_migration.sql (bukan schema.sql yang destruktif).
 -- ---------------------------------------------------------------------------
 create table users (
+  id            uuid not null default gen_random_uuid(), -- identitas stabil utk FK (Cabang/SPV dll),
+                                                           -- LEPAS dari mekanisme login (email/NIK).
+                                                           -- email TETAP primary key (lihat catatan di
+                                                           -- atas + FK nyata di favorite_feedback).
   email         text primary key,
   nik           text,                       -- identifier login baru; nullable selama migrasi
   nama          text not null,
@@ -62,6 +67,7 @@ create table users (
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
+create unique index users_id_unique_idx on users (id);
 create unique index users_nik_unique_idx on users (nik) where nik is not null;
 create trigger users_updated before update on users
   for each row execute function set_updated_at();
@@ -79,14 +85,38 @@ create table login_attempts (
 );
 
 -- ---------------------------------------------------------------------------
+-- CABANG (Kota) — struktur organisasi di atas Drop Point. Manager Kota &
+-- Asisten Manager adalah LABEL ORGANISASI (bukan role otorisasi baru) yang
+-- menunjuk ke akun users existing manapun (role apapun, cukup status_aktif).
+-- ---------------------------------------------------------------------------
+create table cabang (
+  kode_kota                text primary key,
+  nama_kota                text not null,
+  manager_kota_user_id     uuid references users(id) on delete set null,
+  asisten_manager_user_id  uuid references users(id) on delete set null,
+  created_at               timestamptz not null default now(),
+  updated_at               timestamptz not null default now()
+);
+create trigger cabang_updated before update on cabang
+  for each row execute function set_updated_at();
+
+-- ---------------------------------------------------------------------------
 -- MASTER DROP POINT
+--
+-- kode_kota nullable: DP existing tetap tampil ("Belum ada Kota") sampai
+-- di-assign manual. spv_drop_point_user_id = label organisasi (lihat cabang
+-- di atas). Admin Drop Point TIDAK punya kolom sendiri di sini - REUSE
+-- users.role='Admin DP' + users.drop_point=kode_dp yang sudah ada.
 -- ---------------------------------------------------------------------------
 create table master_drop_point (
-  kode_dp      text primary key,
-  nama_dp      text not null,
-  wilayah      text,
-  status_aktif boolean not null default true
+  kode_dp                text primary key,
+  nama_dp                text not null,
+  wilayah                text,
+  status_aktif           boolean not null default true,
+  kode_kota              text references cabang(kode_kota) on delete set null,
+  spv_drop_point_user_id  uuid references users(id) on delete set null
 );
+create index master_drop_point_kode_kota_idx on master_drop_point (kode_kota);
 
 -- ---------------------------------------------------------------------------
 -- MASTER FEEDBACK
