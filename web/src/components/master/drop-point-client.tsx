@@ -19,9 +19,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SLOW_STALE_TIME } from '@/lib/query-config';
 import type { DropPointRow } from '@/lib/data/drop-points';
 import type { CreateGeneralAccountResult, UserRow } from '@/lib/data/users';
+import type { CabangRow } from '@/lib/data/cabang';
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -30,8 +32,24 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return body.data as T;
 }
 
-type FormState = { kodeDp: string; namaDp: string; wilayah: string; statusAktif: boolean };
-const EMPTY: FormState = { kodeDp: '', namaDp: '', wilayah: '', statusAktif: true };
+const NONE = ''; // sentinel "belum di-assign" - Kota & SPV Drop Point opsional
+
+type FormState = {
+  kodeDp: string;
+  namaDp: string;
+  wilayah: string;
+  statusAktif: boolean;
+  kodeKota: string;
+  spvDropPointUserId: string;
+};
+const EMPTY: FormState = {
+  kodeDp: '',
+  namaDp: '',
+  wilayah: '',
+  statusAktif: true,
+  kodeKota: NONE,
+  spvDropPointUserId: NONE,
+};
 
 export function DropPointClient() {
   const qc = useQueryClient();
@@ -40,8 +58,8 @@ export function DropPointClient() {
     queryFn: () => api<DropPointRow[]>('/api/drop-points'),
     staleTime: SLOW_STALE_TIME, // jarang berubah (data master)
   });
-  // Dipakai HANYA utk tahu DP mana yg sudah punya akun General (tombol
-  // dinonaktifkan) - lihat generalDpSet di bawah.
+  // Dipakai utk: (1) tahu DP mana yg sudah punya akun General (tombol
+  // dinonaktifkan) - generalDpSet, dan (2) sumber dropdown SPV Drop Point.
   const { data: users } = useQuery({
     queryKey: ['users'],
     queryFn: () => api<UserRow[]>('/api/users'),
@@ -51,6 +69,16 @@ export function DropPointClient() {
     () => new Set((users ?? []).filter((u) => u['Tipe Akun'] === 'general').map((u) => u['Drop Point'])),
     [users],
   );
+  const activeUsers = useMemo(
+    () => (users ?? []).filter((u) => isAktif(u['Status Aktif'])).sort((a, b) => a.Nama.localeCompare(b.Nama)),
+    [users],
+  );
+  // Sumber dropdown assignment Kota.
+  const { data: cabangList } = useQuery({
+    queryKey: ['cabang'],
+    queryFn: () => api<CabangRow[]>('/api/cabang'),
+    staleTime: SLOW_STALE_TIME,
+  });
 
   const [q, setQ] = useState('');
   const [pageIndex, setPageIndex] = useState(0);
@@ -86,7 +114,13 @@ export function DropPointClient() {
       api('/api/drop-points', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kodeDp: f.kodeDp.trim(), namaDp: f.namaDp.trim(), wilayah: f.wilayah.trim() }),
+        body: JSON.stringify({
+          kodeDp: f.kodeDp.trim(),
+          namaDp: f.namaDp.trim(),
+          wilayah: f.wilayah.trim(),
+          kodeKota: f.kodeKota || null,
+          spvDropPointUserId: f.spvDropPointUserId || null,
+        }),
       }),
     onSuccess: () => {
       toast.success('Drop Point ditambahkan.');
@@ -101,7 +135,13 @@ export function DropPointClient() {
       api(`/api/drop-points/${encodeURIComponent(f.kodeDp)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ namaDp: f.namaDp.trim(), wilayah: f.wilayah.trim(), statusAktif: f.statusAktif }),
+        body: JSON.stringify({
+          namaDp: f.namaDp.trim(),
+          wilayah: f.wilayah.trim(),
+          statusAktif: f.statusAktif,
+          kodeKota: f.kodeKota || null,
+          spvDropPointUserId: f.spvDropPointUserId || null,
+        }),
       }),
     onSuccess: () => {
       toast.success('Drop Point diperbarui.');
@@ -159,6 +199,8 @@ export function DropPointClient() {
       namaDp: r['Nama DP'],
       wilayah: r['Wilayah/Cabang'],
       statusAktif: isAktif(r['Status Aktif']),
+      kodeKota: r['Kode Kota'],
+      spvDropPointUserId: r['SPV Drop Point'],
     });
     setDialogOpen(true);
   }
@@ -169,6 +211,13 @@ export function DropPointClient() {
 
   const saving = createMut.isPending || updateMut.isPending;
   const canSave = editing ? form.namaDp.trim() : form.kodeDp.trim() && form.namaDp.trim();
+
+  // WAJIB: base-ui Select butuh peta value->label eksplisit (`items`) supaya
+  // trigger menampilkan label yang benar, bukan value mentah.
+  const kotaItems: Record<string, string> = { [NONE]: '— Belum ada Kota —' };
+  for (const c of cabangList ?? []) kotaItems[c['Kode Kota']] = `${c['Kode Kota']} — ${c['Nama Kota']}`;
+  const spvItems: Record<string, string> = { [NONE]: '— Belum ditunjuk —' };
+  for (const u of activeUsers) spvItems[u.Id] = `${u.Nama} (${u.Role})`;
 
   return (
     <>
@@ -221,6 +270,9 @@ export function DropPointClient() {
                     <th className="h-8 border-b px-3 text-left font-medium">Kode DP</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Nama DP</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Wilayah/Cabang</th>
+                    <th className="h-8 border-b px-3 text-left font-medium">Kota</th>
+                    <th className="h-8 border-b px-3 text-left font-medium">SPV Drop Point</th>
+                    <th className="h-8 border-b px-3 text-left font-medium">Admin DP</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Status</th>
                     <th className="h-8 w-32 border-b px-3 text-right font-medium">Aksi</th>
                   </tr>
@@ -231,6 +283,9 @@ export function DropPointClient() {
                       <td className="px-3 py-1.5 font-mono">{r['Kode DP']}</td>
                       <td className="px-3 py-1.5">{r['Nama DP']}</td>
                       <td className="px-3 py-1.5">{r['Wilayah/Cabang'] || '—'}</td>
+                      <td className="px-3 py-1.5">{r['Nama Kota'] || '—'}</td>
+                      <td className="px-3 py-1.5">{r['SPV Drop Point Nama'] || '—'}</td>
+                      <td className="px-3 py-1.5">{r['Admin DP'].length > 0 ? r['Admin DP'].join(', ') : '—'}</td>
                       <td className="px-3 py-1.5">
                         <StatusBadge aktif={isAktif(r['Status Aktif'])} />
                       </td>
@@ -272,7 +327,7 @@ export function DropPointClient() {
                   ))}
                   {pageRows.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="text-muted-foreground py-10 text-center">
+                      <td colSpan={8} className="text-muted-foreground py-10 text-center">
                         {q ? 'Tidak ada Drop Point yang cocok.' : 'Belum ada Drop Point. Klik “Tambah Drop Point”.'}
                       </td>
                     </tr>
@@ -328,6 +383,46 @@ export function DropPointClient() {
             <div className="space-y-1.5">
               <Label htmlFor="wilayah">Wilayah/Cabang</Label>
               <Input id="wilayah" value={form.wilayah} onChange={(e) => setForm({ ...form, wilayah: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="kodeKota">Kota</Label>
+              <Select items={kotaItems} value={form.kodeKota} onValueChange={(v) => setForm({ ...form, kodeKota: v ?? NONE })}>
+                <SelectTrigger id="kodeKota" className="h-9 w-full text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>— Belum ada Kota —</SelectItem>
+                  {(cabangList ?? []).map((c) => (
+                    <SelectItem key={c['Kode Kota']} value={c['Kode Kota']}>
+                      {c['Kode Kota']} — {c['Nama Kota']}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="spvDropPoint">SPV Drop Point</Label>
+              <Select
+                items={spvItems}
+                value={form.spvDropPointUserId}
+                onValueChange={(v) => setForm({ ...form, spvDropPointUserId: v ?? NONE })}
+              >
+                <SelectTrigger id="spvDropPoint" className="h-9 w-full text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>— Belum ditunjuk —</SelectItem>
+                  {activeUsers.map((u) => (
+                    <SelectItem key={u.Id} value={u.Id}>
+                      {u.Nama} ({u.Role})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-muted-foreground text-[11px]">
+                Label organisasi (dipilih dari akun User Management manapun), bukan role otorisasi baru. Admin DP
+                (hak akses login) tetap dikelola lewat User Management seperti biasa.
+              </p>
             </div>
             {editing && (
               <label className="flex items-center gap-2 text-sm">

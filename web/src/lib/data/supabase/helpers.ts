@@ -77,3 +77,18 @@ export async function assertDropPointActive(kodeDp: string): Promise<void> {
   if (!data) throw new ApiError('VALIDATION_ERROR', `Drop Point "${kode}" tidak ditemukan`);
   if (data.status_aktif !== true) throw new ApiError('VALIDATION_ERROR', `Drop Point "${kode}" tidak aktif`);
 }
+
+/** Pastikan users.id yang dipilih (Manager Kota/Asisten Manager/SPV Drop
+ *  Point - label organisasi, lihat cabang.ts) benar-benar ada. */
+export async function assertUserExists(userId: string): Promise<void> {
+  const { data, error } = await db().from('users').select('id').eq('id', userId).maybeSingle();
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  if (!data) throw new ApiError('VALIDATION_ERROR', 'Akun yang dipilih tidak ditemukan');
+}
+
+/** Pastikan Kota (cabang.kode_kota) ada, dipakai saat assign Drop Point ke Kota. */
+export async function assertKotaExists(kodeKota: string): Promise<void> {
+  const { data, error } = await db().from('cabang').select('kode_kota').eq('kode_kota', kodeKota).maybeSingle();
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  if (!data) throw new ApiError('VALIDATION_ERROR', `Kota "${kodeKota}" tidak ditemukan`);
+}

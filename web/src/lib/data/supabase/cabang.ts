@@ -1,5 +1,5 @@
 import { db } from './client';
-import { requireActor, requireRole } from './helpers';
+import { assertUserExists, requireActor, requireRole } from './helpers';
 import { ApiError } from '@/lib/errors';
 import type { CabangRow, CreateCabangInput, UpdateCabangInput } from '@/lib/data/types';
 
@@ -31,12 +31,6 @@ function toRow(r: DbRow, namaById: Map<string, string>): CabangRow {
     'Asisten Manager': String(r.asisten_manager_user_id ?? ''),
     'Asisten Manager Nama': r.asisten_manager_user_id ? (namaById.get(r.asisten_manager_user_id) ?? '') : '',
   };
-}
-
-async function assertUserExists(userId: string): Promise<void> {
-  const { data, error } = await db().from('users').select('id').eq('id', userId).maybeSingle();
-  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
-  if (!data) throw new ApiError('VALIDATION_ERROR', 'Akun yang dipilih tidak ditemukan');
 }
 
 export async function listCabang(actorEmail: string): Promise<CabangRow[]> {

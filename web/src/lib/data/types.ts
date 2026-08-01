@@ -7,16 +7,30 @@ export type DropPointRow = {
   'Nama DP': string;
   'Wilayah/Cabang': string;
   'Status Aktif': string;
+  /** '' = belum di-assign ke Kota manapun (lihat cabang.ts). */
+  'Kode Kota': string;
+  'Nama Kota': string;
+  /** users.id (uuid) SPV Drop Point - label organisasi, '' = belum ditunjuk. */
+  'SPV Drop Point': string;
+  'SPV Drop Point Nama': string;
+  /** Admin DP yang ter-assign (users.role='Admin DP' + drop_point=kode_dp) -
+   *  REUSE data existing, TANPA constraint unique di DB (bisa 0/1/banyak).
+   *  Ditampilkan apa adanya, bukan diasumsikan selalu satu. */
+  'Admin DP': string[];
 };
 export type CreateDropPointInput = {
   kodeDp: string;
   namaDp: string;
   wilayah?: string;
+  kodeKota?: string | null;
+  spvDropPointUserId?: string | null;
 };
 export type UpdateDropPointInput = Partial<{
   namaDp: string;
   wilayah: string;
   statusAktif: boolean;
+  kodeKota: string | null;
+  spvDropPointUserId: string | null;
 }>;
 
 // ---- Cabang (Kota) ------------------------------------------------------------
