@@ -1,5 +1,6 @@
 import { db } from './client';
 import { aktifText, assertKotaExists, assertUserExists, getSupervisedDPs, requireActor, requireRole } from './helpers';
+import { requirePermission } from './permissions';
 import { ApiError } from '@/lib/errors';
 import { FULL_ACCESS_ROLES } from '@/lib/roles';
 import type {
@@ -108,7 +109,8 @@ export async function createDropPoint(
   actorEmail: string,
   data: CreateDropPointInput,
 ): Promise<{ kodeDp: string }> {
-  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'master_drop_point');
   const kodeDp = String(data?.kodeDp ?? '').trim();
   const namaDp = String(data?.namaDp ?? '').trim();
   if (!kodeDp || !namaDp) throw new ApiError('VALIDATION_ERROR', 'Kode DP dan Nama DP wajib diisi');
@@ -145,7 +147,8 @@ export async function updateDropPoint(
   kodeDp: string,
   data: UpdateDropPointInput,
 ): Promise<DropPointRow> {
-  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'master_drop_point');
   const patch: Record<string, unknown> = {};
   if (data.namaDp !== undefined) patch.nama_dp = data.namaDp;
   if (data.wilayah !== undefined) patch.wilayah = data.wilayah;
@@ -176,7 +179,8 @@ export async function deleteDropPoint(
   actorEmail: string,
   kodeDp: string,
 ): Promise<{ kodeDp: string }> {
-  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'master_drop_point');
   const { error } = await db().from('master_drop_point').delete().eq('kode_dp', kodeDp);
   if (error) throw new ApiError('INTERNAL_ERROR', error.message);
   return { kodeDp };
@@ -196,7 +200,15 @@ export async function syncSupervisedDropPoints(
   targetEmail: string,
   kodeDpList: string[],
 ): Promise<{ assigned: string[] }> {
-  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  // Dipicu dari halaman User Management (form SPV, jalur KEDUA selain edit
+  // per-DP di halaman Drop Point - lihat komentar di atas), BUKAN dari
+  // halaman Drop Point walau fungsinya tinggal di file ini - menu_key-nya
+  // ikut 'user_management' (konsisten dgn createGeneralAccount di users.ts
+  // yang sebaliknya ikut 'master_drop_point' krn dipicu dari halaman Drop
+  // Point: aturan konsistennya adalah menu_key ikut halaman PEMICU-nya, bukan
+  // lokasi file fungsinya).
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'user_management');
   const email = String(targetEmail ?? '').trim().toLowerCase();
   if (!email) throw new ApiError('VALIDATION_ERROR', 'targetEmail wajib diisi');
 

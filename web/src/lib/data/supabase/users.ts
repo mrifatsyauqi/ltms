@@ -1,5 +1,6 @@
 import { db } from './client';
 import { aktifText, assertDropPointActive, requireActor, requireRole, resolveJabatanIdByRole } from './helpers';
+import { requirePermission } from './permissions';
 import { ApiError } from '@/lib/errors';
 import { ASSIGNABLE_ROLES, FULL_ACCESS_ROLES, isAssignableRole } from '@/lib/roles';
 import type { CreateGeneralAccountResult, CreateUserInput, UpdateUserInput, UserRow } from '@/lib/data/types';
@@ -48,7 +49,8 @@ export async function listUsers(actorEmail: string): Promise<UserRow[]> {
 }
 
 export async function createUser(actorEmail: string, data: CreateUserInput): Promise<{ email: string }> {
-  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'user_management');
   const nama = String(data?.nama ?? '').trim();
   const email = norm(data?.email);
   const nik = String(data?.nik ?? '').trim();
@@ -94,7 +96,8 @@ export async function updateUser(
   targetEmail: string,
   data: UpdateUserInput,
 ): Promise<UserRow> {
-  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'user_management');
   if (!targetEmail) throw new ApiError('VALIDATION_ERROR', 'targetEmail wajib diisi');
   if (data.role !== undefined && !isAssignableRole(data.role)) {
     throw new ApiError('VALIDATION_ERROR', `role harus salah satu dari: ${ASSIGNABLE_ROLES.join(', ')}`);
@@ -157,7 +160,12 @@ export async function createGeneralAccount(
   kodeDp: string,
   passwordHash: string,
 ): Promise<CreateGeneralAccountResult> {
-  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  // Dipicu dari halaman Master Drop Point (bukan User Management, walau
+  // fungsinya membuat baris `users`) - menu_key ikut 'master_drop_point',
+  // konsisten dgn aturan "menu_key ikut halaman PEMICU" (lihat catatan di
+  // syncSupervisedDropPoints, drop-points.ts, kasus kebalikannya).
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'master_drop_point');
   const kode = String(kodeDp ?? '').trim();
   if (!kode) throw new ApiError('VALIDATION_ERROR', 'Kode DP wajib diisi');
   if (!passwordHash) throw new ApiError('VALIDATION_ERROR', 'Password awal wajib diisi');
@@ -192,6 +200,7 @@ export async function createGeneralAccount(
 
 export async function deleteUser(actorEmail: string, targetEmail: string): Promise<{ email: string }> {
   const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'user_management');
   if (!targetEmail) throw new ApiError('VALIDATION_ERROR', 'targetEmail wajib diisi');
   if (norm(targetEmail) === norm(actor.email)) {
     throw new ApiError('VALIDATION_ERROR', 'Tidak bisa menghapus akun sendiri');
@@ -206,7 +215,8 @@ export async function setUserPassword(
   targetEmail: string,
   passwordHash: string,
 ): Promise<{ email: string }> {
-  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'user_management');
   if (!targetEmail || !passwordHash) {
     throw new ApiError('VALIDATION_ERROR', 'targetEmail dan passwordHash wajib diisi');
   }

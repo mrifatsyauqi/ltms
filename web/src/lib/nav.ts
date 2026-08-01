@@ -58,11 +58,12 @@ export function navForRole(role: string | undefined): NavGroup[] {
     // menuKey di cabang ini SENGAJA baru dipasang utk menu_key yang penegakan
     // backend-nya SUDAH ADA (dashboard, feedback_longtail_view,
     // riwayat_feedback, monitoring_delivery_cabang, role_akses, data_longtail,
-    // import_longtail, riwayat_import - CHECKPOINT 3). Sisanya (master_cabang,
-    // master_drop_point, master_feedback, user_management, pengaturan) BELUM
-    // digating di backend - menuKey-nya dipasang nanti BARENGAN gate page +
-    // requirePermission() endpoint-nya, jangan dipasang duluan (menu hilang
-    // tapi URL-nya masih bisa dibuka = false sense of security).
+    // import_longtail, riwayat_import - CHECKPOINT 3; master_cabang,
+    // master_drop_point, master_feedback, user_management - CHECKPOINT 4).
+    // Sisanya (pengaturan) BELUM digating di backend - menuKey-nya dipasang
+    // nanti BARENGAN gate page + requirePermission() endpoint-nya, jangan
+    // dipasang duluan (menu hilang tapi URL-nya masih bisa dibuka = false
+    // sense of security).
     return [
       {
         items: [
@@ -80,10 +81,11 @@ export function navForRole(role: string | undefined): NavGroup[] {
             label: 'Cabang',
             href: '/master/cabang',
             icon: Building2,
-            children: [{ label: 'Drop Point', href: '/master/drop-point', icon: Database }],
+            menuKey: 'master_cabang',
+            children: [{ label: 'Drop Point', href: '/master/drop-point', icon: Database, menuKey: 'master_drop_point' }],
           },
-          { label: 'Master Feedback', href: '/master/feedback', icon: ClipboardList },
-          { label: 'User Management', href: '/master/users', icon: UserCog },
+          { label: 'Master Feedback', href: '/master/feedback', icon: ClipboardList, menuKey: 'master_feedback' },
+          { label: 'User Management', href: '/master/users', icon: UserCog, menuKey: 'user_management' },
           { label: 'Role & Akses', href: '/master/role-akses', icon: ShieldCheck, menuKey: 'role_akses' },
         ],
       },

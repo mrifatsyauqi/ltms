@@ -124,9 +124,10 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
     const groups = navForRole('Admin Cabang');
     const all = groups.flatMap((g) => [...g.items, ...(g.items.flatMap((i) => i.children ?? []))]);
     // "Role & Akses" TIDAK LAGI di daftar ini sejak CHECKPOINT 2, "Data Long
-    // Tail"/"Import Long Tail"/"Riwayat Import" TIDAK LAGI sejak CHECKPOINT 3 -
-    // backend-nya masing2 sudah menegakkan menu_key-nya.
-    const belumDigating = ['Cabang', 'Drop Point', 'Master Feedback', 'User Management', 'Pengaturan'];
+    // Tail"/"Import Long Tail"/"Riwayat Import" TIDAK LAGI sejak CHECKPOINT 3,
+    // "Cabang"/"Drop Point"/"Master Feedback"/"User Management" TIDAK LAGI
+    // sejak CHECKPOINT 4 - backend-nya masing2 sudah menegakkan menu_key-nya.
+    const belumDigating = ['Pengaturan'];
     for (const label of belumDigating) {
       const item = all.find((i) => i.label === label);
       assert.ok(item, `item "${label}" harus ada di nav full access`);
@@ -199,6 +200,72 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
   });
 
   it('11g. REGRESI: full access dgn SEMUA menu_key true (kondisi seed produksi) -> Data Long Tail/Import Long Tail/Riwayat Import tetap tampil, nol perubahan', () => {
+    for (const role of ['Admin Cabang', 'Manager Kota', 'Asisten Manager Kota', 'Super Admin']) {
+      const groups = navForRole(role);
+      assert.deepEqual(filterNavByAccess(groups, access()), groups, `${role}: seed all-true tak boleh menghilangkan apa pun`);
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // CHECKPOINT 4: 4 menu_key Master Data yang penegakan backend-nya sudah ada
+  // (write functions SAJA - listCabang/listDropPoints/listMasterFeedback/
+  // listUsers SENGAJA tak digating, dipakai bersama dropdown di halaman lain).
+  // "Drop Point" nested di bawah "Cabang" - ini kali PERTAMA menuKey nested
+  // dipasang di data nav ASLI (bukan cuma struktur tiruan test 12-15), jadi
+  // ini juga bukti nyata fix rekursi filterItems() (CHECKPOINT 1) BENAR
+  // dipakai, bukan cuma teruji di struktur tiruan.
+  // --------------------------------------------------------------------------
+
+  it("11h. CHECKPOINT 4: \"Cabang\"/\"Drop Point\"/\"Master Feedback\"/\"User Management\" SEKARANG punya menuKey masing2", () => {
+    const groups = navForRole('Admin Cabang');
+    const cabang = groups.flatMap((g) => g.items).find((i) => i.label === 'Cabang');
+    assert.equal(cabang?.menuKey, 'master_cabang');
+    assert.equal(cabang?.children?.find((c) => c.label === 'Drop Point')?.menuKey, 'master_drop_point');
+    const byLabel = new Map(groups.flatMap((g) => g.items).map((i) => [i.label, i]));
+    assert.equal(byLabel.get('Master Feedback')?.menuKey, 'master_feedback');
+    assert.equal(byLabel.get('User Management')?.menuKey, 'user_management');
+  });
+
+  it('11i. master_cabang=false utk Admin Cabang -> "Cabang" DAN "Drop Point" (anaknya) hilang SEKALIGUS (parent mati -> subtree hilang), item lain grup Master Data (Master Feedback/User Management/Role & Akses) TETAP UTUH', () => {
+    const groups = navForRole('Admin Cabang');
+    const filtered = filterNavByAccess(groups, access({ master_cabang: false }));
+    const labels = filtered.flatMap((g) => g.items.map((i) => i.label));
+    assert.ok(!labels.includes('Cabang'), 'harus hilang - backend-nya sudah FORBIDDEN');
+    const masterData = filtered.find((g) => g.label === 'Master Data');
+    assert.ok(!masterData?.items.some((i) => i.children?.some((c) => c.label === 'Drop Point')), 'Drop Point ikut hilang krn parent-nya mati');
+    assert.ok(labels.includes('Master Feedback'));
+    assert.ok(labels.includes('User Management'));
+    assert.ok(labels.includes('Role & Akses'));
+  });
+
+  it('11j. BUKTI FIX REKURSI CHILDREN (data nav ASLI, bukan struktur tiruan): master_drop_point=false SAJA (master_cabang=true) -> "Cabang" TETAP tampil TANPA anak "Drop Point", item lain utuh', () => {
+    const groups = navForRole('Admin Cabang');
+    const filtered = filterNavByAccess(groups, access({ master_drop_point: false }));
+    const masterData = filtered.find((g) => g.label === 'Master Data');
+    const cabang = masterData?.items.find((i) => i.label === 'Cabang');
+    assert.ok(cabang, '"Cabang" tetap tampil - menuKey-nya sendiri (master_cabang) masih true');
+    assert.equal('children' in cabang!, false, 'properti children harus dibuang total, bukan array kosong (lihat komentar filterItems)');
+    const labels = filtered.flatMap((g) => g.items.map((i) => i.label));
+    assert.ok(labels.includes('Master Feedback'));
+    assert.ok(labels.includes('User Management'));
+  });
+
+  it('11k. matikan master_feedback/user_management SATU-SATU utk Admin Cabang -> item terkait hilang, sisanya (termasuk Cabang/Drop Point) utuh', () => {
+    const groups = navForRole('Admin Cabang');
+    for (const [key, label] of [
+      ['master_feedback', 'Master Feedback'],
+      ['user_management', 'User Management'],
+    ] as const) {
+      const filtered = filterNavByAccess(groups, access({ [key]: false }));
+      const labels = filtered.flatMap((g) => g.items.map((i) => i.label));
+      assert.ok(!labels.includes(label), `${label} harus hilang krn ${key}=false`);
+      assert.ok(labels.includes('Cabang'), `${key}=false tak boleh menyentuh Cabang`);
+      const masterData = filtered.find((g) => g.label === 'Master Data');
+      assert.ok(masterData?.items.some((i) => i.children?.some((c) => c.label === 'Drop Point')), `${key}=false tak boleh menyentuh Drop Point`);
+    }
+  });
+
+  it('11l. REGRESI: full access dgn SEMUA menu_key true (kondisi seed produksi) -> Cabang/Drop Point/Master Feedback/User Management tetap tampil, nol perubahan', () => {
     for (const role of ['Admin Cabang', 'Manager Kota', 'Asisten Manager Kota', 'Super Admin']) {
       const groups = navForRole(role);
       assert.deepEqual(filterNavByAccess(groups, access()), groups, `${role}: seed all-true tak boleh menghilangkan apa pun`);

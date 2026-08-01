@@ -37,6 +37,16 @@ function freshStore(): Map<string, Row[]> {
     { no_waybill: 'WB-BATANG', status_terakhir: 'KIRIM', alasan_bermasalah: '', dp_sampai: 'BATANG01', waktu_sampai: '2026-07-28 10:00:00', umur_frozen: null, sprinter_delivery: '', cod: 'NONCOD', delivery_attempt: 0, feedback: '', log_feedback: '', perlu_review: false, version: 1 },
   ]);
   store.set('activity_log', []);
+  store.set('cabang', []);
+  store.set('master_feedback', []);
+  store.set('jabatan', [
+    { id: 'jab-super-admin', nama: 'Super Admin', tingkat: 1, deskripsi: null },
+    { id: 'jab-admin-cabang', nama: 'Admin Cabang', tingkat: 2, deskripsi: null },
+    { id: 'jab-manager-kota', nama: 'Manager Kota', tingkat: 3, deskripsi: null },
+    { id: 'jab-asisten-manager', nama: 'Asisten Manager Kota', tingkat: 4, deskripsi: null },
+    { id: 'jab-spv-dp', nama: 'SPV Drop Point', tingkat: 5, deskripsi: null },
+    { id: 'jab-admin-dp', nama: 'Admin DP', tingkat: 6, deskripsi: null },
+  ]);
   // Seed persis spt migrasi produksi: semua true utk SPV Drop Point/Admin DP
   // (5 menu_key) DAN Admin Cabang/Manager Kota/Asisten Manager Kota (15
   // menu_key, sejak bypass hasPermission() utk grup ini dihapus - role_
@@ -75,6 +85,10 @@ describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fu
   let longtail: typeof import('./longtail.ts');
   let riwayat: typeof import('./riwayat-feedback.ts');
   let importLib: typeof import('./import.ts');
+  let cabangLib: typeof import('./cabang.ts');
+  let dropPointsLib: typeof import('./drop-points.ts');
+  let masterFeedbackLib: typeof import('./master-feedback.ts');
+  let usersLib: typeof import('./users.ts');
   let store: Map<string, Row[]>;
 
   before(async () => {
@@ -87,6 +101,10 @@ describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fu
     longtail = await import('./longtail.ts');
     riwayat = await import('./riwayat-feedback.ts');
     importLib = await import('./import.ts');
+    cabangLib = await import('./cabang.ts');
+    dropPointsLib = await import('./drop-points.ts');
+    masterFeedbackLib = await import('./master-feedback.ts');
+    usersLib = await import('./users.ts');
   });
 
   beforeEach(() => {
@@ -413,5 +431,81 @@ describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fu
       { noWaybill: 'WB-BATANG', statusTerakhir: 'ON DELIVERY', dpSampai: 'BATANG01' },
     ]);
     assert.ok(result, 'Super Admin tetap bisa import');
+  });
+
+  // --------------------------------------------------------------------------
+  // CHECKPOINT 4: 4 menu_key Master Data ('master_cabang', 'master_drop_point',
+  // 'master_feedback', 'user_management') SEKARANG ditegakkan nyata di fungsi
+  // TULIS (create/update/delete) - listCabang/listDropPoints/listMasterFeedback/
+  // listUsers SENGAJA TIDAK disentuh (dipakai bersama dropdown di halaman
+  // lain, lihat komentar di masing2 file produksi).
+  // --------------------------------------------------------------------------
+
+  let dpCounter = 0;
+  /** kodeDp unik per panggilan - createDropPoint cek konflik by kode. */
+  function dp() { return `DPTEST${++dpCounter}`; }
+
+  it('22. CHECKPOINT KRITIS (endpoint nyata): dgn seed default (all-true), Admin Cabang/Manager Kota/Asisten Manager Kota TETAP BISA createCabang/createDropPoint/createMasterFeedback/createUser - regresi nol', async () => {
+    let n = 0;
+    for (const email of [ADMIN_CABANG, MANAGER_KOTA, ASISTEN_MANAGER]) {
+      n++;
+      const cabang = await cabangLib.createCabang(email, { kodeKota: `KOTA-A-${n}`, namaKota: 'Kota Test' });
+      assert.ok(cabang, `${email} tetap bisa createCabang`);
+      const dropPoint = await dropPointsLib.createDropPoint(email, { kodeDp: dp(), namaDp: 'DP Test' });
+      assert.ok(dropPoint, `${email} tetap bisa createDropPoint`);
+      const feedback = await masterFeedbackLib.createMasterFeedback(email, `Feedback Test ${n}`);
+      assert.ok(feedback, `${email} tetap bisa createMasterFeedback`);
+      const user = await usersLib.createUser(email, { nama: 'User Baru', email: `usertest${n}@ltms.test`, nik: `NIK-UT-${n}`, role: 'Admin DP', dropPoint: 'BATANG01' });
+      assert.ok(user, `${email} tetap bisa createUser`);
+    }
+  });
+
+  it('22b. BUKTI 4 menu_key Master Data BENAR-BENAR menegakkan matrix, MASING2 INDEPENDEN: matikan 1 menu_key utk Admin Cabang -> fungsi terkait FORBIDDEN, 3 fungsi lain (menu_key beda) TETAP jalan, Manager Kota (role lain) TETAP tak terpengaruh', async () => {
+    store.get('role_permissions')!.find((r) => r.role === 'Admin Cabang' && r.menu_key === 'master_cabang')!.enabled = false;
+
+    await assert.rejects(
+      () => cabangLib.createCabang(ADMIN_CABANG, { kodeKota: 'KOTA-B', namaKota: 'Kota Test' }),
+      (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+      'Admin Cabang harus FORBIDDEN setelah master_cabang dimatikan',
+    );
+    const dropPoint = await dropPointsLib.createDropPoint(ADMIN_CABANG, { kodeDp: dp(), namaDp: 'DP Test' });
+    assert.ok(dropPoint, 'createDropPoint (menu_key beda) tak ikut terblokir');
+    const feedback = await masterFeedbackLib.createMasterFeedback(ADMIN_CABANG, 'Feedback Independen');
+    assert.ok(feedback, 'createMasterFeedback (menu_key beda) tak ikut terblokir');
+    const user = await usersLib.createUser(ADMIN_CABANG, { nama: 'User Independen', email: 'userindependen@ltms.test', nik: 'NIK-UI', role: 'Admin DP', dropPoint: 'BATANG01' });
+    assert.ok(user, 'createUser (menu_key beda) tak ikut terblokir');
+
+    const cabangManager = await cabangLib.createCabang(MANAGER_KOTA, { kodeKota: 'KOTA-C', namaKota: 'Kota Test' });
+    assert.ok(cabangManager, 'Manager Kota tak ikut terpengaruh - matinya Admin Cabang independen per akun/role');
+  });
+
+  it('22c. REGRESI: SPV Drop Point/Admin DP TETAP tertolak createCabang/createDropPoint/createMasterFeedback/createUser walau menu_key-nya somehow true (requireRole(FULL_ACCESS_ROLES) yang lama tetap penjaga utama, bukan digantikan)', async () => {
+    for (const role of ['SPV Drop Point', 'Admin DP'] as const) {
+      for (const menu_key of ['master_cabang', 'master_drop_point', 'master_feedback', 'user_management'] as const) {
+        store.get('role_permissions')!.push({ role, menu_key, enabled: true });
+      }
+    }
+    for (const email of [SPV, ADMIN_DP]) {
+      await assert.rejects(() => cabangLib.createCabang(email, { kodeKota: 'KOTA-D', namaKota: 'Kota Test' }),
+        (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN', `${email}: createCabang tak boleh bocor`);
+      await assert.rejects(() => dropPointsLib.createDropPoint(email, { kodeDp: dp(), namaDp: 'DP Test' }),
+        (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN', `${email}: createDropPoint tak boleh bocor`);
+      await assert.rejects(() => masterFeedbackLib.createMasterFeedback(email, 'Feedback Bocor'),
+        (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN', `${email}: createMasterFeedback tak boleh bocor`);
+      await assert.rejects(() => usersLib.createUser(email, { nama: 'User Bocor', email: 'userbocor@ltms.test', nik: 'NIK-UB', role: 'Admin DP', dropPoint: 'BATANG01' }),
+        (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN', `${email}: createUser tak boleh bocor`);
+    }
+  });
+
+  it('22d. Super Admin TETAP TIDAK TERPENGARUH lewat createCabang/createDropPoint/createMasterFeedback/createUser walau SEMUA baris role_permissions dimatikan', async () => {
+    for (const r of store.get('role_permissions')!) r.enabled = false;
+    const cabang = await cabangLib.createCabang(SUPER_ADMIN, { kodeKota: 'KOTA-E', namaKota: 'Kota Test' });
+    assert.ok(cabang, 'Super Admin tetap bisa createCabang');
+    const dropPoint = await dropPointsLib.createDropPoint(SUPER_ADMIN, { kodeDp: dp(), namaDp: 'DP Test' });
+    assert.ok(dropPoint, 'Super Admin tetap bisa createDropPoint');
+    const feedback = await masterFeedbackLib.createMasterFeedback(SUPER_ADMIN, 'Feedback Super Admin');
+    assert.ok(feedback, 'Super Admin tetap bisa createMasterFeedback');
+    const user = await usersLib.createUser(SUPER_ADMIN, { nama: 'User Super Admin', email: 'usersuperadmin@ltms.test', nik: 'NIK-USA', role: 'Admin DP', dropPoint: 'BATANG01' });
+    assert.ok(user, 'Super Admin tetap bisa createUser');
   });
 });
