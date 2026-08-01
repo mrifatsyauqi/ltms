@@ -10,6 +10,7 @@ import { navForRole, type NavItem } from '@/lib/nav';
 import { hasFullAccess } from '@/lib/roles';
 import { signOutAction } from '@/app/actions/auth';
 import { ScopeFilter } from '@/components/dashboard/scope-filter';
+import { SupervisedScopeBox } from '@/components/dashboard/supervised-scope-box';
 
 type SidebarProps = {
   role?: string;
@@ -86,25 +87,27 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
       </div>
 
       {/* Konteks DP aktif. Full access (Admin Cabang/Manager Kota/Asisten
-          Manager Kota/Super Admin - Langkah 3): dropdown filter CAKUPAN
-          (memfilter seluruh Dashboard). SPV Drop Point: label statis generik
-          (DP yang disupervisi ditegakkan server-side, bukan dipilih di sini -
-          lihat resolveScopedDps). Admin DP: label statis DP miliknya. */}
+          Manager Kota/Super Admin - Langkah 3): dropdown filter CAKUPAN ke
+          SEMUA DP di sistem. SPV Drop Point: SupervisedScopeBox merender
+          label+isi sendiri (statis kalau cuma 0/1 DP disupervisi - sama
+          persis pola Admin DP, atau dropdown kalau >1 DP TAPI opsinya cuma
+          DP yang disupervisi). Admin DP: label statis DP miliknya. */}
       {!collapsed && (
         <div className="border-sidebar-border bg-sidebar-accent/50 mx-3 mb-2 rounded-lg border px-2.5 py-1.5">
-          <div className="text-[10px] tracking-wide uppercase opacity-60">
-            {hasFullAccess(role) ? 'Cakupan' : role === 'SPV Drop Point' ? 'Cakupan' : 'DP Aktif'}
-          </div>
           {hasFullAccess(role) ? (
-            <ScopeFilter />
+            <>
+              <div className="text-[10px] tracking-wide uppercase opacity-60">Cakupan</div>
+              <ScopeFilter />
+            </>
           ) : role === 'SPV Drop Point' ? (
-            <div className="truncate text-[13px] font-semibold text-sidebar-accent-foreground">
-              Drop Point disupervisi
-            </div>
+            <SupervisedScopeBox />
           ) : (
-            <div className="truncate text-[13px] font-semibold text-sidebar-accent-foreground">
-              {dropPoint || '-'}
-            </div>
+            <>
+              <div className="text-[10px] tracking-wide uppercase opacity-60">DP Aktif</div>
+              <div className="truncate text-[13px] font-semibold text-sidebar-accent-foreground">
+                {dropPoint || '-'}
+              </div>
+            </>
           )}
         </div>
       )}

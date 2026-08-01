@@ -33,8 +33,11 @@ async function fetchScoped(dpFilter: DpFilter): Promise<LongtailDbRow[]> {
 
 /**
  * Semua angka dihitung & di-scope server-side (Admin DP hanya DP-nya, SPV
- * Drop Point semua DP yang disupervisi). `dp` opsional: bila diisi (full
- * access memilih 1 DP di filter CAKUPAN) memfilter ke DP itu. Read-only.
+ * Drop Point semua DP yang disupervisi - atau 1 DP tunggal kalau `dp` diisi
+ * & tervalidasi ada di daftar yang disupervisinya, lihat SupervisedScopeBox
+ * di sidebar). `dp` utk full access: bila diisi (memilih 1 DP di filter
+ * CAKUPAN) memfilter ke DP itu tanpa perlu validasi tambahan (sudah bebas
+ * DP manapun). Read-only.
  */
 export async function getDashboard(actorEmail: string, dp?: string): Promise<DashboardData> {
   const actor = await requireActor(actorEmail);
@@ -42,8 +45,20 @@ export async function getDashboard(actorEmail: string, dp?: string): Promise<Das
 
   // Tentukan filter DP efektif.
   let dpFilter: DpFilter = null;
-  if (!isFullAccess) dpFilter = await resolveScopedDps(actor);
-  else if (dp && String(dp) !== 'ALL') dpFilter = String(dp);
+  if (isFullAccess) {
+    if (dp && String(dp) !== 'ALL') dpFilter = String(dp);
+  } else {
+    const scopedDps = await resolveScopedDps(actor);
+    // `dp` dari SPV Drop Point HANYA dipakai kalau memang salah satu DP yang
+    // disupervisinya sendiri (tervalidasi thd resolveScopedDps, bukan
+    // dipercaya mentah2 dari client) - persempit ke 1 DP itu; selain itu
+    // (tak diisi/'ALL'/tak valid) tetap agregat SEMUA DP yang disupervisi.
+    if (dp && String(dp) !== 'ALL' && scopedDps?.includes(String(dp))) {
+      dpFilter = String(dp);
+    } else {
+      dpFilter = scopedDps;
+    }
+  }
 
   return computeDashboard(dpFilter, actor.role, actor.dropPoint || '');
 }
@@ -210,12 +225,14 @@ export async function writeDailySnapshot(): Promise<{ tanggal: string; scopes: n
  *
  * Snapshot harian (writeDailySnapshot) granularitasnya per-DP TUNGGAL ('ALL'
  * + 1 baris/DP aktif) - belum ada agregat historis multi-DP. SPV Drop Point
- * dgn TEPAT 1 DP disupervisi tetap bisa (jalur sama dgn Admin DP); SPV dgn
- * >1 DP sengaja pulang null (bukan menggabungkan angka snapshot per-DP secara
- * serampangan - beberapa field seperti progress% & paket tertua tidak valid
- * kalau cuma dijumlah). Dashboard LIVE (getDashboard, bukan fungsi ini) sudah
- * benar mengagregasi real-time utk SPV multi-DP - keterbatasan ini CUMA di
- * fitur "keadaan tanggal X" historis.
+ * BISA lihat snapshot kalau: disupervisi TEPAT 1 DP (jalur sama dgn Admin
+ * DP), ATAU mempersempit sendiri ke 1 DP lewat `dp` (tervalidasi thd
+ * resolveScopedDps - lihat getDashboard, pola sama). Kalau masih "Semua DP
+ * Disupervisi" (agregat, >1 DP, tanpa `dp` valid) sengaja pulang null (bukan
+ * menggabungkan angka snapshot per-DP secara serampangan - beberapa field
+ * spt progress% & paket tertua tidak valid kalau cuma dijumlah). Dashboard
+ * LIVE (getDashboard, bukan fungsi ini) sudah benar mengagregasi real-time
+ * utk SPV multi-DP - keterbatasan ini CUMA di fitur "keadaan tanggal X".
  */
 export async function getDashboardSnapshot(
   actorEmail: string,
@@ -225,11 +242,18 @@ export async function getDashboardSnapshot(
   const actor = await requireActor(actorEmail);
   const isFullAccess = hasFullAccess(actor.role);
   let scope = 'ALL';
-  if (!isFullAccess) {
+  if (isFullAccess) {
+    if (dp && String(dp) !== 'ALL') scope = String(dp);
+  } else {
     const scopedDps = await resolveScopedDps(actor);
-    if (!scopedDps || scopedDps.length !== 1) return null;
-    scope = scopedDps[0];
-  } else if (dp && String(dp) !== 'ALL') scope = String(dp);
+    if (dp && String(dp) !== 'ALL' && scopedDps?.includes(String(dp))) {
+      scope = String(dp);
+    } else if (scopedDps && scopedDps.length === 1) {
+      scope = scopedDps[0];
+    } else {
+      return null;
+    }
+  }
 
   const { data, error } = await db()
     .from('dashboard_snapshot')

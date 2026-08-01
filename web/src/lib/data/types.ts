@@ -34,6 +34,12 @@ export type UpdateDropPointInput = Partial<{
   kodeKota: string | null;
   spvDropPointUserId: string | null;
 }>;
+/** DP yang disupervisi SPV Drop Point yang sedang login (dipakai sidebar -
+ *  lihat SupervisedScopeBox), BUKAN daftar DP lengkap sistem. */
+export type SupervisedDropPointRow = {
+  'Kode DP': string;
+  'Nama DP': string;
+};
 
 // ---- Jabatan ------------------------------------------------------------------
 export type JabatanRow = {

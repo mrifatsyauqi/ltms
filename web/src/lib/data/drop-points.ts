@@ -4,5 +4,6 @@ export const listDropPoints = supa.listDropPoints;
 export const createDropPoint = supa.createDropPoint;
 export const updateDropPoint = supa.updateDropPoint;
 export const deleteDropPoint = supa.deleteDropPoint;
+export const listSupervisedDropPoints = supa.listSupervisedDropPoints;
 
-export type { DropPointRow, CreateDropPointInput, UpdateDropPointInput } from './types';
+export type { DropPointRow, CreateDropPointInput, UpdateDropPointInput, SupervisedDropPointRow } from './types';

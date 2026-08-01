@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { type Row, fakeDbFactory } from './fake-db.test-support.ts';
 
 const SPV_ID = 'u-spv-dua-dp';
+const SPV_SATU_ID = 'u-spv-satu-dp';
 
 function freshStore(): Map<string, Row[]> {
   const store = new Map<string, Row[]>();
@@ -20,12 +21,13 @@ function freshStore(): Map<string, Row[]> {
     { id: 'u-asisten', email: 'asisten@ltms.test', nama: 'Asisten Manager', role: 'Asisten Manager Kota', drop_point: '', status_aktif: true },
     { id: 'u-superadmin', email: 'superadmin@ltms.test', nama: 'Super Admin', role: 'Super Admin', drop_point: '', status_aktif: true },
     { id: SPV_ID, email: 'spv@ltms.test', nama: 'SPV Dua DP', role: 'SPV Drop Point', drop_point: '', status_aktif: true },
+    { id: SPV_SATU_ID, email: 'spvsatu@ltms.test', nama: 'SPV Satu DP', role: 'SPV Drop Point', drop_point: '', status_aktif: true },
     { id: 'u-admindp', email: 'admindp@ltms.test', nama: 'Admin DP', role: 'Admin DP', drop_point: 'BATANG01', status_aktif: true },
   ]);
   store.set('master_drop_point', [
     { kode_dp: 'BATANG01', nama_dp: 'Batang 01', wilayah: 'Batang', status_aktif: true, kode_kota: null, spv_drop_point_user_id: SPV_ID },
     { kode_dp: 'BANDAR01', nama_dp: 'Bandar 01', wilayah: 'Bandar', status_aktif: true, kode_kota: null, spv_drop_point_user_id: SPV_ID },
-    { kode_dp: 'SUBAH01', nama_dp: 'Subah 01', wilayah: 'Subah', status_aktif: true, kode_kota: null, spv_drop_point_user_id: null },
+    { kode_dp: 'SUBAH01', nama_dp: 'Subah 01', wilayah: 'Subah', status_aktif: true, kode_kota: null, spv_drop_point_user_id: SPV_SATU_ID },
   ]);
   store.set('longtail', [
     { no_waybill: 'WB-BATANG', status_terakhir: 'DELIVERY', alasan_bermasalah: '', dp_sampai: 'BATANG01', waktu_sampai: '2026-07-28 10:00:00', umur_frozen: null, sprinter_delivery: '', cod: 'NONCOD', delivery_attempt: 0, feedback: '', log_feedback: '', perlu_review: false, version: 1 },
@@ -34,6 +36,10 @@ function freshStore(): Map<string, Row[]> {
   ]);
   store.set('activity_log', []);
   store.set('longtail_archive', []);
+  store.set('dashboard_snapshot', [
+    { tanggal: '2026-07-28', scope: 'BATANG01', data: { role: 'Admin DP', dropPoint: 'BATANG01', summary: { total: 1, sudahFeedback: 0, belumFeedback: 1, clearTTD: 0, belumClearTTD: 1, progressFeedbackPct: 0, paketTertua: 0, paketTertuaWaybill: '', paketLebih3Hari: 0, progressHariIni: 0 }, distribusiFeedback: [], aging: [], monitoringDp: [], progressPerSprinter: [] } },
+    { tanggal: '2026-07-28', scope: 'BANDAR01', data: { role: 'Admin DP', dropPoint: 'BANDAR01', summary: { total: 1, sudahFeedback: 0, belumFeedback: 1, clearTTD: 0, belumClearTTD: 1, progressFeedbackPct: 0, paketTertua: 0, paketTertuaWaybill: '', paketLebih3Hari: 0, progressHariIni: 0 }, distribusiFeedback: [], aging: [], monitoringDp: [], progressPerSprinter: [] } },
+  ]);
   store.set('jabatan', [
     { id: 'jab-super-admin', nama: 'Super Admin', tingkat: 1, deskripsi: null },
     { id: 'jab-admin-cabang', nama: 'Admin Cabang', tingkat: 2, deskripsi: null },
@@ -50,6 +56,7 @@ const MANAGER_KOTA = 'manager@ltms.test';
 const ASISTEN_MANAGER = 'asisten@ltms.test';
 const SUPER_ADMIN = 'superadmin@ltms.test';
 const SPV = 'spv@ltms.test';
+const SPV_SATU = 'spvsatu@ltms.test';
 
 describe('Langkah 3 - Perluasan Role: full access & SPV Drop Point (eksekusi nyata, fungsi produksi asli)', () => {
   let helpers: typeof import('./helpers.ts');
@@ -59,6 +66,7 @@ describe('Langkah 3 - Perluasan Role: full access & SPV Drop Point (eksekusi nya
   let roles: typeof import('../../roles.ts');
   let nav: typeof import('../../nav.ts');
   let users: typeof import('./users.ts');
+  let dropPoints: typeof import('./drop-points.ts');
   let store: Map<string, Row[]>;
 
   before(async () => {
@@ -72,6 +80,7 @@ describe('Langkah 3 - Perluasan Role: full access & SPV Drop Point (eksekusi nya
     roles = await import('../../roles.ts');
     nav = await import('../../nav.ts');
     users = await import('./users.ts');
+    dropPoints = await import('./drop-points.ts');
   });
 
   beforeEach(() => {
@@ -234,5 +243,55 @@ describe('Langkah 3 - Perluasan Role: full access & SPV Drop Point (eksekusi nya
     await users.createUser(MANAGER_KOTA, { nama: 'Dibuat Manager Kota', email: 'dibuatmanager@ltms.test', nik: 'NIK-DM', role: 'Admin DP', dropPoint: 'BATANG01' });
     const list = await users.listUsers(ADMIN_CABANG);
     assert.ok(list.some((u) => u.Email === 'dibuatmanager@ltms.test'));
+  });
+
+  // --------------------------------------------------------------------------
+  // Perbaikan sidebar SPV Drop Point: listSupervisedDropPoints (sumber
+  // SupervisedScopeBox) + narrowing `dp` di getDashboard/getDashboardSnapshot
+  // - "cakupan"-nya SPV sekarang bisa dipersempit ke 1 dari DP yang
+  // disupervisi (dropdown), bukan cuma agregat semua atau tanpa pilihan.
+  // --------------------------------------------------------------------------
+
+  it('20. listSupervisedDropPoints: SPV dgn 1 DP -> array panjang 1 (dasar utk sidebar tampil spt Admin DP)', async () => {
+    const dps = await dropPoints.listSupervisedDropPoints(SPV_SATU);
+    assert.deepEqual(dps.map((d) => d['Kode DP']), ['SUBAH01']);
+  });
+
+  it('21. listSupervisedDropPoints: SPV dgn 2 DP -> array terurut, dasar utk sidebar tampil dropdown', async () => {
+    const dps = await dropPoints.listSupervisedDropPoints(SPV);
+    assert.deepEqual(dps.map((d) => d['Kode DP']), ['BANDAR01', 'BATANG01']);
+  });
+
+  it('22. listSupervisedDropPoints: role selain SPV Drop Point -> array kosong (aman dipanggil role apapun)', async () => {
+    const dps = await dropPoints.listSupervisedDropPoints(ADMIN_CABANG);
+    assert.deepEqual(dps, []);
+  });
+
+  it('23. getDashboard: SPV Drop Point mempersempit ke 1 DP via `dp` (tervalidasi thd DP yang disupervisi sendiri) -> total cuma DP itu', async () => {
+    const dash = await dashboard.getDashboard(SPV, 'BATANG01');
+    assert.equal(dash.summary.total, 1);
+  });
+
+  it('24. getDashboard: SPV Drop Point kirim `dp` DP yang BUKAN cakupannya -> diabaikan, tetap agregat SEMUA DP disupervisi (TIDAK bocor ke DP lain)', async () => {
+    const dash = await dashboard.getDashboard(SPV, 'SUBAH01'); // disupervisi SPV_SATU, bukan SPV
+    assert.equal(dash.summary.total, 2, 'harus fallback ke agregat 2 DP miliknya, bukan 1 baris SUBAH01 & bukan error');
+  });
+
+  it('25. getDashboardSnapshot: SPV Drop Point mempersempit ke 1 DP via `dp` -> bisa baca snapshot DP itu (sebelumnya selalu null utk SPV multi-DP)', async () => {
+    const snap = await dashboard.getDashboardSnapshot(SPV, '2026-07-28', 'BATANG01');
+    assert.ok(snap, 'snapshot BATANG01 harus ketemu setelah dipersempit');
+    assert.equal(snap!.summary.total, 1);
+  });
+
+  it('26. getDashboardSnapshot: SPV Drop Point TANPA mempersempit (masih "Semua DP Disupervisi", >1 DP) -> tetap null (belum ada agregat snapshot multi-DP)', async () => {
+    const snap = await dashboard.getDashboardSnapshot(SPV, '2026-07-28');
+    assert.equal(snap, null);
+  });
+
+  it('27. getDashboardSnapshot: SPV dgn TEPAT 1 DP disupervisi -> otomatis dapat snapshot DP-nya TANPA perlu kirim `dp` (jalur sama dgn Admin DP)', async () => {
+    store.get('dashboard_snapshot')!.push({ tanggal: '2026-07-28', scope: 'SUBAH01', data: { role: 'Admin DP', dropPoint: 'SUBAH01', summary: { total: 1, sudahFeedback: 0, belumFeedback: 1, clearTTD: 0, belumClearTTD: 1, progressFeedbackPct: 0, paketTertua: 0, paketTertuaWaybill: '', paketLebih3Hari: 0, progressHariIni: 0 }, distribusiFeedback: [], aging: [], monitoringDp: [], progressPerSprinter: [] } });
+    const snap = await dashboard.getDashboardSnapshot(SPV_SATU, '2026-07-28');
+    assert.ok(snap);
+    assert.equal(snap!.summary.total, 1);
   });
 });

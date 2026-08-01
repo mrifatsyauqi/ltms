@@ -1,10 +1,11 @@
 import { db } from './client';
-import { aktifText, assertKotaExists, assertUserExists, requireActor, requireRole } from './helpers';
+import { aktifText, assertKotaExists, assertUserExists, getSupervisedDPs, requireActor, requireRole } from './helpers';
 import { ApiError } from '@/lib/errors';
 import { FULL_ACCESS_ROLES } from '@/lib/roles';
 import type {
   CreateDropPointInput,
   DropPointRow,
+  SupervisedDropPointRow,
   UpdateDropPointInput,
 } from '@/lib/data/types';
 
@@ -81,6 +82,26 @@ export async function listDropPoints(actorEmail: string): Promise<DropPointRow[]
   const rows = (data ?? []) as DbRow[];
   const lk = await buildLookups(rows);
   return rows.map((r) => toRow(r, lk));
+}
+
+/** DP yang disupervisi actor yang SEDANG LOGIN (bukan daftar DP lengkap
+ *  sistem) - dipakai sidebar (SupervisedScopeBox) utk SPV Drop Point. Aman
+ *  utk role apapun (bukan cuma SPV): tinggal pulang array kosong kalau
+ *  actor.id tak disupervisikan ke DP manapun. */
+export async function listSupervisedDropPoints(actorEmail: string): Promise<SupervisedDropPointRow[]> {
+  const actor = await requireActor(actorEmail);
+  const kodeList = await getSupervisedDPs(actor.id);
+  if (kodeList.length === 0) return [];
+  const { data, error } = await db()
+    .from('master_drop_point')
+    .select('kode_dp, nama_dp')
+    .in('kode_dp', kodeList)
+    .order('kode_dp');
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  return (data ?? []).map((r) => ({
+    'Kode DP': String((r as { kode_dp: string }).kode_dp ?? ''),
+    'Nama DP': String((r as { nama_dp: string }).nama_dp ?? ''),
+  }));
 }
 
 export async function createDropPoint(
