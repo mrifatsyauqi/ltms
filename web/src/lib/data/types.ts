@@ -2,7 +2,7 @@
 // "shape sheet lama" (mis. 'No. Waybill') supaya API & frontend tidak berubah.
 
 import type { AssignableRole } from '@/lib/roles';
-import type { GatedRole, MenuKey } from '@/lib/data/supabase/permissions';
+import type { ManageableRole, MenuKey } from '@/lib/data/supabase/permissions';
 
 // ---- Drop Point -------------------------------------------------------------
 export type DropPointRow = {
@@ -270,10 +270,12 @@ export type DashboardData = {
 };
 
 // ---- Role & Akses -------------------------------------------------------------
-// Matrix menu HANYA utk 2 role "diatur": 'SPV Drop Point' & 'Admin DP'. Role
-// full access (Super Admin/Admin Cabang/Manager Kota/Asisten Manager Kota)
-// TIDAK PERNAH masuk sini (lihat lib/data/supabase/permissions.ts).
-export type RoleAksesSummary = { role: GatedRole; count: number };
+// UI Role & Akses bisa menampilkan/mengedit 5 role total (ManageableRole) -
+// TAPI siapa BOLEH melihat kartu jabatan yang mana dibatasi per actor (Super
+// Admin: semua 5; Admin Cabang/Manager Kota/Asisten Manager Kota: hanya SPV
+// Drop Point/Admin DP) - lihat manageableRolesFor() di
+// lib/data/supabase/permissions.ts.
+export type RoleAksesSummary = { role: ManageableRole; count: number };
 export type RolePermissionRow = { menuKey: MenuKey; enabled: boolean };
 export type UserPermissionRow = { menuKey: MenuKey; enabled: boolean; isOverride: boolean };
 export type RoleAksesAccount = {
@@ -281,8 +283,9 @@ export type RoleAksesAccount = {
   nama: string;
   email: string;
   nik: string;
-  role: GatedRole;
-  /** SPV: "Supervisi X Drop Point"; Admin DP: "Drop Point <kode>". */
+  role: ManageableRole;
+  /** SPV: "Supervisi X Drop Point"; Admin DP: "Drop Point <kode>"; Manager
+   *  Kota/Asisten Manager Kota: "Kota <nama>"; Admin Cabang: label statis. */
   konteks: string;
   customCount: number;
 };

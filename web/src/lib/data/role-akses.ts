@@ -15,5 +15,5 @@ export type {
   RolePermissionRow,
   UserPermissionRow,
 } from './types';
-export { MENU_KEYS, GATED_ROLES } from './supabase/permissions';
-export type { MenuKey, GatedRole } from './supabase/permissions';
+export { MENU_KEYS, GATED_ROLES, ALL_MANAGEABLE_ROLES } from './supabase/permissions';
+export type { MenuKey, GatedRole, ManageableRole } from './supabase/permissions';

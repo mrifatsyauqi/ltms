@@ -11,11 +11,25 @@ import { type Row, fakeDbFactory } from './fake-db.test-support.ts';
 const SPV_ID = 'u-spv';
 const SPV2_ID = 'u-spv2';
 const ADMINDP_ID = 'u-admindp';
+const MANAGER_ID = 'u-manager';
+const ASISTEN_ID = 'u-asisten';
+
+const FULL_ACCESS_MENU_KEYS = [
+  'dashboard', 'feedback_longtail_view', 'feedback_longtail_edit',
+  'data_longtail', 'import_longtail',
+  'monitoring_delivery_dp', 'monitoring_delivery_cabang',
+  'master_cabang', 'master_drop_point', 'master_feedback', 'user_management',
+  'riwayat_import', 'riwayat_feedback',
+  'pengaturan', 'role_akses',
+] as const;
 
 function freshStore(): Map<string, Row[]> {
   const store = new Map<string, Row[]>();
   store.set('users', [
     { id: 'u-admincabang', email: 'admincabang@ltms.test', nama: 'Admin Cabang', role: 'Admin Cabang', drop_point: '', nik: '1000000001', status_aktif: true },
+    { id: 'u-superadmin', email: 'superadmin@ltms.test', nama: 'Super Admin', role: 'Super Admin', drop_point: '', nik: '1000000002', status_aktif: true },
+    { id: MANAGER_ID, email: 'manager@ltms.test', nama: 'Manager Kota', role: 'Manager Kota', drop_point: '', nik: '3324010', status_aktif: true },
+    { id: ASISTEN_ID, email: 'asisten@ltms.test', nama: 'Asisten Manager', role: 'Asisten Manager Kota', drop_point: '', nik: '3324011', status_aktif: true },
     { id: 'u-admindp2', email: 'admindp2@ltms.test', nama: 'Admin DP Lain', role: 'Admin DP', drop_point: '', nik: '', status_aktif: true },
     { id: SPV_ID, email: 'spv@ltms.test', nama: 'Ahmad Fauzi', role: 'SPV Drop Point', drop_point: '', nik: '3324001', status_aktif: true },
     { id: SPV2_ID, email: 'spv2@ltms.test', nama: 'Budi Santoso', role: 'SPV Drop Point', drop_point: '', nik: '3324002', status_aktif: true },
@@ -25,6 +39,9 @@ function freshStore(): Map<string, Row[]> {
     { kode_dp: 'BATANG01', nama_dp: 'Batang 01', wilayah: 'Batang', status_aktif: true, kode_kota: null, spv_drop_point_user_id: SPV_ID },
     { kode_dp: 'BANDAR01', nama_dp: 'Bandar 01', wilayah: 'Bandar', status_aktif: true, kode_kota: null, spv_drop_point_user_id: SPV_ID },
     { kode_dp: 'SUBAH01', nama_dp: 'Subah 01', wilayah: 'Subah', status_aktif: true, kode_kota: null, spv_drop_point_user_id: null },
+  ]);
+  store.set('cabang', [
+    { kode_kota: 'BATANG', nama_kota: 'Batang', manager_kota_user_id: MANAGER_ID, asisten_manager_user_id: null },
   ]);
   store.set('role_permissions', [
     { role: 'SPV Drop Point', menu_key: 'dashboard', enabled: true },
@@ -37,12 +54,18 @@ function freshStore(): Map<string, Row[]> {
     { role: 'Admin DP', menu_key: 'feedback_longtail_edit', enabled: true },
     { role: 'Admin DP', menu_key: 'riwayat_feedback', enabled: true },
     { role: 'Admin DP', menu_key: 'monitoring_delivery_dp', enabled: true },
+    ...(['Admin Cabang', 'Manager Kota', 'Asisten Manager Kota'] as const).flatMap((role) =>
+      FULL_ACCESS_MENU_KEYS.map((menu_key) => ({ role, menu_key, enabled: true })),
+    ),
   ]);
   store.set('user_permissions', []);
   return store;
 }
 
 const ADMIN_CABANG = 'admincabang@ltms.test';
+const SUPER_ADMIN = 'superadmin@ltms.test';
+const MANAGER_KOTA = 'manager@ltms.test';
+const ASISTEN_MANAGER = 'asisten@ltms.test';
 const ADMIN_DP_LAIN = 'admindp2@ltms.test';
 const SPV = 'spv@ltms.test';
 
@@ -193,6 +216,105 @@ describe('Role & Akses (UI backend): summary/accounts/per-role/per-akun (eksekus
       () => roleAkses.getAccountPermissions(SPV, SPV_ID),
       (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
       'SPV tak boleh lihat izin akun manapun sekalipun dirinya sendiri - halaman ini cuma utk yg mengatur',
+    );
+  });
+
+  // --------------------------------------------------------------------------
+  // Perluasan hierarki: Super Admin bisa atur SEMUA 5 role (termasuk Admin
+  // Cabang/Manager Kota/Asisten Manager Kota) - Admin Cabang/Manager
+  // Kota/Asisten Manager Kota SENDIRI TETAP HANYA bisa atur SPV Drop
+  // Point/Admin DP (tidak berubah), TIDAK BISA atur kartu role mereka
+  // sendiri (privilese eksklusif Super Admin).
+  // --------------------------------------------------------------------------
+
+  it('15. listRoleAksesSummary: Super Admin -> 5 kartu (Admin Cabang/Manager Kota/Asisten Manager Kota/SPV Drop Point/Admin DP)', async () => {
+    const summary = await roleAkses.listRoleAksesSummary(SUPER_ADMIN);
+    assert.deepEqual(
+      summary.map((s) => s.role).sort(),
+      ['Admin Cabang', 'Admin DP', 'Asisten Manager Kota', 'Manager Kota', 'SPV Drop Point'],
+    );
+    assert.equal(summary.find((s) => s.role === 'Admin Cabang')!.count, 1);
+    assert.equal(summary.find((s) => s.role === 'Manager Kota')!.count, 1);
+  });
+
+  it('16. listRoleAksesSummary: Admin Cabang -> TETAP cuma 2 kartu (SPV Drop Point/Admin DP), TIDAK berubah', async () => {
+    const summary = await roleAkses.listRoleAksesSummary(ADMIN_CABANG);
+    assert.deepEqual(
+      summary.map((s) => s.role).sort(),
+      ['Admin DP', 'SPV Drop Point'],
+    );
+  });
+
+  it('17. listAccountsByRole: Super Admin buka kartu "Manager Kota" -> konteks "Kota <nama>" dari tabel cabang, akun tanpa penugasan -> "(belum ditugaskan ke Kota)"', async () => {
+    const managers = await roleAkses.listAccountsByRole(SUPER_ADMIN, 'Manager Kota');
+    const manager = managers.find((m) => m.email === MANAGER_KOTA)!;
+    assert.equal(manager.konteks, 'Kota Batang');
+
+    const asistens = await roleAkses.listAccountsByRole(SUPER_ADMIN, 'Asisten Manager Kota');
+    const asisten = asistens.find((a) => a.email === ASISTEN_MANAGER)!;
+    assert.equal(asisten.konteks, '(belum ditugaskan ke Kota)');
+  });
+
+  it('18. listAccountsByRole: Super Admin buka kartu "Admin Cabang" -> konteks label statis "Akses penuh (Cabang)"', async () => {
+    const accounts = await roleAkses.listAccountsByRole(SUPER_ADMIN, 'Admin Cabang');
+    const admincabang = accounts.find((a) => a.email === ADMIN_CABANG)!;
+    assert.equal(admincabang.konteks, 'Akses penuh (Cabang)');
+  });
+
+  it('19. Super Admin: getRoleDefaultPermissions/getAccountPermissions utk Manager Kota -> 15 baris (bukan 5 spt SPV Drop Point/Admin DP)', async () => {
+    const rows = await roleAkses.getRoleDefaultPermissions(SUPER_ADMIN, 'Manager Kota');
+    assert.equal(rows.length, 15);
+    const detail = await roleAkses.getAccountPermissions(SUPER_ADMIN, MANAGER_ID);
+    assert.equal(detail.permissions.length, 15);
+    assert.equal(detail.konteks, 'Kota Batang');
+  });
+
+  it('20. Super Admin: setUserPermissionOverride override 1 menu utk 1 akun Manager Kota -> tersimpan, akun Manager Kota LAIN/role lain tak ikut berubah', async () => {
+    const detail = await roleAkses.setUserPermissionOverride(SUPER_ADMIN, MANAGER_ID, 'user_management', false);
+    const row = detail.permissions.find((p) => p.menuKey === 'user_management')!;
+    assert.equal(row.enabled, false);
+    assert.equal(row.isOverride, true);
+
+    const asistenDetail = await roleAkses.getAccountPermissions(SUPER_ADMIN, ASISTEN_ID);
+    assert.equal(asistenDetail.permissions.find((p) => p.menuKey === 'user_management')!.enabled, true, 'akun/role lain tak ikut berubah');
+  });
+
+  it('21. REGRESI KRITIS: Admin Cabang/Manager Kota/Asisten Manager Kota TETAP DITOLAK (VALIDATION_ERROR) mengatur kartu role mereka SENDIRI - privilese eksklusif Super Admin', async () => {
+    await assert.rejects(
+      () => roleAkses.listAccountsByRole(ADMIN_CABANG, 'Admin Cabang'),
+      (e: unknown) => (e as { code?: string }).code === 'VALIDATION_ERROR',
+    );
+    await assert.rejects(
+      () => roleAkses.listAccountsByRole(ADMIN_CABANG, 'Manager Kota'),
+      (e: unknown) => (e as { code?: string }).code === 'VALIDATION_ERROR',
+    );
+    await assert.rejects(
+      () => roleAkses.getAccountPermissions(ADMIN_CABANG, MANAGER_ID),
+      (e: unknown) => (e as { code?: string }).code === 'VALIDATION_ERROR',
+      'Admin Cabang tak boleh lihat izin akun Manager Kota - itu privilese Super Admin',
+    );
+    await assert.rejects(
+      () => roleAkses.setRoleDefaultPermission(ADMIN_CABANG, 'Asisten Manager Kota', 'dashboard', false),
+      (e: unknown) => (e as { code?: string }).code === 'VALIDATION_ERROR',
+    );
+  });
+
+  it('22. REGRESI: Admin Cabang tetap BISA atur SPV Drop Point/Admin DP spt sebelumnya (privilese sempit tidak ikut hilang)', async () => {
+    const detail = await roleAkses.setUserPermissionOverride(ADMIN_CABANG, SPV_ID, 'dashboard', false);
+    assert.equal(detail.permissions.find((p) => p.menuKey === 'dashboard')!.enabled, false);
+  });
+
+  it('23. Manager Kota/Asisten Manager Kota (dirinya sendiri, walau full access) TETAP DITOLAK memanggil Role & Akses sama sekali - GATED_ROLES SPV/Admin DP saja yg diblokir sebelumnya, tapi role INI HARUS lolos requireManagerActor (FULL_ACCESS_ROLES) lalu ditolak assertManageableRole saat coba atur role sendiri', async () => {
+    // Manager Kota LOLOS requireManagerActor (dia FULL_ACCESS_ROLES), tapi
+    // manageableRolesFor('Manager Kota') cuma GATED_ROLES -> coba atur SPV
+    // Drop Point/Admin DP tetap BOLEH (setara Admin Cabang).
+    const detail = await roleAkses.setUserPermissionOverride(MANAGER_KOTA, ADMINDP_ID, 'dashboard', false);
+    assert.equal(detail.permissions.find((p) => p.menuKey === 'dashboard')!.enabled, false);
+    // Tapi TIDAK BOLEH atur role Manager Kota/Asisten Manager Kota/Admin
+    // Cabang (termasuk dirinya sendiri) - sama spt Admin Cabang di test 21.
+    await assert.rejects(
+      () => roleAkses.listAccountsByRole(MANAGER_KOTA, 'Manager Kota'),
+      (e: unknown) => (e as { code?: string }).code === 'VALIDATION_ERROR',
     );
   });
 });

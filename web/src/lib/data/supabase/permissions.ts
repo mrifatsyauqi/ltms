@@ -48,6 +48,32 @@ export function isGatedRole(v: string): v is GatedRole {
   return (GATED_ROLES as readonly string[]).includes(v);
 }
 
+/**
+ * 5 role yang bisa "diatur" TOTAL lewat UI Role & Akses (union semua
+ * manager) - BEDA dari GATED_ROLES di atas (itu scope OTORISASI RUNTIME
+ * hasPermission(), masih 2 role sampai bypass Admin Cabang/Manager
+ * Kota/Asisten Manager Kota dihapus). ALL_MANAGEABLE_ROLES scope UI: kartu
+ * jabatan mana yang BOLEH ditampilkan/diedit, independen dari status bypass
+ * di atas - lihat manageableRolesFor().
+ */
+export const ALL_MANAGEABLE_ROLES = ['Admin Cabang', 'Manager Kota', 'Asisten Manager Kota', 'SPV Drop Point', 'Admin DP'] as const;
+export type ManageableRole = (typeof ALL_MANAGEABLE_ROLES)[number];
+
+export function isManageableRole(v: string): v is ManageableRole {
+  return (ALL_MANAGEABLE_ROLES as readonly string[]).includes(v);
+}
+
+/**
+ * Role yang boleh diatur actor ini via Role & Akses. Super Admin: SEMUA 5
+ * (5 kartu jabatan di grid). Admin Cabang/Manager Kota/Asisten Manager
+ * Kota: HANYA SPV Drop Point/Admin DP (2 kartu, tidak berubah) - TIDAK BISA
+ * lihat/atur kartu role mereka sendiri (Admin Cabang/Manager Kota/Asisten
+ * Manager Kota), itu privilese eksklusif Super Admin.
+ */
+export function manageableRolesFor(actorRole: string): readonly ManageableRole[] {
+  return actorRole === 'Super Admin' ? ALL_MANAGEABLE_ROLES : GATED_ROLES;
+}
+
 /** Ambil SEMUA baris efektif (override + default) sekaligus utk 1 actor
  *  GATED (SPV Drop Point/Admin DP) - dipakai bersama oleh hasPermission()
  *  (1 menu_key) & getEffectiveMenuAccess() (semua menu_key, mis. utk render

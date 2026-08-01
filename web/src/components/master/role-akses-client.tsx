@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { SLOW_STALE_TIME } from '@/lib/query-config';
 import type {
-  GatedRole,
+  ManageableRole,
   MenuKey,
   RoleAksesAccount,
   RoleAksesAccountDetail,
@@ -32,10 +32,7 @@ type MenuCardDef = { title: string; desc: string; toggles: { key: MenuKey; label
 // Editor Izin: card per menu_key yang dimiliki SPV Drop Point/Admin DP (5,
 // lihat lib/data/supabase/permissions.ts) - Import/Master Data/User
 // Management memang tak pernah dimiliki role ini, tak ada card-nya.
-// Cakupan menu_key role LAIN (Admin Cabang dkk, 15 menu_key) di luar scope
-// editor ini (dipetakan lewat PermissionCards.rows yang dikirim caller,
-// hanya card yg ADA di data yg dirender - lihat cardOverride/byKey di bawah).
-const MENU_CARDS: MenuCardDef[] = [
+const GATED_MENU_CARDS: MenuCardDef[] = [
   { title: 'Dashboard', desc: 'Ringkasan statistik & monitoring', toggles: [{ key: 'dashboard', label: 'AKSES' }] },
   {
     title: 'Feedback Long Tail',
@@ -52,6 +49,47 @@ const MENU_CARDS: MenuCardDef[] = [
   },
   { title: 'Riwayat Feedback', desc: 'Histori aktivitas per waybill', toggles: [{ key: 'riwayat_feedback', label: 'AKSES' }] },
 ];
+
+// Editor Izin utk Admin Cabang/Manager Kota/Asisten Manager Kota (cakupan
+// sidebar full access, 14 menu_key relevan dari 15 di vocabulary - lihat
+// lib/data/supabase/permissions.ts; monitoring_delivery_dp SENGAJA tak
+// dipakai di sini, itu milik SPV Drop Point/Admin DP).
+const FULL_ACCESS_MENU_CARDS: MenuCardDef[] = [
+  { title: 'Dashboard', desc: 'Ringkasan statistik & monitoring', toggles: [{ key: 'dashboard', label: 'AKSES' }] },
+  {
+    title: 'Feedback Long Tail',
+    desc: 'Isi & kelola feedback paket',
+    toggles: [
+      { key: 'feedback_longtail_view', label: 'LIHAT' },
+      { key: 'feedback_longtail_edit', label: 'EDIT' },
+    ],
+  },
+  { title: 'Data Long Tail', desc: 'Tabel data mentah per waybill', toggles: [{ key: 'data_longtail', label: 'AKSES' }] },
+  { title: 'Import Long Tail', desc: 'Upload file tarikan JMS', toggles: [{ key: 'import_longtail', label: 'AKSES' }] },
+  {
+    title: 'Monitoring Delivery',
+    desc: 'Tabel Monitoring Delivery Refine Total per Drop Point',
+    toggles: [{ key: 'monitoring_delivery_cabang', label: 'AKSES' }],
+  },
+  {
+    title: 'Cabang & Drop Point',
+    desc: 'Struktur organisasi Kota & Drop Point',
+    toggles: [
+      { key: 'master_cabang', label: 'CABANG' },
+      { key: 'master_drop_point', label: 'DROP POINT' },
+    ],
+  },
+  { title: 'Master Feedback', desc: 'Daftar kategori feedback baku', toggles: [{ key: 'master_feedback', label: 'AKSES' }] },
+  { title: 'User Management', desc: 'Kelola akun pengguna', toggles: [{ key: 'user_management', label: 'AKSES' }] },
+  { title: 'Role & Akses', desc: 'Kelola hak akses menu SPV Drop Point/Admin DP', toggles: [{ key: 'role_akses', label: 'AKSES' }] },
+  { title: 'Riwayat Import', desc: 'Histori tarikan data JMS', toggles: [{ key: 'riwayat_import', label: 'AKSES' }] },
+  { title: 'Riwayat Feedback', desc: 'Histori aktivitas per waybill', toggles: [{ key: 'riwayat_feedback', label: 'AKSES' }] },
+  { title: 'Pengaturan', desc: 'Pengaturan aplikasi & Link Berbagi Laporan', toggles: [{ key: 'pengaturan', label: 'AKSES' }] },
+];
+
+function menuCardsFor(role: ManageableRole): MenuCardDef[] {
+  return role === 'SPV Drop Point' || role === 'Admin DP' ? GATED_MENU_CARDS : FULL_ACCESS_MENU_CARDS;
+}
 
 function initials(nama: string): string {
   const parts = nama.trim().split(/\s+/).filter(Boolean);
@@ -115,7 +153,7 @@ function Avatar({ nama, size = 9 }: { nama: string; size?: 8 | 9 }) {
   );
 }
 
-function RoleGrid({ summary, onSelect }: { summary: RoleAksesSummary[]; onSelect: (role: GatedRole) => void }) {
+function RoleGrid({ summary, onSelect }: { summary: RoleAksesSummary[]; onSelect: (role: ManageableRole) => void }) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       {summary.map((s) => (
@@ -142,7 +180,7 @@ function AccountList({
   accounts,
   onSelect,
 }: {
-  role: GatedRole;
+  role: ManageableRole;
   accounts: RoleAksesAccount[];
   onSelect: (id: string) => void;
 }) {
@@ -212,11 +250,13 @@ function Legend() {
 }
 
 function PermissionCards({
+  menuCards,
   rows,
   onToggle,
   onReset,
   pending,
 }: {
+  menuCards: MenuCardDef[];
   rows: (RolePermissionRow | UserPermissionRow)[];
   onToggle: (menuKey: MenuKey, enabled: boolean) => void;
   onReset?: (menuKey: MenuKey) => void;
@@ -225,7 +265,7 @@ function PermissionCards({
   const byKey = new Map(rows.map((r) => [r.menuKey, r]));
   return (
     <div className="flex flex-col gap-2">
-      {MENU_CARDS.map((card) => {
+      {menuCards.map((card) => {
         const cardOverride = card.toggles.some((t) => (byKey.get(t.key) as UserPermissionRow | undefined)?.isOverride);
         return (
           <div key={card.title} className="border-border bg-card flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
@@ -291,7 +331,7 @@ export function RoleAksesClient() {
   const qc = useQueryClient();
   const [mode, setMode] = useState<Mode>('per-akun');
   const [view, setView] = useState<View>('grid');
-  const [role, setRole] = useState<GatedRole | null>(null);
+  const [role, setRole] = useState<ManageableRole | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
 
   const summaryQ = useQuery({
@@ -370,7 +410,7 @@ export function RoleAksesClient() {
     setRole(null);
     setAccountId(null);
   }
-  function openRole(r: GatedRole) {
+  function openRole(r: ManageableRole) {
     setRole(r);
     setView(mode === 'per-role' ? 'editor' : 'accounts');
   }
@@ -390,7 +430,7 @@ export function RoleAksesClient() {
     <>
       <PageHeader
         title="Role & Akses"
-        description="Atur hak akses menu untuk SPV Drop Point & Admin DP — per role sekaligus, atau per akun secara individual."
+        description="Atur hak akses menu per role atau per akun secara individual. Super Admin bisa mengatur seluruh jabatan; Admin Cabang/Manager Kota/Asisten Manager Kota hanya SPV Drop Point & Admin DP."
       />
       <div className="flex flex-col gap-3 p-4">
         <div className="bg-muted flex w-fit items-center gap-1 rounded-lg p-0.5">
@@ -457,6 +497,7 @@ export function RoleAksesClient() {
                 <AccountHeaderCard detail={accountDetailQ.data} />
                 <Legend />
                 <PermissionCards
+                  menuCards={menuCardsFor(accountDetailQ.data.role)}
                   rows={accountDetailQ.data.permissions}
                   onToggle={(menuKey, enabled) => setOverrideMut.mutate({ menuKey, enabled })}
                   onReset={(menuKey) => resetOverrideMut.mutate(menuKey)}
@@ -477,6 +518,7 @@ export function RoleAksesClient() {
               <div className="text-muted-foreground py-6 text-center text-sm">Memuat…</div>
             ) : (
               <PermissionCards
+                menuCards={menuCardsFor(role)}
                 rows={roleDefaultAsUserRows}
                 onToggle={(menuKey, enabled) => setRoleDefaultMut.mutate({ menuKey, enabled })}
                 pending={setRoleDefaultMut.isPending}
