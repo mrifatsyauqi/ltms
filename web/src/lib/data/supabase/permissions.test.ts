@@ -11,6 +11,15 @@ import { type Row, fakeDbFactory } from './fake-db.test-support.ts';
 const SPV_ID = 'u-spv';
 const ADMINDP_ID = 'u-admindp';
 
+const FULL_ACCESS_MENU_KEYS = [
+  'dashboard', 'feedback_longtail_view', 'feedback_longtail_edit',
+  'data_longtail', 'import_longtail',
+  'monitoring_delivery_dp', 'monitoring_delivery_cabang',
+  'master_cabang', 'master_drop_point', 'master_feedback', 'user_management',
+  'riwayat_import', 'riwayat_feedback',
+  'pengaturan', 'role_akses',
+] as const;
+
 function freshStore(): Map<string, Row[]> {
   const store = new Map<string, Row[]>();
   store.set('users', [
@@ -28,9 +37,11 @@ function freshStore(): Map<string, Row[]> {
     { no_waybill: 'WB-BATANG', status_terakhir: 'KIRIM', alasan_bermasalah: '', dp_sampai: 'BATANG01', waktu_sampai: '2026-07-28 10:00:00', umur_frozen: null, sprinter_delivery: '', cod: 'NONCOD', delivery_attempt: 0, feedback: '', log_feedback: '', perlu_review: false, version: 1 },
   ]);
   store.set('activity_log', []);
-  // Seed persis spt migrasi produksi: semua true utk kedua role (5 menu_key
-  // sejak monitoring_delivery_dp ditambahkan - mode per-Sprinter Monitoring
-  // Delivery, dipakai SPV Drop Point & Admin DP).
+  // Seed persis spt migrasi produksi: semua true utk SPV Drop Point/Admin DP
+  // (5 menu_key) DAN Admin Cabang/Manager Kota/Asisten Manager Kota (15
+  // menu_key, sejak bypass hasPermission() utk grup ini dihapus - role_
+  // akses_hierarchy_migration.sql). Kalau seed ini TIDAK all-true, itulah
+  // skenario "lockout" yang harus dicegah (lihat test 2/12 di bawah).
   store.set('role_permissions', [
     { role: 'SPV Drop Point', menu_key: 'dashboard', enabled: true },
     { role: 'SPV Drop Point', menu_key: 'feedback_longtail_view', enabled: true },
@@ -42,6 +53,9 @@ function freshStore(): Map<string, Row[]> {
     { role: 'Admin DP', menu_key: 'feedback_longtail_edit', enabled: true },
     { role: 'Admin DP', menu_key: 'riwayat_feedback', enabled: true },
     { role: 'Admin DP', menu_key: 'monitoring_delivery_dp', enabled: true },
+    ...(['Admin Cabang', 'Manager Kota', 'Asisten Manager Kota'] as const).flatMap((role) =>
+      FULL_ACCESS_MENU_KEYS.map((menu_key) => ({ role, menu_key, enabled: true })),
+    ),
   ]);
   store.set('user_permissions', []);
   return store;
@@ -88,21 +102,32 @@ describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fu
     }
   });
 
-  it('2. hasPermission: Admin Cabang/Manager Kota/Asisten Manager Kota selalu true - TIDAK PERNAH masuk matrix (given dari Langkah 3), walau ada baris matrix yg bilang false utk "role" mereka', async () => {
-    // Baris ini SEHARUSNYA mustahil di produksi (CHECK constraint DB menolak
-    // role selain SPV Drop Point/Admin DP) - disimulasikan di sini justru utk
-    // membuktikan kode TIDAK PERNAH membaca baris ini utk role full access,
-    // bukan cuma "kebetulan" tidak ada baris yg mengembalikan false.
-    store.set('role_permissions', [
-      { role: 'Admin Cabang', menu_key: 'dashboard', enabled: false },
-      { role: 'Manager Kota', menu_key: 'dashboard', enabled: false },
-      { role: 'Asisten Manager Kota', menu_key: 'dashboard', enabled: false },
-    ]);
+  it('2. CHECKPOINT KRITIS (cegah lockout): hasPermission Admin Cabang/Manager Kota/Asisten Manager Kota -> TETAP true utk SEMUA menu_key dgn seed default (all-true) - bypass grup DIHAPUS, tapi krn seed default true, PERILAKU YANG TERAMATI TETAP SAMA PERSIS spt sebelum bypass dihapus (regresi nol utk akun produksi manapun yang belum di-nonaktifkan apa pun)', async () => {
     for (const email of [ADMIN_CABANG, MANAGER_KOTA, ASISTEN_MANAGER]) {
       const actor = await helpers.requireActor(email);
       for (const key of permissions.MENU_KEYS) {
-        assert.equal(await permissions.hasPermission(actor, key), true, `${email} harus tetap true utk ${key}`);
+        assert.equal(await permissions.hasPermission(actor, key), true, `${email} harus true utk ${key} (seed default)`);
       }
+    }
+  });
+
+  it('2b. BUKTI bypass BENAR-BENAR dihapus (bukan cuma "kebetulan default true"): matikan 1 menu_key spesifik utk Admin Cabang/Manager Kota/Asisten Manager Kota -> hasPermission HARUS ikut false, menu lain TIDAK terpengaruh', async () => {
+    for (const role of ['Admin Cabang', 'Manager Kota', 'Asisten Manager Kota']) {
+      store.get('role_permissions')!.find((r) => r.role === role && r.menu_key === 'master_cabang')!.enabled = false;
+    }
+    for (const email of [ADMIN_CABANG, MANAGER_KOTA, ASISTEN_MANAGER]) {
+      const actor = await helpers.requireActor(email);
+      assert.equal(await permissions.hasPermission(actor, 'master_cabang'), false, `${email} harus false setelah menu_key ini dimatikan - membuktikan matrix BENAR-BENAR dicek, bukan bypass`);
+      assert.equal(await permissions.hasPermission(actor, 'dashboard'), true, `${email} menu lain tak ikut terpengaruh`);
+    }
+  });
+
+  it('2c. Super Admin TETAP satu-satunya bypass mutlak - TIDAK terpengaruh walau SEMUA baris role_permissions (termasuk miliknya sendiri, seharusnya mustahil di produksi krn CHECK constraint) dimatikan', async () => {
+    for (const r of store.get('role_permissions')!) r.enabled = false;
+    store.get('role_permissions')!.push({ role: 'Super Admin', menu_key: 'dashboard', enabled: false }); // mustahil di produksi (CHECK constraint), disimulasikan utk buktikan Super Admin tak pernah baca baris ini sama sekali
+    const superAdmin = await helpers.requireActor(SUPER_ADMIN);
+    for (const key of permissions.MENU_KEYS) {
+      assert.equal(await permissions.hasPermission(superAdmin, key), true, `Super Admin harus tetap true utk ${key}`);
     }
   });
 
@@ -204,9 +229,8 @@ describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fu
     );
   });
 
-  it('12. REGRESI: Admin Cabang/Manager Kota/Asisten Manager Kota/Super Admin TIDAK TERPENGARUH SAMA SEKALI walau SEMUA baris role_permissions dimatikan (matrix cuma berlaku utk SPV DP/Admin DP)', async () => {
-    for (const r of store.get('role_permissions')!) r.enabled = false;
-    for (const email of [ADMIN_CABANG, MANAGER_KOTA, ASISTEN_MANAGER, SUPER_ADMIN]) {
+  it('12. CHECKPOINT KRITIS (endpoint nyata, bukan cuma hasPermission murni): dgn seed default (all-true), Admin Cabang/Manager Kota/Asisten Manager Kota TETAP BISA akses Dashboard/Feedback Long Tail/Riwayat Feedback via fungsi produksi asli - regresi nol', async () => {
+    for (const email of [ADMIN_CABANG, MANAGER_KOTA, ASISTEN_MANAGER]) {
       const dash = await dashboard.getDashboard(email);
       assert.ok(dash, `${email} tetap bisa akses Dashboard`);
       const list = await longtail.listLongTail(email);
@@ -214,6 +238,31 @@ describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fu
       const log = await riwayat.listRiwayatFeedback(email);
       assert.ok(Array.isArray(log), `${email} tetap bisa akses Riwayat Feedback`);
     }
+  });
+
+  it('12b. BUKTI endpoint nyata BENAR-BENAR menegakkan matrix skrg (bukan cuma hasPermission murni): matikan "dashboard" utk Admin Cabang/Manager Kota/Asisten Manager Kota -> getDashboard FORBIDDEN, TAPI Feedback Long Tail/Riwayat Feedback (menu_key beda) tetap jalan', async () => {
+    for (const role of ['Admin Cabang', 'Manager Kota', 'Asisten Manager Kota']) {
+      store.get('role_permissions')!.find((r) => r.role === role && r.menu_key === 'dashboard')!.enabled = false;
+    }
+    for (const email of [ADMIN_CABANG, MANAGER_KOTA, ASISTEN_MANAGER]) {
+      await assert.rejects(
+        () => dashboard.getDashboard(email),
+        (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+        `${email} harus FORBIDDEN setelah menu dashboard dimatikan`,
+      );
+      const list = await longtail.listLongTail(email);
+      assert.ok(Array.isArray(list), `${email} Feedback Long Tail (menu_key beda) tak ikut terblokir`);
+    }
+  });
+
+  it('12c. Super Admin TETAP TIDAK TERPENGARUH SAMA SEKALI lewat endpoint nyata walau SEMUA baris role_permissions dimatikan', async () => {
+    for (const r of store.get('role_permissions')!) r.enabled = false;
+    const dash = await dashboard.getDashboard(SUPER_ADMIN);
+    assert.ok(dash, 'Super Admin tetap bisa akses Dashboard');
+    const list = await longtail.listLongTail(SUPER_ADMIN);
+    assert.ok(Array.isArray(list), 'Super Admin tetap bisa akses Feedback Long Tail (view)');
+    const log = await riwayat.listRiwayatFeedback(SUPER_ADMIN);
+    assert.ok(Array.isArray(log), 'Super Admin tetap bisa akses Riwayat Feedback');
   });
 
   // --------------------------------------------------------------------------
@@ -286,12 +335,24 @@ describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fu
   });
 
   it("19. 'monitoring_delivery_cabang' (mode Refine Total, milik Admin Cabang dkk) TIDAK memengaruhi 'monitoring_delivery_dp' SPV Drop Point/Admin DP - 2 menu_key independen walau 1 fitur", async () => {
-    // Baris ini mustahil di produksi (Admin Cabang tak masuk GATED_ROLES
-    // sekarang, hasPermission-nya masih bypass) - disimulasikan justru utk
-    // membuktikan monitoring_delivery_dp SPV/Admin DP membaca baris
-    // role='SPV Drop Point'/'Admin DP' miliknya sendiri, bukan tercampur.
-    store.get('role_permissions')!.push({ role: 'Admin Cabang', menu_key: 'monitoring_delivery_cabang', enabled: false });
+    store.get('role_permissions')!.find((r) => r.role === 'Admin Cabang' && r.menu_key === 'monitoring_delivery_cabang')!.enabled = false;
     const admindp = await helpers.requireActor(ADMIN_DP);
-    assert.equal(await permissions.hasPermission(admindp, 'monitoring_delivery_dp'), true);
+    assert.equal(await permissions.hasPermission(admindp, 'monitoring_delivery_dp'), true, 'menu_key role lain tak ikut mempengaruhi');
+  });
+
+  // --------------------------------------------------------------------------
+  // Wiring Monitoring Delivery utk Admin Cabang/Manager Kota/Asisten Manager
+  // Kota (monitoring_delivery_cabang) SEKARANG BENAR-BENAR AKTIF sejak
+  // bypass hasPermission() dihapus - sebelumnya no-op (selalu true krn
+  // bypass grup, terlepas dari isi role_permissions).
+  // --------------------------------------------------------------------------
+
+  it("20. CHECKPOINT: matikan 'monitoring_delivery_cabang' utk Admin Cabang -> getMyMenuAccess false (SEKARANG BENAR-BENAR aktif, sebelumnya no-op krn bypass) - matikan lagi utk Manager Kota/Asisten Manager Kota independen per role", async () => {
+    store.get('role_permissions')!.find((r) => r.role === 'Admin Cabang' && r.menu_key === 'monitoring_delivery_cabang')!.enabled = false;
+    const accessCabang = await permissions.getMyMenuAccess(ADMIN_CABANG);
+    assert.equal(accessCabang.monitoring_delivery_cabang, false);
+
+    const accessManager = await permissions.getMyMenuAccess(MANAGER_KOTA);
+    assert.equal(accessManager.monitoring_delivery_cabang, true, 'Manager Kota tak ikut terpengaruh - matinya Admin Cabang independen per role');
   });
 });
