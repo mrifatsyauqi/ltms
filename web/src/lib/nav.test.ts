@@ -123,9 +123,10 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
   it('11. GUARD: item full access yang backend-nya BELUM digating SENGAJA masih tanpa menuKey (dipasang nanti barengan gate page + endpoint-nya)', () => {
     const groups = navForRole('Admin Cabang');
     const all = groups.flatMap((g) => [...g.items, ...(g.items.flatMap((i) => i.children ?? []))]);
-    // "Role & Akses" TIDAK LAGI di daftar ini sejak CHECKPOINT 2 - backend-nya
-    // (requireManagerActor + gate page) sudah menegakkan 'role_akses'.
-    const belumDigating = ['Data Long Tail', 'Import Long Tail', 'Cabang', 'Drop Point', 'Master Feedback', 'User Management', 'Riwayat Import', 'Pengaturan'];
+    // "Role & Akses" TIDAK LAGI di daftar ini sejak CHECKPOINT 2, "Data Long
+    // Tail"/"Import Long Tail"/"Riwayat Import" TIDAK LAGI sejak CHECKPOINT 3 -
+    // backend-nya masing2 sudah menegakkan menu_key-nya.
+    const belumDigating = ['Cabang', 'Drop Point', 'Master Feedback', 'User Management', 'Pengaturan'];
     for (const label of belumDigating) {
       const item = all.find((i) => i.label === label);
       assert.ok(item, `item "${label}" harus ada di nav full access`);
@@ -163,6 +164,44 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
       const afterOff = filterNavByAccess(groups, access({ role_akses: false }));
       assert.deepEqual(afterOff, before, `${role}: mematikan role_akses tak boleh mengubah apa pun`);
       assert.ok(!before.flatMap((g) => g.items.map((i) => i.label)).includes('Role & Akses'));
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // CHECKPOINT 3: 3 menu_key baru yang penegakan backend-nya sudah ada -
+  // 'data_longtail' (page-level saja, cabang view=data di /feedback),
+  // 'import_longtail' (page-level + requirePermission() di importLongTail()),
+  // 'riwayat_import' (page-level SAJA - listImportBatches() SENGAJA tak
+  // digating krn dipakai bersama oleh panel riwayat di dalam /import).
+  // --------------------------------------------------------------------------
+
+  it("11e. CHECKPOINT 3: \"Data Long Tail\"/\"Import Long Tail\"/\"Riwayat Import\" SEKARANG punya menuKey masing2", () => {
+    const groups = navForRole('Admin Cabang');
+    const byLabel = new Map(groups.flatMap((g) => g.items).map((i) => [i.label, i]));
+    assert.equal(byLabel.get('Data Long Tail')?.menuKey, 'data_longtail');
+    assert.equal(byLabel.get('Import Long Tail')?.menuKey, 'import_longtail');
+    assert.equal(byLabel.get('Riwayat Import')?.menuKey, 'riwayat_import');
+  });
+
+  it('11f. matikan data_longtail/import_longtail/riwayat_import SATU-SATU utk Admin Cabang -> item terkait hilang, sisanya (termasuk yang belum digating) utuh', () => {
+    const groups = navForRole('Admin Cabang');
+    for (const [key, label] of [
+      ['data_longtail', 'Data Long Tail'],
+      ['import_longtail', 'Import Long Tail'],
+      ['riwayat_import', 'Riwayat Import'],
+    ] as const) {
+      const filtered = filterNavByAccess(groups, access({ [key]: false }));
+      const labels = filtered.flatMap((g) => g.items.map((i) => i.label));
+      assert.ok(!labels.includes(label), `${label} harus hilang krn ${key}=false`);
+      assert.ok(labels.includes('Feedback Long Tail'), `${key}=false tak boleh ikut menghilangkan item lain`);
+      assert.ok(labels.includes('Cabang'), `${key}=false tak boleh menyentuh item yg belum digating`);
+    }
+  });
+
+  it('11g. REGRESI: full access dgn SEMUA menu_key true (kondisi seed produksi) -> Data Long Tail/Import Long Tail/Riwayat Import tetap tampil, nol perubahan', () => {
+    for (const role of ['Admin Cabang', 'Manager Kota', 'Asisten Manager Kota', 'Super Admin']) {
+      const groups = navForRole(role);
+      assert.deepEqual(filterNavByAccess(groups, access()), groups, `${role}: seed all-true tak boleh menghilangkan apa pun`);
     }
   });
 

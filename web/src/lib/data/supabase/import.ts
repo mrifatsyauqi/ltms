@@ -1,5 +1,6 @@
 import { db } from './client';
 import { requireActor, requireRole } from './helpers';
+import { requirePermission } from './permissions';
 import { ApiError } from '@/lib/errors';
 import { FULL_ACCESS_ROLES } from '@/lib/roles';
 import { isClearTTD, jakartaParts, jakartaStamp, planAutoClose } from './longtail-shared';
@@ -100,6 +101,7 @@ export async function importLongTail(
   rows: MappedRow[],
 ): Promise<ImportResult> {
   const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'import_longtail');
   const incoming = Array.isArray(rows) ? rows : [];
 
   // Kumpulkan baris valid (punya waybill), hitung skip utk yang kosong.

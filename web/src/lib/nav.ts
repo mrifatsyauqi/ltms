@@ -57,9 +57,9 @@ export function navForRole(role: string | undefined): NavGroup[] {
   if (hasFullAccess(role)) {
     // menuKey di cabang ini SENGAJA baru dipasang utk menu_key yang penegakan
     // backend-nya SUDAH ADA (dashboard, feedback_longtail_view,
-    // riwayat_feedback, monitoring_delivery_cabang, role_akses). Sisanya
-    // (data_longtail, import_longtail, master_cabang, master_drop_point,
-    // master_feedback, user_management, riwayat_import, pengaturan) BELUM
+    // riwayat_feedback, monitoring_delivery_cabang, role_akses, data_longtail,
+    // import_longtail, riwayat_import - CHECKPOINT 3). Sisanya (master_cabang,
+    // master_drop_point, master_feedback, user_management, pengaturan) BELUM
     // digating di backend - menuKey-nya dipasang nanti BARENGAN gate page +
     // requirePermission() endpoint-nya, jangan dipasang duluan (menu hilang
     // tapi URL-nya masih bisa dibuka = false sense of security).
@@ -68,8 +68,8 @@ export function navForRole(role: string | undefined): NavGroup[] {
         items: [
           { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, menuKey: 'dashboard' },
           { label: 'Feedback Long Tail', href: '/feedback', icon: MessageSquareText, menuKey: 'feedback_longtail_view' },
-          { label: 'Data Long Tail', href: '/feedback?view=data', icon: Table2 },
-          { label: 'Import Long Tail', href: '/import', icon: Upload },
+          { label: 'Data Long Tail', href: '/feedback?view=data', icon: Table2, menuKey: 'data_longtail' },
+          { label: 'Import Long Tail', href: '/import', icon: Upload, menuKey: 'import_longtail' },
           { label: 'Monitoring Delivery', href: '/monitoring-delivery', icon: Truck, menuKey: 'monitoring_delivery_cabang' },
         ],
       },
@@ -90,7 +90,7 @@ export function navForRole(role: string | undefined): NavGroup[] {
       {
         label: 'Laporan',
         items: [
-          { label: 'Riwayat Import', href: '/riwayat-import', icon: FileClock },
+          { label: 'Riwayat Import', href: '/riwayat-import', icon: FileClock, menuKey: 'riwayat_import' },
           { label: 'Riwayat Feedback', href: '/riwayat-feedback', icon: History, menuKey: 'riwayat_feedback' },
         ],
       },

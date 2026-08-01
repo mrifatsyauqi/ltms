@@ -74,6 +74,7 @@ describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fu
   let dashboard: typeof import('./dashboard.ts');
   let longtail: typeof import('./longtail.ts');
   let riwayat: typeof import('./riwayat-feedback.ts');
+  let importLib: typeof import('./import.ts');
   let store: Map<string, Row[]>;
 
   before(async () => {
@@ -85,6 +86,7 @@ describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fu
     dashboard = await import('./dashboard.ts');
     longtail = await import('./longtail.ts');
     riwayat = await import('./riwayat-feedback.ts');
+    importLib = await import('./import.ts');
   });
 
   beforeEach(() => {
@@ -354,5 +356,62 @@ describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fu
 
     const accessManager = await permissions.getMyMenuAccess(MANAGER_KOTA);
     assert.equal(accessManager.monitoring_delivery_cabang, true, 'Manager Kota tak ikut terpengaruh - matinya Admin Cabang independen per role');
+  });
+
+  // --------------------------------------------------------------------------
+  // CHECKPOINT 3: 'import_longtail' SEKARANG ditegakkan nyata di importLongTail()
+  // (import.ts), lapisan TAMBAHAN di atas requireRole(FULL_ACCESS_ROLES) yang
+  // sudah ada sebelumnya (SPV/Admin DP TETAP tertolak walau import_longtail
+  // mereka somehow true - dibuktikan test 21c). 'data_longtail'/'riwayat_import'
+  // sengaja TIDAK punya test endpoint di sini - keduanya page-level SAJA
+  // (tak ada requirePermission() di data-layer manapun utk keduanya), lihat
+  // nav.test.ts utk cakupan sidebar-nya.
+  // --------------------------------------------------------------------------
+
+  it('21. CHECKPOINT KRITIS (endpoint nyata): dgn seed default (all-true), Admin Cabang/Manager Kota/Asisten Manager Kota TETAP BISA importLongTail() - regresi nol', async () => {
+    for (const email of [ADMIN_CABANG, MANAGER_KOTA, ASISTEN_MANAGER]) {
+      const result = await importLib.importLongTail(email, 'tarikan.xlsx', [
+        { noWaybill: 'WB-BATANG', statusTerakhir: 'ON DELIVERY', dpSampai: 'BATANG01' },
+      ]);
+      assert.ok(result, `${email} tetap bisa import`);
+    }
+  });
+
+  it('21b. BUKTI import_longtail BENAR-BENAR menegakkan matrix (lapisan TAMBAHAN, bukan pengganti requireRole): matikan utk Admin Cabang -> importLongTail FORBIDDEN, TAPI Dashboard (menu_key beda) tetap jalan; Manager Kota tak ikut terpengaruh', async () => {
+    store.get('role_permissions')!.find((r) => r.role === 'Admin Cabang' && r.menu_key === 'import_longtail')!.enabled = false;
+
+    await assert.rejects(
+      () => importLib.importLongTail(ADMIN_CABANG, 'tarikan.xlsx', [{ noWaybill: 'WB-BATANG', statusTerakhir: 'ON DELIVERY', dpSampai: 'BATANG01' }]),
+      (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+      'Admin Cabang harus FORBIDDEN setelah import_longtail dimatikan',
+    );
+    const dash = await dashboard.getDashboard(ADMIN_CABANG);
+    assert.ok(dash, 'Dashboard (menu_key beda) tak ikut terblokir');
+
+    const resultManager = await importLib.importLongTail(MANAGER_KOTA, 'tarikan.xlsx', [
+      { noWaybill: 'WB-BATANG', statusTerakhir: 'ON DELIVERY', dpSampai: 'BATANG01' },
+    ]);
+    assert.ok(resultManager, 'Manager Kota tak ikut terpengaruh - matinya Admin Cabang independen per akun/role');
+  });
+
+  it('21c. REGRESI: SPV Drop Point/Admin DP TETAP tertolak importLongTail() walau import_longtail mereka somehow true (requireRole(FULL_ACCESS_ROLES) yang lama tetap jadi penjaga utama, bukan digantikan)', async () => {
+    for (const role of ['SPV Drop Point', 'Admin DP'] as const) {
+      store.get('role_permissions')!.push({ role, menu_key: 'import_longtail', enabled: true });
+    }
+    for (const email of [SPV, ADMIN_DP]) {
+      await assert.rejects(
+        () => importLib.importLongTail(email, 'tarikan.xlsx', [{ noWaybill: 'WB-BATANG', statusTerakhir: 'ON DELIVERY', dpSampai: 'BATANG01' }]),
+        (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+        `${email}: import_longtail=true TIDAK BOLEH membocorkan akses - requireRole(FULL_ACCESS_ROLES) tetap harus menolak duluan`,
+      );
+    }
+  });
+
+  it('21d. Super Admin TETAP TIDAK TERPENGARUH lewat importLongTail() walau SEMUA baris role_permissions dimatikan', async () => {
+    for (const r of store.get('role_permissions')!) r.enabled = false;
+    const result = await importLib.importLongTail(SUPER_ADMIN, 'tarikan.xlsx', [
+      { noWaybill: 'WB-BATANG', statusTerakhir: 'ON DELIVERY', dpSampai: 'BATANG01' },
+    ]);
+    assert.ok(result, 'Super Admin tetap bisa import');
   });
 });
