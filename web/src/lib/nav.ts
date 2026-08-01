@@ -55,15 +55,14 @@ export type NavGroup = {
  */
 export function navForRole(role: string | undefined): NavGroup[] {
   if (hasFullAccess(role)) {
-    // menuKey di cabang ini SENGAJA baru dipasang utk menu_key yang penegakan
-    // backend-nya SUDAH ADA (dashboard, feedback_longtail_view,
-    // riwayat_feedback, monitoring_delivery_cabang, role_akses, data_longtail,
-    // import_longtail, riwayat_import - CHECKPOINT 3; master_cabang,
-    // master_drop_point, master_feedback, user_management - CHECKPOINT 4).
-    // Sisanya (pengaturan) BELUM digating di backend - menuKey-nya dipasang
-    // nanti BARENGAN gate page + requirePermission() endpoint-nya, jangan
-    // dipasang duluan (menu hilang tapi URL-nya masih bisa dibuka = false
-    // sense of security).
+    // menuKey di cabang ini dipasang BARENGAN gate page + requirePermission()
+    // endpoint-nya (dashboard, feedback_longtail_view, riwayat_feedback,
+    // monitoring_delivery_cabang, role_akses, data_longtail, import_longtail,
+    // riwayat_import - CHECKPOINT 3; master_cabang, master_drop_point,
+    // master_feedback, user_management - CHECKPOINT 4; pengaturan -
+    // CHECKPOINT 5). SEMUA 15 menu_key SEKARANG punya menuKey - tak ada lagi
+    // yang "sengaja belum digating" (rollout 9 menu_key yang dimulai dari
+    // audit PRD v2.0 selesai).
     return [
       {
         items: [
@@ -99,7 +98,7 @@ export function navForRole(role: string | undefined): NavGroup[] {
       {
         label: 'Pengaturan',
         items: [
-          { label: 'Pengaturan', href: '/pengaturan', icon: Settings },
+          { label: 'Pengaturan', href: '/pengaturan', icon: Settings, menuKey: 'pengaturan' },
           { label: 'Profile', href: '/profil', icon: UserRound },
         ],
       },

@@ -89,6 +89,7 @@ describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fu
   let dropPointsLib: typeof import('./drop-points.ts');
   let masterFeedbackLib: typeof import('./master-feedback.ts');
   let usersLib: typeof import('./users.ts');
+  let publicShareLib: typeof import('./public-share.ts');
   let store: Map<string, Row[]>;
 
   before(async () => {
@@ -105,6 +106,7 @@ describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fu
     dropPointsLib = await import('./drop-points.ts');
     masterFeedbackLib = await import('./master-feedback.ts');
     usersLib = await import('./users.ts');
+    publicShareLib = await import('./public-share.ts');
   });
 
   beforeEach(() => {
@@ -507,5 +509,64 @@ describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fu
     assert.ok(feedback, 'Super Admin tetap bisa createMasterFeedback');
     const user = await usersLib.createUser(SUPER_ADMIN, { nama: 'User Super Admin', email: 'usersuperadmin@ltms.test', nik: 'NIK-USA', role: 'Admin DP', dropPoint: 'BATANG01' });
     assert.ok(user, 'Super Admin tetap bisa createUser');
+  });
+
+  // --------------------------------------------------------------------------
+  // CHECKPOINT 5 (TERAKHIR dari rollout 9 menu_key): 'pengaturan' SEKARANG
+  // ditegakkan nyata di KEDUA sub-fitur /pengaturan - Link Berbagi Laporan
+  // (createShareLink/regenerateShareLink/revokeShareLink/getShareLinkStats,
+  // public-share.ts) & Reset Data Long Tail (previewResetLongTail/
+  // resetLongTailData, longtail.ts) - SATU menu_key yg SAMA utk keduanya
+  // (bukan dipecah granular per sub-fitur, keputusan eksplisit user).
+  // --------------------------------------------------------------------------
+
+  it('23. CHECKPOINT KRITIS (endpoint nyata): dgn seed default (all-true), Admin Cabang/Manager Kota/Asisten Manager Kota TETAP BISA createShareLink & previewResetLongTail - regresi nol', async () => {
+    for (const email of [ADMIN_CABANG, MANAGER_KOTA, ASISTEN_MANAGER]) {
+      store.set('public_share_links', []); // 1 link aktif max - reset per percobaan
+      const link = await publicShareLib.createShareLink(email);
+      assert.ok(link, `${email} tetap bisa createShareLink`);
+      const preview = await longtail.previewResetLongTail(email);
+      assert.ok(preview, `${email} tetap bisa previewResetLongTail`);
+    }
+  });
+
+  it('23b. BUKTI \'pengaturan\' BENAR-BENAR menegakkan matrix, TAPI SATU key yg SAMA utk KEDUA sub-fitur (bukan dipecah granular): matikan pengaturan utk Admin Cabang -> createShareLink DAN previewResetLongTail SAMA2 FORBIDDEN, TAPI Dashboard (menu_key beda) tetap jalan; Manager Kota tak ikut terpengaruh', async () => {
+    store.get('role_permissions')!.find((r) => r.role === 'Admin Cabang' && r.menu_key === 'pengaturan')!.enabled = false;
+
+    await assert.rejects(
+      () => publicShareLib.createShareLink(ADMIN_CABANG),
+      (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+      'Admin Cabang harus FORBIDDEN createShareLink setelah pengaturan dimatikan',
+    );
+    await assert.rejects(
+      () => longtail.previewResetLongTail(ADMIN_CABANG),
+      (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+      'Admin Cabang harus FORBIDDEN previewResetLongTail juga - SATU key yg sama menutup KEDUA sub-fitur',
+    );
+    const dash = await dashboard.getDashboard(ADMIN_CABANG);
+    assert.ok(dash, 'Dashboard (menu_key beda) tak ikut terblokir');
+
+    const linkManager = await publicShareLib.createShareLink(MANAGER_KOTA);
+    assert.ok(linkManager, 'Manager Kota tak ikut terpengaruh - matinya Admin Cabang independen per akun/role');
+  });
+
+  it('23c. REGRESI: SPV Drop Point/Admin DP TETAP tertolak createShareLink/previewResetLongTail walau pengaturan mereka somehow true (requireRole(FULL_ACCESS_ROLES) yang lama tetap penjaga utama)', async () => {
+    for (const role of ['SPV Drop Point', 'Admin DP'] as const) {
+      store.get('role_permissions')!.push({ role, menu_key: 'pengaturan', enabled: true });
+    }
+    for (const email of [SPV, ADMIN_DP]) {
+      await assert.rejects(() => publicShareLib.createShareLink(email),
+        (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN', `${email}: createShareLink tak boleh bocor`);
+      await assert.rejects(() => longtail.previewResetLongTail(email),
+        (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN', `${email}: previewResetLongTail tak boleh bocor`);
+    }
+  });
+
+  it('23d. Super Admin TETAP TIDAK TERPENGARUH lewat createShareLink/previewResetLongTail walau SEMUA baris role_permissions dimatikan', async () => {
+    for (const r of store.get('role_permissions')!) r.enabled = false;
+    const link = await publicShareLib.createShareLink(SUPER_ADMIN);
+    assert.ok(link, 'Super Admin tetap bisa createShareLink');
+    const preview = await longtail.previewResetLongTail(SUPER_ADMIN);
+    assert.ok(preview, 'Super Admin tetap bisa previewResetLongTail');
   });
 });

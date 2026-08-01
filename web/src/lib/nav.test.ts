@@ -117,21 +117,18 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
     assert.ok(!labels.includes('Dashboard'));
     assert.ok(!labels.includes('Feedback Long Tail'));
     assert.ok(!labels.includes('Riwayat Feedback'));
-    assert.ok(labels.includes('Data Long Tail'), 'menu_key lain (belum digating backend) tak ikut hilang');
+    assert.ok(labels.includes('Data Long Tail'), 'menu_key lain (tak disentuh test ini) tak ikut hilang');
   });
 
-  it('11. GUARD: item full access yang backend-nya BELUM digating SENGAJA masih tanpa menuKey (dipasang nanti barengan gate page + endpoint-nya)', () => {
+  it('11. GUARD (sebelumnya: item belum digating SENGAJA tanpa menuKey - rollout 9 menu_key SELESAI sejak CHECKPOINT 5): SEMUA item nav full access SEKARANG punya menuKey, KECUALI Profile (sengaja tak pernah masuk matrix, lihat MENU_KEYS)', () => {
     const groups = navForRole('Admin Cabang');
     const all = groups.flatMap((g) => [...g.items, ...(g.items.flatMap((i) => i.children ?? []))]);
-    // "Role & Akses" TIDAK LAGI di daftar ini sejak CHECKPOINT 2, "Data Long
-    // Tail"/"Import Long Tail"/"Riwayat Import" TIDAK LAGI sejak CHECKPOINT 3,
-    // "Cabang"/"Drop Point"/"Master Feedback"/"User Management" TIDAK LAGI
-    // sejak CHECKPOINT 4 - backend-nya masing2 sudah menegakkan menu_key-nya.
-    const belumDigating = ['Pengaturan'];
-    for (const label of belumDigating) {
-      const item = all.find((i) => i.label === label);
-      assert.ok(item, `item "${label}" harus ada di nav full access`);
-      assert.equal(item!.menuKey, undefined, `"${label}" belum punya penegakan backend - JANGAN pasang menuKey duluan`);
+    for (const item of all) {
+      if (item.label === 'Profile') {
+        assert.equal(item.menuKey, undefined, 'Profile sengaja SELALU tampil, tak pernah masuk matrix');
+        continue;
+      }
+      assert.ok(item.menuKey, `"${item.label}" harus sudah punya menuKey - tak ada lagi item full access yg "sengaja belum digating"`);
     }
   });
 
@@ -147,7 +144,7 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
     assert.equal(item?.menuKey, 'role_akses');
   });
 
-  it('11c. role_akses=false utk Admin Cabang -> item "Role & Akses" HILANG dari sidebar, item lain grup Master Data (belum digating) TETAP UTUH', () => {
+  it('11c. role_akses=false utk Admin Cabang -> item "Role & Akses" HILANG dari sidebar, item lain grup Master Data TETAP UTUH', () => {
     const groups = navForRole('Admin Cabang');
     const filtered = filterNavByAccess(groups, access({ role_akses: false }));
     const labels = filtered.flatMap((g) => g.items.map((i) => i.label));
@@ -184,7 +181,7 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
     assert.equal(byLabel.get('Riwayat Import')?.menuKey, 'riwayat_import');
   });
 
-  it('11f. matikan data_longtail/import_longtail/riwayat_import SATU-SATU utk Admin Cabang -> item terkait hilang, sisanya (termasuk yang belum digating) utuh', () => {
+  it('11f. matikan data_longtail/import_longtail/riwayat_import SATU-SATU utk Admin Cabang -> item terkait hilang, sisanya utuh', () => {
     const groups = navForRole('Admin Cabang');
     for (const [key, label] of [
       ['data_longtail', 'Data Long Tail'],
@@ -195,7 +192,7 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
       const labels = filtered.flatMap((g) => g.items.map((i) => i.label));
       assert.ok(!labels.includes(label), `${label} harus hilang krn ${key}=false`);
       assert.ok(labels.includes('Feedback Long Tail'), `${key}=false tak boleh ikut menghilangkan item lain`);
-      assert.ok(labels.includes('Cabang'), `${key}=false tak boleh menyentuh item yg belum digating`);
+      assert.ok(labels.includes('Cabang'), `${key}=false tak boleh menyentuh menu_key lain`);
     }
   });
 
@@ -273,10 +270,41 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
   });
 
   // --------------------------------------------------------------------------
+  // CHECKPOINT 5 (TERAKHIR dari rollout 9 menu_key): 'pengaturan' - SATU
+  // gerbang utk KEDUA sub-fitur di halaman /pengaturan (Link Berbagi Laporan
+  // di public-share.ts, Reset Data Long Tail di longtail.ts) - SENGAJA tak
+  // dipecah lebih granular per sub-fitur (keputusan eksplisit user).
+  // --------------------------------------------------------------------------
+
+  it('11m. CHECKPOINT 5: item "Pengaturan" (grup Pengaturan) SEKARANG punya menuKey \'pengaturan\'', () => {
+    const groups = navForRole('Admin Cabang');
+    const item = groups.flatMap((g) => g.items).find((i) => i.label === 'Pengaturan');
+    assert.equal(item?.menuKey, 'pengaturan');
+  });
+
+  it('11n. pengaturan=false utk Admin Cabang -> item "Pengaturan" HILANG dari sidebar, "Profile" (grup sama, tak pernah masuk matrix) TETAP tampil, item grup lain tak ikut terpengaruh', () => {
+    const groups = navForRole('Admin Cabang');
+    const filtered = filterNavByAccess(groups, access({ pengaturan: false }));
+    const labels = filtered.flatMap((g) => g.items.map((i) => i.label));
+    assert.ok(!labels.includes('Pengaturan'), 'harus hilang - backend-nya sudah FORBIDDEN utk akun ini');
+    assert.ok(labels.includes('Profile'), 'Profile tak pernah masuk matrix, selalu tampil');
+    assert.ok(labels.includes('Dashboard'));
+    assert.ok(labels.includes('Cabang'));
+  });
+
+  it('11o. REGRESI: full access dgn SEMUA menu_key true (kondisi seed produksi) -> Pengaturan tetap tampil, nol perubahan - SEMUA 15 menu_key kini punya menuKey, rollout 9 menu_key SELESAI', () => {
+    for (const role of ['Admin Cabang', 'Manager Kota', 'Asisten Manager Kota', 'Super Admin']) {
+      const groups = navForRole(role);
+      assert.deepEqual(filterNavByAccess(groups, access()), groups, `${role}: seed all-true tak boleh menghilangkan apa pun`);
+    }
+  });
+
+  // --------------------------------------------------------------------------
   // filterNavByAccess() dulu cuma memfilter group.items, TIDAK pernah masuk ke
-  // item.children (submenu "Drop Point" di bawah "Cabang"). Belum berefek hari
-  // ini (children-nya belum ada yang bermenuKey), diperbaiki DULUAN sbg fix
-  // struktural supaya begitu menuKey-nya dipasang nanti, filternya sudah benar.
+  // item.children (submenu "Drop Point" di bawah "Cabang"). Sejak CHECKPOINT 4
+  // sudah TERBUKTI berefek nyata di data nav ASLI (lihat test 11j) - blok di
+  // bawah ini tetap dipertahankan sbg cakupan tambahan pakai struktur tiruan
+  // (kasus grandchild/multi-level yang belum ada di data nav sungguhan).
   // --------------------------------------------------------------------------
 
   const icon = navForRole('Admin Cabang')[0].items[0].icon;

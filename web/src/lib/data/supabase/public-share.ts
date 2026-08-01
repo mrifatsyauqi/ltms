@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { db } from './client';
 import { requireActor, requireRole } from './helpers';
+import { requirePermission } from './permissions';
 import { ApiError } from '@/lib/errors';
 import { FULL_ACCESS_ROLES } from '@/lib/roles';
 
@@ -145,7 +146,8 @@ async function countAccess(token: string, halaman?: 'dashboard' | 'data-longtail
 
 /** Statistik link aktif (UI Kelola Link Laporan) - null kalau belum pernah dibuat/sudah dicabut total. Admin Cabang saja. */
 export async function getShareLinkStats(actorEmail: string): Promise<ShareLinkStats | null> {
-  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'pengaturan');
   const link = await getActiveShareLink();
   if (!link) return null;
 
@@ -162,6 +164,7 @@ export async function getShareLinkStats(actorEmail: string): Promise<ShareLinkSt
 /** "Buat Link Laporan" - hanya kalau BELUM ada link aktif (ditegakkan jg di DB via unique partial index). Admin Cabang saja. */
 export async function createShareLink(actorEmail: string): Promise<{ token: string }> {
   const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'pengaturan');
   const existing = await getActiveShareLink();
   if (existing) throw new ApiError('CONFLICT', 'Sudah ada link aktif - gunakan Regenerate untuk mengganti, atau Cabut Total dulu.');
 
@@ -185,6 +188,7 @@ export async function createShareLink(actorEmail: string): Promise<{ token: stri
  */
 export async function regenerateShareLink(actorEmail: string): Promise<{ token: string }> {
   const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'pengaturan');
   const existing = await getActiveShareLink();
   if (existing) {
     const { error: revokeErr } = await db().from('public_share_links').update({ revoked: true }).eq('token', existing.token);
@@ -204,7 +208,8 @@ export async function regenerateShareLink(actorEmail: string): Promise<{ token: 
 
 /** "Cabut Total" - revoke tanpa generate baru, mematikan fitur sepenuhnya sampai dibuat ulang manual. Admin Cabang saja. */
 export async function revokeShareLink(actorEmail: string): Promise<void> {
-  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'pengaturan');
   const existing = await getActiveShareLink();
   if (!existing) return; // tak ada apa2 utk dicabut - idempotent, bukan error.
   const { error } = await db().from('public_share_links').update({ revoked: true }).eq('token', existing.token);

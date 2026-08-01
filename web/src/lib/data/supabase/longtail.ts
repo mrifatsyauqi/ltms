@@ -242,14 +242,16 @@ async function countTable(table: string): Promise<number> {
 }
 
 export async function previewResetLongTail(actorEmail: string): Promise<ResetPreview> {
-  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'pengaturan');
   const counts: Record<string, number> = {};
   for (const t of RESET_TARGETS) counts[t.key] = await countTable(t.table);
   return { dryRun: true, counts };
 }
 
 export async function resetLongTailData(actorEmail: string, targets?: string[]): Promise<ResetResult> {
-  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'pengaturan');
   const cleared: Record<string, number> = {};
   
   const tablesToReset = targets 
