@@ -294,4 +294,58 @@ describe('Langkah 3 - Perluasan Role: full access & SPV Drop Point (eksekusi nya
     assert.ok(snap);
     assert.equal(snap!.summary.total, 1);
   });
+
+  // --------------------------------------------------------------------------
+  // Perbaikan UX: assign SPV Drop Point ke BANYAK DP sekaligus dari form User
+  // (syncSupervisedDropPoints) - jalur KEDUA selain edit per-DP di halaman
+  // Drop Point, keduanya nulis ke kolom yang SAMA jadi harus tetap sinkron.
+  // --------------------------------------------------------------------------
+
+  function spvOf(kodeDp: string): string | null {
+    const row = store.get('master_drop_point')!.find((d) => d.kode_dp === kodeDp)!;
+    return (row.spv_drop_point_user_id as string | null) ?? null;
+  }
+
+  it('28. syncSupervisedDropPoints: uncheck salah satu DP -> DP itu dilepas (null), DP lain tetap, DP milik SPV LAIN tak tersentuh', async () => {
+    await dropPoints.syncSupervisedDropPoints(ADMIN_CABANG, SPV, ['BATANG01']);
+    assert.equal(spvOf('BATANG01'), SPV_ID);
+    assert.equal(spvOf('BANDAR01'), null, 'BANDAR01 harus dilepas krn tak lagi dipilih');
+    assert.equal(spvOf('SUBAH01'), SPV_SATU_ID, 'milik SPV lain tidak boleh ikut berubah');
+  });
+
+  it('29. syncSupervisedDropPoints: assign DP yang sebelumnya milik SPV LAIN -> pindah kepemilikan (reassign), DP existing target tetap', async () => {
+    await dropPoints.syncSupervisedDropPoints(ADMIN_CABANG, SPV, ['BATANG01', 'BANDAR01', 'SUBAH01']);
+    assert.equal(spvOf('BATANG01'), SPV_ID);
+    assert.equal(spvOf('BANDAR01'), SPV_ID);
+    assert.equal(spvOf('SUBAH01'), SPV_ID, 'reassign dari SPV_SATU ke SPV');
+  });
+
+  it('30. syncSupervisedDropPoints: kirim array kosong -> SEMUA DP milik target dilepas', async () => {
+    await dropPoints.syncSupervisedDropPoints(ADMIN_CABANG, SPV, []);
+    assert.equal(spvOf('BATANG01'), null);
+    assert.equal(spvOf('BANDAR01'), null);
+  });
+
+  it('31. syncSupervisedDropPoints: target BUKAN Jabatan "SPV Drop Point" -> VALIDATION_ERROR', async () => {
+    await assert.rejects(
+      () => dropPoints.syncSupervisedDropPoints(ADMIN_CABANG, 'admindp@ltms.test', ['BATANG01']),
+      (e: unknown) => (e as { code?: string }).code === 'VALIDATION_ERROR',
+    );
+  });
+
+  it('32. syncSupervisedDropPoints: kode DP tidak ada -> VALIDATION_ERROR, TIDAK ADA perubahan (validasi dulu sebelum update apapun)', async () => {
+    await assert.rejects(
+      () => dropPoints.syncSupervisedDropPoints(ADMIN_CABANG, SPV, ['TIDAK-ADA']),
+      (e: unknown) => (e as { code?: string }).code === 'VALIDATION_ERROR',
+    );
+    assert.equal(spvOf('BATANG01'), SPV_ID, 'assignment lama tak boleh ikut berubah krn request gagal');
+    assert.equal(spvOf('BANDAR01'), SPV_ID);
+  });
+
+  it('33. syncSupervisedDropPoints: dipanggil Admin DP (bukan full access) -> FORBIDDEN', async () => {
+    await assert.rejects(
+      () => dropPoints.syncSupervisedDropPoints('admindp@ltms.test', SPV, ['BATANG01']),
+      (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+    );
+  });
 });

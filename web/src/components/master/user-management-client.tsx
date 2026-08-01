@@ -33,8 +33,27 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return body.data as T;
 }
 
-type FormState = { nama: string; email: string; nik: string; role: AssignableRole; dropPoint: string; statusAktif: boolean };
-const EMPTY: FormState = { nama: '', email: '', nik: '', role: 'Admin DP', dropPoint: '', statusAktif: true };
+type FormState = {
+  nama: string;
+  email: string;
+  nik: string;
+  role: AssignableRole;
+  dropPoint: string;
+  statusAktif: boolean;
+  /** Kode DP terpilih di multi-select "Drop Point yang Disupervisi" (Jabatan
+   *  SPV Drop Point saja) - CUMA yang aktif & tampil di checklist, lihat
+   *  hiddenSupervised utk DP nonaktif yang sudah ter-assign sebelumnya. */
+  supervisedDps: string[];
+};
+const EMPTY: FormState = {
+  nama: '',
+  email: '',
+  nik: '',
+  role: 'Admin DP',
+  dropPoint: '',
+  statusAktif: true,
+  supervisedDps: [],
+};
 
 // Tabel jabatan punya 6 baris (Super Admin, Admin Cabang, Manager Kota,
 // Asisten Manager Kota, SPV Drop Point, Admin DP). Dropdown ini menawarkan 5
@@ -81,6 +100,12 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const [passwordFor, setPasswordFor] = useState<UserRow | null>(null);
   const [passwordValue, setPasswordValue] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  // DP nonaktif yang sudah ter-assign ke user ini SEBELUM dialog dibuka -
+  // tak ditampilkan di checklist (checklist cuma DP aktif, konsisten dgn
+  // field Drop Point Admin DP), TAPI ikut disertakan lagi saat submit supaya
+  // tak diam-diam terlepas cuma krn dialog User dibuka & disimpan.
+  const [hiddenSupervised, setHiddenSupervised] = useState<string[]>([]);
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -100,6 +125,9 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const pageRows = rows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
   const invalidate = () => qc.invalidateQueries({ queryKey: ['users'] });
 
+  // Tanpa onSuccess/onError - hasilnya (toast, tutup dialog, invalidate)
+  // ditangani terpusat di submit() krn ada langkah lanjutan (sync Drop Point
+  // yang disupervisi) yang harus ikut sukses dulu sebelum dialog ditutup.
   const createMut = useMutation({
     mutationFn: (f: FormState) =>
       api('/api/users', {
@@ -113,12 +141,6 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
           dropPoint: f.role === 'Admin DP' ? f.dropPoint : '',
         }),
       }),
-    onSuccess: () => {
-      toast.success('User ditambahkan.');
-      setDialogOpen(false);
-      invalidate();
-    },
-    onError: (e: Error) => toast.error(`Gagal menambah: ${e.message}`),
   });
 
   const updateMut = useMutation({
@@ -135,12 +157,6 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
           statusAktif: f.statusAktif,
         }),
       }),
-    onSuccess: () => {
-      toast.success('User diperbarui.');
-      setDialogOpen(false);
-      invalidate();
-    },
-    onError: (e: Error) => toast.error(`Gagal memperbarui: ${e.message}`),
   });
 
   const deleteMut = useMutation({
@@ -171,10 +187,14 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   function openCreate() {
     setEditing(null);
     setForm({ ...EMPTY, dropPoint: activeDps[0]?.['Kode DP'] ?? '' });
+    setHiddenSupervised([]);
     setDialogOpen(true);
   }
   function openEdit(r: UserRow) {
     setEditing(r);
+    const activeKodeSet = new Set(activeDps.map((d) => d['Kode DP']));
+    const assignedKodes = (dps ?? []).filter((d) => d['SPV Drop Point'] === r.Id).map((d) => d['Kode DP']);
+    setHiddenSupervised(assignedKodes.filter((k) => !activeKodeSet.has(k)));
     setForm({
       nama: r.Nama,
       email: r.Email,
@@ -185,16 +205,40 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
       role: isAssignableRole(r.Role) ? r.Role : 'Admin DP',
       dropPoint: r['Drop Point'] || activeDps[0]?.['Kode DP'] || '',
       statusAktif: isAktif(r['Status Aktif']),
+      supervisedDps: assignedKodes.filter((k) => activeKodeSet.has(k)),
     });
     setDialogOpen(true);
   }
-  function submit() {
-    if (editing) updateMut.mutate(form);
-    else createMut.mutate(form);
+  async function submit() {
+    setSubmitting(true);
+    try {
+      if (editing) await updateMut.mutateAsync(form);
+      else await createMut.mutateAsync(form);
+
+      if (form.role === 'SPV Drop Point') {
+        const targetEmail = editing ? editing.Email : form.email.trim();
+        const kodeDpList = [...new Set([...form.supervisedDps, ...hiddenSupervised])];
+        await api(`/api/users/${encodeURIComponent(targetEmail)}/supervised-drop-points`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kodeDpList }),
+        });
+        qc.invalidateQueries({ queryKey: ['drop-points'] });
+      }
+
+      toast.success(editing ? 'User diperbarui.' : 'User ditambahkan.');
+      setDialogOpen(false);
+      invalidate();
+    } catch (e) {
+      toast.error(`Gagal menyimpan: ${(e as Error).message}`);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  const saving = createMut.isPending || updateMut.isPending;
+  const saving = submitting;
   const needDp = form.role === 'Admin DP';
+  const needSupervised = form.role === 'SPV Drop Point';
   const canSave =
     form.nama.trim() &&
     (editing || form.email.trim()) &&
@@ -440,6 +484,45 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                 )}
                 <p className="text-muted-foreground text-[11px]">
                   Dipilih dari daftar Master Drop Point (bukan ketik bebas) supaya cocok dengan data Long Tail.
+                </p>
+              </div>
+            )}
+            {needSupervised && (
+              <div className="space-y-1.5">
+                <Label>Drop Point yang Disupervisi</Label>
+                {activeDps.length === 0 ? (
+                  <p className="text-destructive text-xs">
+                    Belum ada Drop Point aktif. Tambahkan di Master Drop Point dulu.
+                  </p>
+                ) : (
+                  <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-2">
+                    {activeDps.map((d) => {
+                      const kode = d['Kode DP'];
+                      const checked = form.supervisedDps.includes(kode);
+                      return (
+                        <label key={kode} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                supervisedDps: e.target.checked
+                                  ? [...form.supervisedDps, kode]
+                                  : form.supervisedDps.filter((k) => k !== kode),
+                              })
+                            }
+                          />
+                          {kode} — {d['Nama DP']}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                <p className="text-muted-foreground text-[11px]">
+                  Bisa pilih lebih dari satu, atau kosongkan dulu & assign belakangan. DP yang di-uncheck akan
+                  dilepas dari supervisi user ini. Cara lain yang tetap sinkron: assign per-DP satu-satu lewat
+                  halaman Cabang → Drop Point.
                 </p>
               </div>
             )}

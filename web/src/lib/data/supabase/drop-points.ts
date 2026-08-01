@@ -181,3 +181,66 @@ export async function deleteDropPoint(
   if (error) throw new ApiError('INTERNAL_ERROR', error.message);
   return { kodeDp };
 }
+
+/**
+ * Assign/lepas SPV Drop Point ke BANYAK DP sekaligus dari form User (jalur
+ * KEDUA selain edit per-DP satu-satu di halaman Drop Point - keduanya nulis
+ * ke kolom yang SAMA, spv_drop_point_user_id, jadi otomatis tetap sinkron).
+ * `kodeDpList` = daftar FINAL yang diinginkan (bukan "tambahkan ke") - DP
+ * yang sebelumnya ter-assign ke user ini tapi TIDAK ada di daftar baru
+ * otomatis dilepas (spv_drop_point_user_id -> null), DP lain milik SPV lain
+ * TIDAK disentuh sama sekali.
+ */
+export async function syncSupervisedDropPoints(
+  actorEmail: string,
+  targetEmail: string,
+  kodeDpList: string[],
+): Promise<{ assigned: string[] }> {
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  const email = String(targetEmail ?? '').trim().toLowerCase();
+  if (!email) throw new ApiError('VALIDATION_ERROR', 'targetEmail wajib diisi');
+
+  const { data: target, error: targetErr } = await db().from('users').select('id, role').eq('email', email).maybeSingle();
+  if (targetErr) throw new ApiError('INTERNAL_ERROR', targetErr.message);
+  if (!target) throw new ApiError('NOT_FOUND', `Email "${targetEmail}" tidak ditemukan`);
+  if (target.role !== 'SPV Drop Point') {
+    throw new ApiError('VALIDATION_ERROR', 'Assignment DP yang disupervisi cuma berlaku utk Jabatan "SPV Drop Point"');
+  }
+  const targetId = String(target.id);
+
+  const kodeList = [...new Set((kodeDpList ?? []).map((k) => String(k).trim()).filter(Boolean))];
+  if (kodeList.length > 0) {
+    const { data: exist, error: existErr } = await db().from('master_drop_point').select('kode_dp').in('kode_dp', kodeList);
+    if (existErr) throw new ApiError('INTERNAL_ERROR', existErr.message);
+    const foundSet = new Set((exist ?? []).map((r) => String((r as { kode_dp: string }).kode_dp)));
+    const missing = kodeList.filter((k) => !foundSet.has(k));
+    if (missing.length > 0) throw new ApiError('VALIDATION_ERROR', `Drop Point tidak ditemukan: ${missing.join(', ')}`);
+  }
+
+  // Diff thd assignment SEBELUMNYA (bukan overwrite serampangan) - lepas cuma
+  // DP milik TARGET INI yang tak lagi dipilih; DP milik SPV lain tak pernah
+  // ikut ter-query (filter by spv_drop_point_user_id = targetId), jadi aman.
+  const { data: currentRows, error: curErr } = await db()
+    .from('master_drop_point')
+    .select('kode_dp')
+    .eq('spv_drop_point_user_id', targetId);
+  if (curErr) throw new ApiError('INTERNAL_ERROR', curErr.message);
+  const currentSet = new Set((currentRows ?? []).map((r) => String((r as { kode_dp: string }).kode_dp)));
+  const toUnassign = [...currentSet].filter((k) => !kodeList.includes(k));
+
+  if (toUnassign.length > 0) {
+    const { error } = await db()
+      .from('master_drop_point')
+      .update({ spv_drop_point_user_id: null })
+      .in('kode_dp', toUnassign);
+    if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  }
+  if (kodeList.length > 0) {
+    const { error } = await db()
+      .from('master_drop_point')
+      .update({ spv_drop_point_user_id: targetId })
+      .in('kode_dp', kodeList);
+    if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  }
+  return { assigned: kodeList };
+}
