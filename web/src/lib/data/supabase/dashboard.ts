@@ -1,6 +1,7 @@
 import { db } from './client';
 import { requireActor, resolveScopedDps } from './helpers';
 import { hasFullAccess } from '@/lib/roles';
+import { requirePermission } from './permissions';
 import { ApiError } from '@/lib/errors';
 import {
   categorizeFeedback,
@@ -75,6 +76,7 @@ async function fetchTodayActivityLog(dpFilter: DpFilter, today: string): Promise
  */
 export async function getDashboard(actorEmail: string, dp?: string): Promise<DashboardData> {
   const actor = await requireActor(actorEmail);
+  await requirePermission(actor, 'dashboard');
   const isFullAccess = hasFullAccess(actor.role);
 
   // Tentukan filter DP efektif.
@@ -274,6 +276,7 @@ export async function getDashboardSnapshot(
   dp?: string,
 ): Promise<DashboardData | null> {
   const actor = await requireActor(actorEmail);
+  await requirePermission(actor, 'dashboard');
   const isFullAccess = hasFullAccess(actor.role);
   let scope = 'ALL';
   if (isFullAccess) {

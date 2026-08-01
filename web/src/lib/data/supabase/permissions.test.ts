@@ -1,0 +1,214 @@
+// Role & Akses (matrix menu HANYA utk SPV Drop Point/Admin DP): hasPermission()
+// murni + integrasi nyata ke endpoint (dashboard/feedback longtail view+edit/
+// riwayat feedback) - mock.module() HANYA di boundary db() (client.ts), pola
+// sama dgn role-expansion.test.ts. Checkpoint utama yg diminta: akun SPV
+// dummy, matikan 1 menu (role default) -> FORBIDDEN, nyalakan lagi via
+// override akun -> berhasil lagi.
+import { after, before, beforeEach, describe, it, mock } from 'node:test';
+import assert from 'node:assert/strict';
+import { type Row, fakeDbFactory } from './fake-db.test-support.ts';
+
+const SPV_ID = 'u-spv';
+const ADMINDP_ID = 'u-admindp';
+
+function freshStore(): Map<string, Row[]> {
+  const store = new Map<string, Row[]>();
+  store.set('users', [
+    { id: 'u-admincabang', email: 'admincabang@ltms.test', nama: 'Admin Cabang', role: 'Admin Cabang', drop_point: '', status_aktif: true },
+    { id: 'u-manager', email: 'manager@ltms.test', nama: 'Manager Kota', role: 'Manager Kota', drop_point: '', status_aktif: true },
+    { id: 'u-asisten', email: 'asisten@ltms.test', nama: 'Asisten Manager', role: 'Asisten Manager Kota', drop_point: '', status_aktif: true },
+    { id: 'u-superadmin', email: 'superadmin@ltms.test', nama: 'Super Admin', role: 'Super Admin', drop_point: '', status_aktif: true },
+    { id: SPV_ID, email: 'spv@ltms.test', nama: 'SPV Dummy', role: 'SPV Drop Point', drop_point: '', status_aktif: true },
+    { id: ADMINDP_ID, email: 'admindp@ltms.test', nama: 'Admin DP', role: 'Admin DP', drop_point: 'BATANG01', status_aktif: true },
+  ]);
+  store.set('master_drop_point', [
+    { kode_dp: 'BATANG01', nama_dp: 'Batang 01', wilayah: 'Batang', status_aktif: true, kode_kota: null, spv_drop_point_user_id: SPV_ID },
+  ]);
+  store.set('longtail', [
+    { no_waybill: 'WB-BATANG', status_terakhir: 'KIRIM', alasan_bermasalah: '', dp_sampai: 'BATANG01', waktu_sampai: '2026-07-28 10:00:00', umur_frozen: null, sprinter_delivery: '', cod: 'NONCOD', delivery_attempt: 0, feedback: '', log_feedback: '', perlu_review: false, version: 1 },
+  ]);
+  store.set('activity_log', []);
+  // Seed persis spt migrasi produksi: semua true utk kedua role.
+  store.set('role_permissions', [
+    { role: 'SPV Drop Point', menu_key: 'dashboard', enabled: true },
+    { role: 'SPV Drop Point', menu_key: 'feedback_longtail_view', enabled: true },
+    { role: 'SPV Drop Point', menu_key: 'feedback_longtail_edit', enabled: true },
+    { role: 'SPV Drop Point', menu_key: 'riwayat_feedback', enabled: true },
+    { role: 'Admin DP', menu_key: 'dashboard', enabled: true },
+    { role: 'Admin DP', menu_key: 'feedback_longtail_view', enabled: true },
+    { role: 'Admin DP', menu_key: 'feedback_longtail_edit', enabled: true },
+    { role: 'Admin DP', menu_key: 'riwayat_feedback', enabled: true },
+  ]);
+  store.set('user_permissions', []);
+  return store;
+}
+
+const ADMIN_CABANG = 'admincabang@ltms.test';
+const MANAGER_KOTA = 'manager@ltms.test';
+const ASISTEN_MANAGER = 'asisten@ltms.test';
+const SUPER_ADMIN = 'superadmin@ltms.test';
+const SPV = 'spv@ltms.test';
+const ADMIN_DP = 'admindp@ltms.test';
+
+describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fungsi produksi asli)', () => {
+  let helpers: typeof import('./helpers.ts');
+  let permissions: typeof import('./permissions.ts');
+  let dashboard: typeof import('./dashboard.ts');
+  let longtail: typeof import('./longtail.ts');
+  let riwayat: typeof import('./riwayat-feedback.ts');
+  let store: Map<string, Row[]>;
+
+  before(async () => {
+    mock.module('./client', {
+      namedExports: { db: fakeDbFactory(() => store) },
+    });
+    helpers = await import('./helpers.ts');
+    permissions = await import('./permissions.ts');
+    dashboard = await import('./dashboard.ts');
+    longtail = await import('./longtail.ts');
+    riwayat = await import('./riwayat-feedback.ts');
+  });
+
+  beforeEach(() => {
+    store = freshStore();
+  });
+
+  after(() => mock.reset());
+
+  it('1. hasPermission: Super Admin selalu true, TIDAK PERNAH dicek ke matrix - walau role_permissions/user_permissions kosong sama sekali', async () => {
+    store.set('role_permissions', []);
+    store.set('user_permissions', []);
+    const actor = await helpers.requireActor(SUPER_ADMIN);
+    for (const key of permissions.MENU_KEYS) {
+      assert.equal(await permissions.hasPermission(actor, key), true, `Super Admin harus true utk ${key} walau matrix kosong`);
+    }
+  });
+
+  it('2. hasPermission: Admin Cabang/Manager Kota/Asisten Manager Kota selalu true - TIDAK PERNAH masuk matrix (given dari Langkah 3), walau ada baris matrix yg bilang false utk "role" mereka', async () => {
+    // Baris ini SEHARUSNYA mustahil di produksi (CHECK constraint DB menolak
+    // role selain SPV Drop Point/Admin DP) - disimulasikan di sini justru utk
+    // membuktikan kode TIDAK PERNAH membaca baris ini utk role full access,
+    // bukan cuma "kebetulan" tidak ada baris yg mengembalikan false.
+    store.set('role_permissions', [
+      { role: 'Admin Cabang', menu_key: 'dashboard', enabled: false },
+      { role: 'Manager Kota', menu_key: 'dashboard', enabled: false },
+      { role: 'Asisten Manager Kota', menu_key: 'dashboard', enabled: false },
+    ]);
+    for (const email of [ADMIN_CABANG, MANAGER_KOTA, ASISTEN_MANAGER]) {
+      const actor = await helpers.requireActor(email);
+      for (const key of permissions.MENU_KEYS) {
+        assert.equal(await permissions.hasPermission(actor, key), true, `${email} harus tetap true utk ${key}`);
+      }
+    }
+  });
+
+  it('3. hasPermission: SPV Drop Point/Admin DP ikuti default role_permissions kalau TIDAK ada override akun', async () => {
+    const spv = await helpers.requireActor(SPV);
+    const admindp = await helpers.requireActor(ADMIN_DP);
+    for (const key of permissions.MENU_KEYS) {
+      assert.equal(await permissions.hasPermission(spv, key), true);
+      assert.equal(await permissions.hasPermission(admindp, key), true);
+    }
+  });
+
+  it('4. hasPermission: default role dimatikan (enabled=false) -> actor role itu ikut false kalau tak ada override akun', async () => {
+    store.get('role_permissions')!.find((r) => r.role === 'SPV Drop Point' && r.menu_key === 'riwayat_feedback')!.enabled = false;
+    const spv = await helpers.requireActor(SPV);
+    assert.equal(await permissions.hasPermission(spv, 'riwayat_feedback'), false);
+    assert.equal(await permissions.hasPermission(spv, 'dashboard'), true, 'menu lain tak ikut terpengaruh');
+  });
+
+  it('5. hasPermission: override akun (user_permissions) MENANG atas default role, baik menyalakan maupun mematikan', async () => {
+    store.set('user_permissions', [
+      { user_id: SPV_ID, menu_key: 'dashboard', enabled: false }, // default true -> di-override jadi false
+    ]);
+    store.get('role_permissions')!.find((r) => r.role === 'SPV Drop Point' && r.menu_key === 'feedback_longtail_edit')!.enabled = false;
+    store.get('user_permissions')!.push({ user_id: SPV_ID, menu_key: 'feedback_longtail_edit', enabled: true }); // default false -> di-override jadi true
+
+    const spv = await helpers.requireActor(SPV);
+    assert.equal(await permissions.hasPermission(spv, 'dashboard'), false, 'override false menang atas default true');
+    assert.equal(await permissions.hasPermission(spv, 'feedback_longtail_edit'), true, 'override true menang atas default false');
+    assert.equal(await permissions.hasPermission(spv, 'riwayat_feedback'), true, 'menu tanpa override tetap ikut default');
+  });
+
+  it('6. hasPermission: role_permissions kosong sama sekali (jaring pengaman) -> default true, BUKAN false', async () => {
+    store.set('role_permissions', []);
+    const spv = await helpers.requireActor(SPV);
+    assert.equal(await permissions.hasPermission(spv, 'dashboard'), true);
+  });
+
+  // --------------------------------------------------------------------------
+  // Checkpoint yang diminta: akun SPV dummy, matikan 1 menu, verifikasi
+  // TIDAK BISA akses (FORBIDDEN) lewat endpoint/fungsi produksi ASLI (bukan
+  // cuma hasPermission() murni) - lalu nyalakan lagi via override akun,
+  // verifikasi BISA akses lagi.
+  // --------------------------------------------------------------------------
+
+  it('7. CHECKPOINT: SPV dummy - matikan feedback_longtail_edit (default role) -> submitFeedback FORBIDDEN', async () => {
+    store.get('role_permissions')!.find((r) => r.role === 'SPV Drop Point' && r.menu_key === 'feedback_longtail_edit')!.enabled = false;
+    await assert.rejects(
+      () => longtail.submitFeedback(SPV, 'WB-BATANG', 'On Delivery'),
+      (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+    );
+  });
+
+  it('8. CHECKPOINT: ...lalu nyalakan lagi KHUSUS akun ini via override user_permissions -> submitFeedback berhasil lagi (default role tetap false, tidak ikut berubah)', async () => {
+    store.get('role_permissions')!.find((r) => r.role === 'SPV Drop Point' && r.menu_key === 'feedback_longtail_edit')!.enabled = false;
+    store.get('user_permissions')!.push({ user_id: SPV_ID, menu_key: 'feedback_longtail_edit', enabled: true });
+
+    const result = await longtail.submitFeedback(SPV, 'WB-BATANG', 'On Delivery via override');
+    assert.equal(result.Feedback, 'On Delivery via override');
+
+    // Default role utk SPV LAIN (tanpa override akun) tetap FORBIDDEN - override
+    // cuma berlaku per akun, tidak ikut menaikkan default role-nya.
+    store.get('users')!.push({ id: 'u-spv-lain', email: 'spvlain@ltms.test', nama: 'SPV Lain', role: 'SPV Drop Point', drop_point: '', status_aktif: true });
+    store.get('master_drop_point')!.push({ kode_dp: 'BANDAR01', nama_dp: 'Bandar 01', wilayah: 'Bandar', status_aktif: true, kode_kota: null, spv_drop_point_user_id: 'u-spv-lain' });
+    store.get('longtail')!.push({ no_waybill: 'WB-BANDAR', status_terakhir: 'KIRIM', alasan_bermasalah: '', dp_sampai: 'BANDAR01', waktu_sampai: '2026-07-28 10:00:00', umur_frozen: null, sprinter_delivery: '', cod: 'NONCOD', delivery_attempt: 0, feedback: '', log_feedback: '', perlu_review: false, version: 1 });
+    await assert.rejects(
+      () => longtail.submitFeedback('spvlain@ltms.test', 'WB-BANDAR', 'On Delivery'),
+      (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+    );
+  });
+
+  it('9. getDashboard: menu "dashboard" dimatikan utk Admin DP -> FORBIDDEN', async () => {
+    store.get('role_permissions')!.find((r) => r.role === 'Admin DP' && r.menu_key === 'dashboard')!.enabled = false;
+    await assert.rejects(
+      () => dashboard.getDashboard(ADMIN_DP),
+      (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+    );
+  });
+
+  it('10. listLongTail/getLongTail: menu "feedback_longtail_view" dimatikan -> FORBIDDEN utk keduanya, TAPI submitFeedback (edit) tetap jalan (menu beda)', async () => {
+    store.get('role_permissions')!.find((r) => r.role === 'SPV Drop Point' && r.menu_key === 'feedback_longtail_view')!.enabled = false;
+    await assert.rejects(
+      () => longtail.listLongTail(SPV),
+      (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+    );
+    await assert.rejects(
+      () => longtail.getLongTail(SPV, 'WB-BATANG'),
+      (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+    );
+    const ok = await longtail.submitFeedback(SPV, 'WB-BATANG', 'On Delivery');
+    assert.equal(ok.Feedback, 'On Delivery', 'feedback_longtail_edit tak ikut terpengaruh matinya feedback_longtail_view');
+  });
+
+  it('11. listRiwayatFeedback: menu "riwayat_feedback" dimatikan -> FORBIDDEN', async () => {
+    store.get('role_permissions')!.find((r) => r.role === 'Admin DP' && r.menu_key === 'riwayat_feedback')!.enabled = false;
+    await assert.rejects(
+      () => riwayat.listRiwayatFeedback(ADMIN_DP),
+      (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+    );
+  });
+
+  it('12. REGRESI: Admin Cabang/Manager Kota/Asisten Manager Kota/Super Admin TIDAK TERPENGARUH SAMA SEKALI walau SEMUA baris role_permissions dimatikan (matrix cuma berlaku utk SPV DP/Admin DP)', async () => {
+    for (const r of store.get('role_permissions')!) r.enabled = false;
+    for (const email of [ADMIN_CABANG, MANAGER_KOTA, ASISTEN_MANAGER, SUPER_ADMIN]) {
+      const dash = await dashboard.getDashboard(email);
+      assert.ok(dash, `${email} tetap bisa akses Dashboard`);
+      const list = await longtail.listLongTail(email);
+      assert.ok(Array.isArray(list), `${email} tetap bisa akses Feedback Long Tail (view)`);
+      const log = await riwayat.listRiwayatFeedback(email);
+      assert.ok(Array.isArray(log), `${email} tetap bisa akses Riwayat Feedback`);
+    }
+  });
+});

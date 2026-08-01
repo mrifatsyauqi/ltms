@@ -1,5 +1,6 @@
 import { db } from './client';
 import { attributionName, requireActor, requireRole, resolveScopedDps, type Actor } from './helpers';
+import { requirePermission } from './permissions';
 import { ApiError } from '@/lib/errors';
 import { FULL_ACCESS_ROLES } from '@/lib/roles';
 import {
@@ -34,6 +35,7 @@ async function assertCanAccessDp(actor: Actor, dpSampai: string | null): Promise
 
 export async function listLongTail(actorEmail: string, dpFilter?: string): Promise<LongTailRow[]> {
   const actor = await requireActor(actorEmail);
+  await requirePermission(actor, 'feedback_longtail_view');
   const rows = await fetchLongtailScoped(actor, dpFilter);
   return rows.map(decorateLongTailRow);
 }
@@ -53,6 +55,7 @@ export async function listLongTailPublic(): Promise<LongTailRow[]> {
 
 export async function getLongTail(actorEmail: string, waybill: string): Promise<LongTailRow> {
   const actor = await requireActor(actorEmail);
+  await requirePermission(actor, 'feedback_longtail_view');
   const row = await findRow(waybill);
   if (!row) throw new ApiError('NOT_FOUND', 'Waybill tidak ditemukan');
   await assertCanAccessDp(actor, row.dp_sampai);
@@ -66,6 +69,7 @@ export async function submitFeedback(
   baseVersion?: string,
 ): Promise<LongTailRow> {
   const actor = await requireActor(actorEmail);
+  await requirePermission(actor, 'feedback_longtail_edit');
   const feedback = String(feedbackRaw ?? '').trim();
   if (!waybill) throw new ApiError('VALIDATION_ERROR', 'waybill wajib diisi');
   if (!feedback) throw new ApiError('VALIDATION_ERROR', 'feedback tidak boleh kosong');

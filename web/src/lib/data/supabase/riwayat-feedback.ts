@@ -1,5 +1,6 @@
 import { db } from './client';
 import { requireActor, resolveScopedDps } from './helpers';
+import { requirePermission } from './permissions';
 import { ApiError } from '@/lib/errors';
 import { isClearTTD, jakartaParts } from './longtail-shared';
 import type { RiwayatFeedbackRow } from '@/lib/data/types';
@@ -31,6 +32,7 @@ export async function listRiwayatFeedback(
   dpFilter?: string,
 ): Promise<RiwayatFeedbackRow[]> {
   const actor = await requireActor(actorEmail);
+  await requirePermission(actor, 'riwayat_feedback');
   const scopedDps = await resolveScopedDps(actor);
 
   let q = db()
