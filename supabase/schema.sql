@@ -31,6 +31,7 @@ drop table if exists master_drop_point cascade;
 drop table if exists cabang            cascade;
 drop table if exists login_attempts    cascade;
 drop table if exists users             cascade;
+drop table if exists jabatan           cascade;
 drop function if exists set_updated_at cascade;
 
 -- Trigger util: auto-set updated_at.
@@ -40,6 +41,20 @@ begin
   return new;
 end;
 $$ language plpgsql;
+
+-- ---------------------------------------------------------------------------
+-- JABATAN — normalisasi role/label organisasi jadi entitas resmi dgn id,
+-- LEPAS dari kolom users.role (text) yang TETAP DIPERTAHANKAN sbg
+-- fallback/cross-check selama masa transisi (lihat supabase/jabatan_migration.sql
+-- utk setup produksi yang sudah live). jabatan_id di users masih NULLABLE di
+-- sini (dev-recreate) - backfill + NOT NULL menyusul di file migrasi terpisah.
+-- ---------------------------------------------------------------------------
+create table jabatan (
+  id        uuid primary key default gen_random_uuid(),
+  nama      text not null unique,
+  tingkat   integer not null,
+  deskripsi text
+);
 
 -- ---------------------------------------------------------------------------
 -- USERS (store login; NextAuth resolve role + drop_point dari sini)
@@ -62,12 +77,14 @@ create table users (
                 check (tipe_akun in ('individual', 'general')),
   role          text not null check (role in ('Admin Cabang', 'Admin DP')),
   drop_point    text,                       -- kode DP; kosong utk Admin Cabang
+  jabatan_id    uuid references jabatan(id) on delete set null, -- normalisasi role, lihat blok JABATAN di atas
   password_hash text,                       -- scrypt "salt:hash"; kosong = hanya Google
   status_aktif  boolean not null default true,
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
 create unique index users_id_unique_idx on users (id);
+create index users_jabatan_id_idx on users (jabatan_id);
 create unique index users_nik_unique_idx on users (nik) where nik is not null;
 create trigger users_updated before update on users
   for each row execute function set_updated_at();
