@@ -1,7 +1,7 @@
 import { db } from './client';
 import { aktifText, assertDropPointActive, requireActor, requireRole, resolveJabatanIdByRole } from './helpers';
 import { ApiError } from '@/lib/errors';
-import { FULL_ACCESS_ROLES } from '@/lib/roles';
+import { ASSIGNABLE_ROLES, FULL_ACCESS_ROLES, isAssignableRole } from '@/lib/roles';
 import type { CreateGeneralAccountResult, CreateUserInput, UpdateUserInput, UserRow } from '@/lib/data/types';
 
 const SELECT_COLUMNS = 'id, nama, email, nik, nama_tampilan, tipe_akun, role, drop_point, status_aktif';
@@ -54,8 +54,8 @@ export async function createUser(actorEmail: string, data: CreateUserInput): Pro
   const nik = String(data?.nik ?? '').trim();
   const role = data?.role;
   if (!nama || !email || !nik || !role) throw new ApiError('VALIDATION_ERROR', 'nama, email, NIK, role wajib diisi');
-  if (role !== 'Admin Cabang' && role !== 'Admin DP') {
-    throw new ApiError('VALIDATION_ERROR', 'role harus "Admin Cabang" atau "Admin DP"');
+  if (!isAssignableRole(role)) {
+    throw new ApiError('VALIDATION_ERROR', `role harus salah satu dari: ${ASSIGNABLE_ROLES.join(', ')}`);
   }
   if (role === 'Admin DP') {
     if (!data.dropPoint) throw new ApiError('VALIDATION_ERROR', 'Admin DP wajib dikaitkan ke minimal satu Drop Point');
@@ -96,6 +96,9 @@ export async function updateUser(
 ): Promise<UserRow> {
   requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   if (!targetEmail) throw new ApiError('VALIDATION_ERROR', 'targetEmail wajib diisi');
+  if (data.role !== undefined && !isAssignableRole(data.role)) {
+    throw new ApiError('VALIDATION_ERROR', `role harus salah satu dari: ${ASSIGNABLE_ROLES.join(', ')}`);
+  }
   if (data.role === 'Admin DP') {
     if (!data.dropPoint) throw new ApiError('VALIDATION_ERROR', 'Admin DP wajib dikaitkan ke minimal satu Drop Point');
     await assertDropPointActive(data.dropPoint);
@@ -119,8 +122,11 @@ export async function updateUser(
     patch.role = data.role;
     patch.jabatan_id = await resolveJabatanIdByRole(data.role); // ikut disinkronkan, lihat helpers.ts
   }
-  // Role Admin Cabang -> DP dikosongkan (cakupan semua DP).
-  if (data.role === 'Admin Cabang') patch.drop_point = '';
+  // Role selain Admin DP -> DP dikosongkan (Manager Kota/Asisten Manager
+  // Kota/Admin Cabang cakupan semua DP; SPV Drop Point di-assign lewat
+  // halaman Drop Point/master_drop_point.spv_drop_point_user_id, BUKAN
+  // kolom ini).
+  if (data.role !== undefined && data.role !== 'Admin DP') patch.drop_point = '';
   else if (data.dropPoint !== undefined) patch.drop_point = data.dropPoint;
   if (data.statusAktif !== undefined) patch.status_aktif = !!data.statusAktif;
 

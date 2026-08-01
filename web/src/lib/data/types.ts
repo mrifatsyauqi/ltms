@@ -1,6 +1,8 @@
 // Tipe kanonik lapisan data (Supabase-only sejak Tahap 8). Bentuk respons tetap
 // "shape sheet lama" (mis. 'No. Waybill') supaya API & frontend tidak berubah.
 
+import type { AssignableRole } from '@/lib/roles';
+
 // ---- Drop Point -------------------------------------------------------------
 export type DropPointRow = {
   'Kode DP': string;
@@ -95,13 +97,13 @@ export type CreateUserInput = {
   nama: string;
   email: string;
   nik: string;
-  role: 'Admin Cabang' | 'Admin DP';
+  role: AssignableRole;
   dropPoint?: string;
 };
 export type UpdateUserInput = Partial<{
   nama: string;
   nik: string;
-  role: 'Admin Cabang' | 'Admin DP';
+  role: AssignableRole;
   dropPoint: string;
   statusAktif: boolean;
 }>;

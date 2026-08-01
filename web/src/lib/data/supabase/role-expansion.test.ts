@@ -34,6 +34,14 @@ function freshStore(): Map<string, Row[]> {
   ]);
   store.set('activity_log', []);
   store.set('longtail_archive', []);
+  store.set('jabatan', [
+    { id: 'jab-super-admin', nama: 'Super Admin', tingkat: 1, deskripsi: null },
+    { id: 'jab-admin-cabang', nama: 'Admin Cabang', tingkat: 2, deskripsi: null },
+    { id: 'jab-manager-kota', nama: 'Manager Kota', tingkat: 3, deskripsi: null },
+    { id: 'jab-asisten-manager', nama: 'Asisten Manager Kota', tingkat: 4, deskripsi: null },
+    { id: 'jab-spv-dp', nama: 'SPV Drop Point', tingkat: 5, deskripsi: null },
+    { id: 'jab-admin-dp', nama: 'Admin DP', tingkat: 6, deskripsi: null },
+  ]);
   return store;
 }
 
@@ -50,6 +58,7 @@ describe('Langkah 3 - Perluasan Role: full access & SPV Drop Point (eksekusi nya
   let riwayat: typeof import('./riwayat-feedback.ts');
   let roles: typeof import('../../roles.ts');
   let nav: typeof import('../../nav.ts');
+  let users: typeof import('./users.ts');
   let store: Map<string, Row[]>;
 
   before(async () => {
@@ -62,6 +71,7 @@ describe('Langkah 3 - Perluasan Role: full access & SPV Drop Point (eksekusi nya
     riwayat = await import('./riwayat-feedback.ts');
     roles = await import('../../roles.ts');
     nav = await import('../../nav.ts');
+    users = await import('./users.ts');
   });
 
   beforeEach(() => {
@@ -183,5 +193,46 @@ describe('Langkah 3 - Perluasan Role: full access & SPV Drop Point (eksekusi nya
       () => longtail.getLongTail('admindp@ltms.test', 'WB-BANDAR'),
       (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
     );
+  });
+
+  it('15. createUser: role "Manager Kota" berhasil, jabatan_id ikut disinkronkan, drop_point TETAP kosong', async () => {
+    await users.createUser(ADMIN_CABANG, { nama: 'Budi Manager', email: 'budimanager@ltms.test', nik: 'NIK-BM', role: 'Manager Kota' });
+    const list = await users.listUsers(ADMIN_CABANG);
+    const row = list.find((u) => u.Email === 'budimanager@ltms.test');
+    assert.ok(row);
+    assert.equal(row!.Role, 'Manager Kota');
+    assert.equal(row!['Drop Point'], '', 'Manager Kota tidak terikat 1 DP - drop_point harus kosong');
+    const raw = store.get('users')!.find((u) => u.email === 'budimanager@ltms.test')!;
+    assert.equal(raw.jabatan_id, 'jab-manager-kota');
+  });
+
+  it('16. createUser: role "SPV Drop Point" berhasil TANPA wajib isi dropPoint (di-assign lewat halaman Drop Point, bukan form ini)', async () => {
+    await users.createUser(ADMIN_CABANG, { nama: 'Sari SPV', email: 'sarispv@ltms.test', nik: 'NIK-SS', role: 'SPV Drop Point' });
+    const list = await users.listUsers(ADMIN_CABANG);
+    const row = list.find((u) => u.Email === 'sarispv@ltms.test');
+    assert.ok(row);
+    assert.equal(row!.Role, 'SPV Drop Point');
+    assert.equal(row!['Drop Point'], '');
+  });
+
+  it('17. createUser: role "Super Admin" -> VALIDATION_ERROR (TIDAK BISA dibuat lewat form/API, cuma SQL manual)', async () => {
+    await assert.rejects(
+      () => users.createUser(ADMIN_CABANG, { nama: 'Coba Jadi SA', email: 'cobasa@ltms.test', nik: 'NIK-SA2', role: 'Super Admin' as never }),
+      (e: unknown) => (e as { code?: string }).code === 'VALIDATION_ERROR',
+    );
+  });
+
+  it('18. updateUser: ganti role Admin DP -> Asisten Manager Kota mengosongkan drop_point & menyinkronkan jabatan_id', async () => {
+    const updated = await users.updateUser(ADMIN_CABANG, 'admindp@ltms.test', { role: 'Asisten Manager Kota' });
+    assert.equal(updated.Role, 'Asisten Manager Kota');
+    assert.equal(updated['Drop Point'], '', 'drop_point harus dikosongkan - Asisten Manager Kota tidak terikat 1 DP');
+    const raw = store.get('users')!.find((u) => u.email === 'admindp@ltms.test')!;
+    assert.equal(raw.jabatan_id, 'jab-asisten-manager');
+  });
+
+  it('19. Manager Kota/Asisten Manager Kota bisa membuat user baru (requireRole FULL_ACCESS_ROLES di createUser) - hak penuh spt Admin Cabang', async () => {
+    await users.createUser(MANAGER_KOTA, { nama: 'Dibuat Manager Kota', email: 'dibuatmanager@ltms.test', nik: 'NIK-DM', role: 'Admin DP', dropPoint: 'BATANG01' });
+    const list = await users.listUsers(ADMIN_CABANG);
+    assert.ok(list.some((u) => u.Email === 'dibuatmanager@ltms.test'));
   });
 });

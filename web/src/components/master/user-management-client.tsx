@@ -21,6 +21,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { SLOW_STALE_TIME } from '@/lib/query-config';
+import { ASSIGNABLE_ROLES, hasFullAccess, isAssignableRole, type AssignableRole } from '@/lib/roles';
 import type { UserRow } from '@/lib/data/users';
 import type { DropPointRow } from '@/lib/data/drop-points';
 import type { JabatanRow } from '@/lib/data/jabatan';
@@ -32,20 +33,17 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return body.data as T;
 }
 
-type Role = 'Admin Cabang' | 'Admin DP';
-type FormState = { nama: string; email: string; nik: string; role: Role; dropPoint: string; statusAktif: boolean };
+type FormState = { nama: string; email: string; nik: string; role: AssignableRole; dropPoint: string; statusAktif: boolean };
 const EMPTY: FormState = { nama: '', email: '', nik: '', role: 'Admin DP', dropPoint: '', statusAktif: true };
 
-// Tabel jabatan sudah punya 6 baris (Super Admin, Admin Cabang, Manager Kota,
-// Asisten Manager Kota, SPV Drop Point, Admin DP), TAPI dropdown ini SENGAJA
-// cuma menawarkan 2 - Admin Cabang & Admin DP - satu-satunya yang punya
-// pemetaan akses nyata sekarang (role tetap sumber kebenaran akses, lihat
-// resolveJabatanIdByRole di helpers.ts). 4 jabatan lain BELUM bisa dipilih
-// sbg jabatan utama sampai task Role & Akses berikutnya mendefinisikan akses
-// nyatanya - keputusan eksplisit, BUKAN oversight (opsi "pemetaan tingkat"
-// ditolak krn berisiko kasih akses penuh/salah ke label yang kelihatan
-// terbatas).
-const SELECTABLE_JABATAN = new Set<string>(['Admin Cabang', 'Admin DP']);
+// Tabel jabatan punya 6 baris (Super Admin, Admin Cabang, Manager Kota,
+// Asisten Manager Kota, SPV Drop Point, Admin DP). Dropdown ini menawarkan 5
+// - SEMUA KECUALI Super Admin (lihat ASSIGNABLE_ROLES) - Super Admin sengaja
+// TIDAK BISA dibuat lewat form, cuma lewat SQL manual (mencegah risiko
+// privilege escalation via UI). Manager Kota/Asisten Manager Kota punya
+// akses PENUH setara Admin Cabang (Langkah 3); SPV Drop Point di-assign ke
+// DP-nya lewat halaman Drop Point, BUKAN field di form ini.
+const SELECTABLE_JABATAN = new Set<string>(ASSIGNABLE_ROLES);
 
 export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const qc = useQueryClient();
@@ -181,7 +179,10 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
       nama: r.Nama,
       email: r.Email,
       nik: r.NIK,
-      role: (r.Role as Role) === 'Admin Cabang' ? 'Admin Cabang' : 'Admin DP',
+      // Super Admin (satu-satunya role di luar ASSIGNABLE_ROLES) tak bisa
+      // dibuat/diubah lewat form ini - fallback ke Admin DP kalau baris yang
+      // dibuka edit-nya kebetulan Super Admin, supaya dropdown tetap valid.
+      role: isAssignableRole(r.Role) ? r.Role : 'Admin DP',
       dropPoint: r['Drop Point'] || activeDps[0]?.['Kode DP'] || '',
       statusAktif: isAktif(r['Status Aktif']),
     });
@@ -280,7 +281,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                         <span
                           className={cn(
                             'rounded px-1.5 py-0.5 text-[11px] font-medium',
-                            r.Role === 'Admin Cabang'
+                            hasFullAccess(r.Role)
                               ? 'bg-brand-muted text-brand'
                               : 'bg-accent-blue/12 text-accent-blue',
                           )}
@@ -402,7 +403,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
               <Select
                 items={jabatanItems}
                 value={form.role}
-                onValueChange={(v) => setForm({ ...form, role: (v ?? 'Admin DP') as Role })}
+                onValueChange={(v) => setForm({ ...form, role: (v ?? 'Admin DP') as AssignableRole })}
               >
                 <SelectTrigger id="jabatan" className="h-9 w-full text-sm">
                   <SelectValue />
