@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   MessageSquareText,
   Settings,
+  ShieldCheck,
   Table2,
   Truck,
   Upload,
@@ -64,6 +65,7 @@ export function navForRole(role: string | undefined): NavGroup[] {
           },
           { label: 'Master Feedback', href: '/master/feedback', icon: ClipboardList },
           { label: 'User Management', href: '/master/users', icon: UserCog },
+          { label: 'Role & Akses', href: '/master/role-akses', icon: ShieldCheck },
         ],
       },
       {

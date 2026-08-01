@@ -86,9 +86,13 @@ export class FakeQuery {
       return resolve({ data: rows, error: null });
     }
     if (this.mode === 'upsert') {
+      // onConflict bisa composite ('role,menu_key') - cocokkan SEMUA kolomnya,
+      // bukan cuma treat string gabungan itu sbg satu nama kolom literal
+      // (yg tak pernah match apa pun -> upsert jadi selalu INSERT/duplikat).
+      const keyCols = this.upsertKey!.split(',').map((c) => c.trim());
       const rows = Array.isArray(this.payload) ? this.payload : [this.payload!];
       for (const r of rows) {
-        const idx = table.findIndex((t) => t[this.upsertKey!] === r[this.upsertKey!]);
+        const idx = table.findIndex((t) => keyCols.every((col) => t[col] === r[col]));
         if (idx >= 0) table[idx] = { ...table[idx], ...r };
         else table.push({ ...r });
       }

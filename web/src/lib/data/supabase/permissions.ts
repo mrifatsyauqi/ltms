@@ -17,6 +17,11 @@ export function isMenuKey(v: string): v is MenuKey {
  *  TIDAK PERNAH masuk matrix ini - akses mereka given/hardcoded dari
  *  Langkah 3, tak dicek lewat hasPermission() sama sekali. */
 export const GATED_ROLES = ['SPV Drop Point', 'Admin DP'] as const;
+export type GatedRole = (typeof GATED_ROLES)[number];
+
+export function isGatedRole(v: string): v is GatedRole {
+  return (GATED_ROLES as readonly string[]).includes(v);
+}
 
 /**
  * Resolusi akses menu utk 1 actor: Super Admin & full access (Admin Cabang/

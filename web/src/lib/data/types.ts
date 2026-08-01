@@ -2,6 +2,7 @@
 // "shape sheet lama" (mis. 'No. Waybill') supaya API & frontend tidak berubah.
 
 import type { AssignableRole } from '@/lib/roles';
+import type { GatedRole, MenuKey } from '@/lib/data/supabase/permissions';
 
 // ---- Drop Point -------------------------------------------------------------
 export type DropPointRow = {
@@ -267,3 +268,22 @@ export type DashboardData = {
   monitoringDp: MonitoringDpRow[];
   progressPerSprinter: { sprinter: string; total: number; sudah: number; progressPct: number }[];
 };
+
+// ---- Role & Akses -------------------------------------------------------------
+// Matrix menu HANYA utk 2 role "diatur": 'SPV Drop Point' & 'Admin DP'. Role
+// full access (Super Admin/Admin Cabang/Manager Kota/Asisten Manager Kota)
+// TIDAK PERNAH masuk sini (lihat lib/data/supabase/permissions.ts).
+export type RoleAksesSummary = { role: GatedRole; count: number };
+export type RolePermissionRow = { menuKey: MenuKey; enabled: boolean };
+export type UserPermissionRow = { menuKey: MenuKey; enabled: boolean; isOverride: boolean };
+export type RoleAksesAccount = {
+  id: string;
+  nama: string;
+  email: string;
+  nik: string;
+  role: GatedRole;
+  /** SPV: "Supervisi X Drop Point"; Admin DP: "Drop Point <kode>". */
+  konteks: string;
+  customCount: number;
+};
+export type RoleAksesAccountDetail = RoleAksesAccount & { permissions: UserPermissionRow[] };
