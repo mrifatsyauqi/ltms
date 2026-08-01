@@ -31,10 +31,12 @@ function freshStore(): Map<string, Row[]> {
     { role: 'SPV Drop Point', menu_key: 'feedback_longtail_view', enabled: true },
     { role: 'SPV Drop Point', menu_key: 'feedback_longtail_edit', enabled: true },
     { role: 'SPV Drop Point', menu_key: 'riwayat_feedback', enabled: true },
+    { role: 'SPV Drop Point', menu_key: 'monitoring_delivery_dp', enabled: true },
     { role: 'Admin DP', menu_key: 'dashboard', enabled: true },
     { role: 'Admin DP', menu_key: 'feedback_longtail_view', enabled: true },
     { role: 'Admin DP', menu_key: 'feedback_longtail_edit', enabled: true },
     { role: 'Admin DP', menu_key: 'riwayat_feedback', enabled: true },
+    { role: 'Admin DP', menu_key: 'monitoring_delivery_dp', enabled: true },
   ]);
   store.set('user_permissions', []);
   return store;
@@ -105,10 +107,11 @@ describe('Role & Akses (UI backend): summary/accounts/per-role/per-akun (eksekus
     );
   });
 
-  it('6. getRoleDefaultPermissions: 4 baris lengkap sesuai seed (semua true)', async () => {
+  it('6. getRoleDefaultPermissions: 5 baris lengkap sesuai seed (semua true) - PERSIS yang ada di DB utk role itu, bukan disintesis dari daftar menu_key global (15)', async () => {
     const rows = await roleAkses.getRoleDefaultPermissions(ADMIN_CABANG, 'SPV Drop Point');
-    assert.equal(rows.length, 4);
+    assert.equal(rows.length, 5);
     assert.ok(rows.every((r) => r.enabled === true));
+    assert.ok(rows.some((r) => r.menuKey === 'monitoring_delivery_dp'));
   });
 
   it('7. setRoleDefaultPermission (mode Per Role): matikan 1 menu -> berlaku ke SEMUA akun role itu yang TAK punya override, tapi role LAIN tak ikut berubah', async () => {
@@ -123,19 +126,21 @@ describe('Role & Akses (UI backend): summary/accounts/per-role/per-akun (eksekus
     assert.equal(spvDetail.permissions.find((p) => p.menuKey === 'riwayat_feedback')!.isOverride, false, 'ikut default, BUKAN override akun');
   });
 
-  it('8. setRoleDefaultPermission dipanggil DUA KALI (ubah lagi) -> tetap 4 baris (upsert, bukan duplikat) - regresi utk perbaikan FakeQuery composite onConflict', async () => {
+  it('8. setRoleDefaultPermission dipanggil DUA KALI (ubah lagi) -> tetap 5 baris (upsert, bukan duplikat) - regresi utk perbaikan FakeQuery composite onConflict', async () => {
     await roleAkses.setRoleDefaultPermission(ADMIN_CABANG, 'SPV Drop Point', 'dashboard', false);
     await roleAkses.setRoleDefaultPermission(ADMIN_CABANG, 'SPV Drop Point', 'dashboard', true);
     const rows = await roleAkses.getRoleDefaultPermissions(ADMIN_CABANG, 'SPV Drop Point');
-    assert.equal(rows.length, 4, 'harus tetap 4 baris, bukan bertambah jadi duplikat');
+    assert.equal(rows.length, 5, 'harus tetap 5 baris, bukan bertambah jadi duplikat');
     assert.equal(rows.find((r) => r.menuKey === 'dashboard')!.enabled, true);
   });
 
-  it('9. getAccountPermissions: akun tanpa override -> semua isOverride=false, ikut default role', async () => {
+  it('9. getAccountPermissions: akun tanpa override -> semua isOverride=false, ikut default role (5 baris, termasuk monitoring_delivery_dp)', async () => {
     const detail = await roleAkses.getAccountPermissions(ADMIN_CABANG, SPV_ID);
     assert.equal(detail.nama, 'Ahmad Fauzi');
     assert.equal(detail.customCount, 0);
+    assert.equal(detail.permissions.length, 5);
     assert.ok(detail.permissions.every((p) => p.isOverride === false && p.enabled === true));
+    assert.ok(detail.permissions.some((p) => p.menuKey === 'monitoring_delivery_dp'));
   });
 
   it('10. setUserPermissionOverride: override 1 menu KHUSUS 1 akun - akun lain (termasuk role sama) TAK ikut berubah', async () => {

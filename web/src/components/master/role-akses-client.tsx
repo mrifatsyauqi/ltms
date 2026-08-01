@@ -29,10 +29,12 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 
 type MenuCardDef = { title: string; desc: string; toggles: { key: MenuKey; label: string }[] };
 
-// Editor Izin: card per menu_key (Dashboard, Feedback Long Tail Lihat/Edit,
-// Riwayat Feedback) - PERSIS 4 menu_key yg ada di matrix (lihat
-// lib/data/supabase/permissions.ts), TIDAK lebih (Import/Master Data/User
-// Management memang tak pernah dimiliki SPV DP/Admin DP).
+// Editor Izin: card per menu_key yang dimiliki SPV Drop Point/Admin DP (5,
+// lihat lib/data/supabase/permissions.ts) - Import/Master Data/User
+// Management memang tak pernah dimiliki role ini, tak ada card-nya.
+// Cakupan menu_key role LAIN (Admin Cabang dkk, 15 menu_key) di luar scope
+// editor ini (dipetakan lewat PermissionCards.rows yang dikirim caller,
+// hanya card yg ADA di data yg dirender - lihat cardOverride/byKey di bawah).
 const MENU_CARDS: MenuCardDef[] = [
   { title: 'Dashboard', desc: 'Ringkasan statistik & monitoring', toggles: [{ key: 'dashboard', label: 'AKSES' }] },
   {
@@ -42,6 +44,11 @@ const MENU_CARDS: MenuCardDef[] = [
       { key: 'feedback_longtail_view', label: 'LIHAT' },
       { key: 'feedback_longtail_edit', label: 'EDIT' },
     ],
+  },
+  {
+    title: 'Monitoring Delivery',
+    desc: 'Tabel Monitoring Delivery per Sprinter',
+    toggles: [{ key: 'monitoring_delivery_dp', label: 'AKSES' }],
   },
   { title: 'Riwayat Feedback', desc: 'Histori aktivitas per waybill', toggles: [{ key: 'riwayat_feedback', label: 'AKSES' }] },
 ];

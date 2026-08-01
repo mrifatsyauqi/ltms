@@ -2,7 +2,7 @@ import { db } from './client';
 import { requireActor, requireRole } from './helpers';
 import { ApiError } from '@/lib/errors';
 import { FULL_ACCESS_ROLES } from '@/lib/roles';
-import { GATED_ROLES, MENU_KEYS, isGatedRole, isMenuKey, type GatedRole, type MenuKey } from './permissions';
+import { GATED_ROLES, isGatedRole, isMenuKey, type GatedRole, type MenuKey } from './permissions';
 import type {
   RoleAksesAccount,
   RoleAksesAccountDetail,
@@ -100,17 +100,21 @@ export async function listAccountsByRole(actorEmail: string, role: string): Prom
   });
 }
 
-/** Default matrix 1 role (4 baris, 1 per menu_key) - selalu lengkap krn seed
- *  migrasi mencakup semua kombinasi; baris yg somehow hilang dianggap true
- *  (sama spt fallback di hasPermission()). */
+/** Default matrix 1 role - PERSIS baris yang ada di role_permissions utk
+ *  role itu (bukan map ke semua MENU_KEYS global - role_permissions cakupan
+ *  BEDA per role: SPV Drop Point/Admin DP cuma 5, role lain nanti bisa
+ *  sampai 15, lihat permissions.ts). Baris yang seharusnya ada tapi hilang
+ *  (data corrupt, seharusnya tak pernah terjadi krn seed migrasi lengkap)
+ *  berarti menu itu tak muncul di editor - lebih aman drpd disintesis true. */
 export async function getRoleDefaultPermissions(actorEmail: string, role: string): Promise<RolePermissionRow[]> {
   await requireManagerActor(actorEmail);
   assertGatedRole(role);
-  const { data, error } = await db().from('role_permissions').select('menu_key, enabled').eq('role', role);
+  const { data, error } = await db().from('role_permissions').select('menu_key, enabled').eq('role', role).order('menu_key');
   if (error) throw new ApiError('INTERNAL_ERROR', error.message);
-  const byKey = new Map<string, boolean>();
-  (data ?? []).forEach((r) => byKey.set(String((r as { menu_key: string }).menu_key), Boolean((r as { enabled: boolean }).enabled)));
-  return MENU_KEYS.map((menuKey) => ({ menuKey, enabled: byKey.get(menuKey) ?? true }));
+  return (data ?? []).map((r) => {
+    const row = r as { menu_key: string; enabled: boolean };
+    return { menuKey: row.menu_key as MenuKey, enabled: Boolean(row.enabled) };
+  });
 }
 
 /** Ubah default 1 menu_key utk 1 role (berlaku ke SEMUA akun role itu yang
@@ -131,8 +135,9 @@ export async function setRoleDefaultPermission(
   return getRoleDefaultPermissions(actorEmail, role);
 }
 
-/** Detail 1 akun: info dasar + 4 baris permission EFEKTIF (override kalau
- *  ada, else default role-nya) + flag isOverride per baris - dipakai Editor
+/** Detail 1 akun: info dasar + baris permission EFEKTIF (override kalau ada,
+ *  else default role-nya) + flag isOverride per baris - cakupan menu_key
+ *  ikut role akun ini (lihat getRoleDefaultPermissions) - dipakai Editor
  *  Izin mode "Per Akun" (toggle + badge "Custom" + "Reset ke Default"). */
 export async function getAccountPermissions(actorEmail: string, targetUserId: string): Promise<RoleAksesAccountDetail> {
   await requireManagerActor(actorEmail);
@@ -161,11 +166,9 @@ export async function getAccountPermissions(actorEmail: string, targetUserId: st
   (overrideRes.data ?? []).forEach((r) =>
     overrides.set(String((r as { menu_key: string }).menu_key), Boolean((r as { enabled: boolean }).enabled)),
   );
-  const defaultByKey = new Map(defaultRows.map((r) => [r.menuKey, r.enabled]));
-
-  const permissions: UserPermissionRow[] = MENU_KEYS.map((menuKey) => {
-    const isOverride = overrides.has(menuKey);
-    return { menuKey, enabled: isOverride ? overrides.get(menuKey)! : (defaultByKey.get(menuKey) ?? true), isOverride };
+  const permissions: UserPermissionRow[] = defaultRows.map((d) => {
+    const isOverride = overrides.has(d.menuKey);
+    return { menuKey: d.menuKey, enabled: isOverride ? overrides.get(d.menuKey)! : d.enabled, isOverride };
   });
 
   const konteks =

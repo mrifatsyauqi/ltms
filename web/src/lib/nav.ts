@@ -58,7 +58,7 @@ export function navForRole(role: string | undefined): NavGroup[] {
           { label: 'Feedback Long Tail', href: '/feedback', icon: MessageSquareText },
           { label: 'Data Long Tail', href: '/feedback?view=data', icon: Table2 },
           { label: 'Import Long Tail', href: '/import', icon: Upload },
-          { label: 'Monitoring Delivery', href: '/monitoring-delivery', icon: Truck },
+          { label: 'Monitoring Delivery', href: '/monitoring-delivery', icon: Truck, menuKey: 'monitoring_delivery_cabang' },
         ],
       },
       {
@@ -92,14 +92,19 @@ export function navForRole(role: string | undefined): NavGroup[] {
     ];
   }
 
-  // Admin DP & SPV Drop Point - menuKey diisi utk 3 item yang diatur lewat
-  // Role & Akses (Monitoring Delivery & Profil Saya SENGAJA tanpa menuKey ->
-  // selalu tampil, lihat filterNavByAccess).
+  // Admin DP & SPV Drop Point - menuKey diisi utk 4 item yang diatur lewat
+  // Role & Akses (Profil Saya SENGAJA tanpa menuKey -> selalu tampil, lihat
+  // filterNavByAccess). Monitoring Delivery = mode per-Sprinter
+  // ('monitoring_delivery_dp') - dipakai KEDUA role ini (lihat
+  // app/(app)/monitoring-delivery/page.tsx: isCabang cuma true utk full
+  // access, SPV Drop Point TIDAK LAGI dapat mode Refine Total cabang -
+  // sebelumnya salah, ikut memicu FORBIDDEN krn mode itu fetch
+  // /api/drop-points yg cuma boleh full access).
   return [
     {
       items: [
         { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, menuKey: 'dashboard' },
-        { label: 'Monitoring Delivery', href: '/monitoring-delivery', icon: Truck },
+        { label: 'Monitoring Delivery', href: '/monitoring-delivery', icon: Truck, menuKey: 'monitoring_delivery_dp' },
         { label: 'Feedback Long Tail', href: '/feedback', icon: MessageSquareText, menuKey: 'feedback_longtail_view' },
         { label: 'Riwayat Feedback', href: '/riwayat-feedback', icon: History, menuKey: 'riwayat_feedback' },
         { label: 'Profil Saya', href: '/profil', icon: UserRound },

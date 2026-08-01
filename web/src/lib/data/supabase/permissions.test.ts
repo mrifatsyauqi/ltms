@@ -28,16 +28,20 @@ function freshStore(): Map<string, Row[]> {
     { no_waybill: 'WB-BATANG', status_terakhir: 'KIRIM', alasan_bermasalah: '', dp_sampai: 'BATANG01', waktu_sampai: '2026-07-28 10:00:00', umur_frozen: null, sprinter_delivery: '', cod: 'NONCOD', delivery_attempt: 0, feedback: '', log_feedback: '', perlu_review: false, version: 1 },
   ]);
   store.set('activity_log', []);
-  // Seed persis spt migrasi produksi: semua true utk kedua role.
+  // Seed persis spt migrasi produksi: semua true utk kedua role (5 menu_key
+  // sejak monitoring_delivery_dp ditambahkan - mode per-Sprinter Monitoring
+  // Delivery, dipakai SPV Drop Point & Admin DP).
   store.set('role_permissions', [
     { role: 'SPV Drop Point', menu_key: 'dashboard', enabled: true },
     { role: 'SPV Drop Point', menu_key: 'feedback_longtail_view', enabled: true },
     { role: 'SPV Drop Point', menu_key: 'feedback_longtail_edit', enabled: true },
     { role: 'SPV Drop Point', menu_key: 'riwayat_feedback', enabled: true },
+    { role: 'SPV Drop Point', menu_key: 'monitoring_delivery_dp', enabled: true },
     { role: 'Admin DP', menu_key: 'dashboard', enabled: true },
     { role: 'Admin DP', menu_key: 'feedback_longtail_view', enabled: true },
     { role: 'Admin DP', menu_key: 'feedback_longtail_edit', enabled: true },
     { role: 'Admin DP', menu_key: 'riwayat_feedback', enabled: true },
+    { role: 'Admin DP', menu_key: 'monitoring_delivery_dp', enabled: true },
   ]);
   store.set('user_permissions', []);
   return store;
@@ -220,18 +224,13 @@ describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fu
   // dibagi bersama) supaya sidebar & backend tak pernah beda pendapat.
   // --------------------------------------------------------------------------
 
-  it('13. getEffectiveMenuAccess: full access (termasuk Super Admin) -> semua 4 menu true TANPA butuh baris matrix sama sekali', async () => {
+  it('13. getEffectiveMenuAccess: full access (termasuk Super Admin) -> SEMUA 15 menu_key true TANPA butuh baris matrix sama sekali', async () => {
     store.set('role_permissions', []);
     store.set('user_permissions', []);
     for (const email of [ADMIN_CABANG, MANAGER_KOTA, ASISTEN_MANAGER, SUPER_ADMIN]) {
       const actor = await helpers.requireActor(email);
       const access = await permissions.getEffectiveMenuAccess(actor);
-      assert.deepEqual(access, {
-        dashboard: true,
-        feedback_longtail_view: true,
-        feedback_longtail_edit: true,
-        riwayat_feedback: true,
-      });
+      assert.deepEqual(access, Object.fromEntries(permissions.MENU_KEYS.map((k) => [k, true])));
     }
   });
 
@@ -263,5 +262,36 @@ describe('Role & Akses: hasPermission() + integrasi endpoint (eksekusi nyata, fu
     store.get('users')!.push({ id: 'u-aneh', email: 'aneh@ltms.test', nama: 'Role Aneh', role: 'Role Tidak Dikenal', drop_point: '', status_aktif: true });
     const access = await permissions.getMyMenuAccess('aneh@ltms.test');
     assert.ok(Object.values(access).every((v) => v === false));
+  });
+
+  // --------------------------------------------------------------------------
+  // Wiring Monitoring Delivery: 'monitoring_delivery_dp' (mode per-Sprinter)
+  // dipasangkan ke SPV Drop Point & Admin DP - menu_key BARU yang sebelumnya
+  // tak ada di seed 4-menu_key original mereka. REGRESI KRITIS: Admin DP
+  // existing (sudah lama pakai fitur ini) TIDAK BOLEH terputus - seed true.
+  // --------------------------------------------------------------------------
+
+  it("17. REGRESI KRITIS: hasPermission Admin DP & SPV Drop Point utk 'monitoring_delivery_dp' -> true by default (seed), TIDAK terputus", async () => {
+    const admindp = await helpers.requireActor(ADMIN_DP);
+    const spv = await helpers.requireActor(SPV);
+    assert.equal(await permissions.hasPermission(admindp, 'monitoring_delivery_dp'), true, 'Admin DP existing tak boleh terputus');
+    assert.equal(await permissions.hasPermission(spv, 'monitoring_delivery_dp'), true);
+  });
+
+  it("18. CHECKPOINT: matikan 'monitoring_delivery_dp' utk Admin DP -> getMyMenuAccess false (page akan blokir & sidebar akan sembunyikan), menu lain tak ikut terpengaruh", async () => {
+    store.get('role_permissions')!.find((r) => r.role === 'Admin DP' && r.menu_key === 'monitoring_delivery_dp')!.enabled = false;
+    const access = await permissions.getMyMenuAccess(ADMIN_DP);
+    assert.equal(access.monitoring_delivery_dp, false);
+    assert.equal(access.dashboard, true, 'menu lain tak ikut terpengaruh');
+  });
+
+  it("19. 'monitoring_delivery_cabang' (mode Refine Total, milik Admin Cabang dkk) TIDAK memengaruhi 'monitoring_delivery_dp' SPV Drop Point/Admin DP - 2 menu_key independen walau 1 fitur", async () => {
+    // Baris ini mustahil di produksi (Admin Cabang tak masuk GATED_ROLES
+    // sekarang, hasPermission-nya masih bypass) - disimulasikan justru utk
+    // membuktikan monitoring_delivery_dp SPV/Admin DP membaca baris
+    // role='SPV Drop Point'/'Admin DP' miliknya sendiri, bukan tercampur.
+    store.get('role_permissions')!.push({ role: 'Admin Cabang', menu_key: 'monitoring_delivery_cabang', enabled: false });
+    const admindp = await helpers.requireActor(ADMIN_DP);
+    assert.equal(await permissions.hasPermission(admindp, 'monitoring_delivery_dp'), true);
   });
 });

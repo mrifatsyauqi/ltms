@@ -3,10 +3,35 @@ import { ApiError } from '@/lib/errors';
 import { hasFullAccess } from '@/lib/roles';
 import { requireActor, type Actor } from './helpers';
 
-/** Menu yang bisa digating lewat Role & Akses - HANYA menu yang memang
- *  dimiliki SPV Drop Point/Admin DP di sidebar (lihat lib/nav.ts).
- *  Monitoring Delivery & Profil SENGAJA tak masuk - selalu accessible. */
-export const MENU_KEYS = ['dashboard', 'feedback_longtail_view', 'feedback_longtail_edit', 'riwayat_feedback'] as const;
+/**
+ * Vocabulary lengkap menu_key (harus SAMA PERSIS dgn CHECK constraint
+ * role_permissions/user_permissions.menu_key - lihat
+ * supabase/role_akses_hierarchy_migration.sql). Relevansi per role BEDA:
+ * SPV Drop Point/Admin DP cuma pakai 5 (dashboard, feedback_longtail_view,
+ * feedback_longtail_edit, riwayat_feedback, monitoring_delivery_dp - mode
+ * per-Sprinter); Admin Cabang/Manager Kota/Asisten Manager Kota pakai
+ * cakupan lebih luas termasuk monitoring_delivery_cabang (mode Refine
+ * Total per DP) - lihat pemetaan menuKey per item di lib/nav.ts. Profil
+ * SENGAJA tak masuk vocabulary ini sama sekali - selalu accessible utk
+ * semua role, tak pernah digating.
+ */
+export const MENU_KEYS = [
+  'dashboard',
+  'feedback_longtail_view',
+  'feedback_longtail_edit',
+  'data_longtail',
+  'import_longtail',
+  'monitoring_delivery_dp',
+  'monitoring_delivery_cabang',
+  'master_cabang',
+  'master_drop_point',
+  'master_feedback',
+  'user_management',
+  'riwayat_import',
+  'riwayat_feedback',
+  'pengaturan',
+  'role_akses',
+] as const;
 export type MenuKey = (typeof MENU_KEYS)[number];
 
 export function isMenuKey(v: string): v is MenuKey {
