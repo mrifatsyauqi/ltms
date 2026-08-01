@@ -1,6 +1,7 @@
 import { db } from './client';
 import { assertUserExists, requireActor, requireRole } from './helpers';
 import { ApiError } from '@/lib/errors';
+import { FULL_ACCESS_ROLES } from '@/lib/roles';
 import type { CabangRow, CreateCabangInput, UpdateCabangInput } from '@/lib/data/types';
 
 type DbRow = {
@@ -43,7 +44,7 @@ export async function listCabang(actorEmail: string): Promise<CabangRow[]> {
 }
 
 export async function createCabang(actorEmail: string, data: CreateCabangInput): Promise<{ kodeKota: string }> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   const kodeKota = String(data?.kodeKota ?? '').trim();
   const namaKota = String(data?.namaKota ?? '').trim();
   if (!kodeKota || !namaKota) throw new ApiError('VALIDATION_ERROR', 'Kode Kota dan Nama Kota wajib diisi');
@@ -74,7 +75,7 @@ export async function updateCabang(
   kodeKota: string,
   data: UpdateCabangInput,
 ): Promise<CabangRow> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   const patch: Record<string, unknown> = {};
   if (data.namaKota !== undefined) {
     const namaKota = String(data.namaKota).trim();

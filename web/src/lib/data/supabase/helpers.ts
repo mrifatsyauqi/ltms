@@ -1,7 +1,10 @@
 import { db } from './client';
 import { ApiError } from '@/lib/errors';
+import { hasFullAccess } from '@/lib/roles';
 
 export type Actor = {
+  /** users.id (uuid) - dipakai SPV Drop Point utk resolve DP yang disupervisi. */
+  id: string;
   email: string;
   role: string;
   dropPoint: string;
@@ -26,7 +29,7 @@ export async function requireActor(email: string | null | undefined): Promise<Ac
   if (!e) throw new ApiError('UNAUTHENTICATED', 'Email kosong');
   const { data, error } = await db()
     .from('users')
-    .select('email, nik, nama, nama_tampilan, tipe_akun, role, drop_point, status_aktif')
+    .select('id, email, nik, nama, nama_tampilan, tipe_akun, role, drop_point, status_aktif')
     .eq('email', e)
     .maybeSingle();
   if (error) throw new ApiError('INTERNAL_ERROR', error.message);
@@ -34,6 +37,7 @@ export async function requireActor(email: string | null | undefined): Promise<Ac
     throw new ApiError('UNAUTHENTICATED', `User "${e}" tidak dikenali atau nonaktif di tabel users Supabase`);
   }
   return {
+    id: String(data.id ?? ''),
     email: String(data.email),
     role: String(data.role),
     dropPoint: String(data.drop_point ?? ''),
@@ -53,7 +57,15 @@ export function attributionName(actor: Actor): string {
   return actor.tipeAkun === 'general' ? actor.namaTampilan : actor.email;
 }
 
-export function requireRole(actor: Actor, roles: string[]): Actor {
+/**
+ * Super Admin bypass eksplisit di FUNGSI OTORISASI PALING DASAR (dicek SEBELUM
+ * array `roles` sama sekali) - superior thd pengecekan role apapun, termasuk
+ * yang ditambahkan nanti dan lupa memasukkan 'Super Admin' ke daftarnya.
+ * JANGAN pindahkan Super Admin jadi anggota biasa di FULL_ACCESS_ROLES saja -
+ * itu tidak memberi jaminan yang sama (lihat lib/roles.ts).
+ */
+export function requireRole(actor: Actor, roles: readonly string[]): Actor {
+  if (actor.role === 'Super Admin') return actor;
   if (!roles.includes(actor.role)) {
     throw new ApiError('FORBIDDEN', `Role ${actor.role} tidak diizinkan untuk aksi ini`);
   }
@@ -106,4 +118,24 @@ export async function resolveJabatanIdByRole(role: string): Promise<string> {
   if (error) throw new ApiError('INTERNAL_ERROR', error.message);
   if (!data) throw new ApiError('INTERNAL_ERROR', `Jabatan untuk role "${role}" tidak ditemukan di tabel jabatan`);
   return String(data.id);
+}
+
+/** Kode DP yang disupervisi SPV Drop Point (master_drop_point.spv_drop_point_user_id
+ *  = users.id) - bisa lebih dari satu, BEDA dari Admin DP yang selalu 1 (users.drop_point). */
+export async function getSupervisedDPs(actorId: string): Promise<string[]> {
+  const { data, error } = await db().from('master_drop_point').select('kode_dp').eq('spv_drop_point_user_id', actorId);
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  return (data ?? []).map((r) => String((r as { kode_dp: string }).kode_dp));
+}
+
+/**
+ * Daftar kode_dp yang boleh diakses actor. `null` = TANPA batasan (full
+ * access - Super Admin/Admin Cabang/Manager Kota/Asisten Manager Kota).
+ * SPV Drop Point: array 0/1/banyak DP (getSupervisedDPs). Admin DP: array
+ * berisi 1 elemen (actor.dropPoint), perilaku sama seperti sebelum Langkah 3.
+ */
+export async function resolveScopedDps(actor: Actor): Promise<string[] | null> {
+  if (hasFullAccess(actor.role)) return null;
+  if (actor.role === 'SPV Drop Point') return getSupervisedDPs(actor.id);
+  return actor.dropPoint ? [actor.dropPoint] : [];
 }

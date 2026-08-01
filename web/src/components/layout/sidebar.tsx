@@ -7,6 +7,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { ChevronDown, ChevronLeft, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { navForRole, type NavItem } from '@/lib/nav';
+import { hasFullAccess } from '@/lib/roles';
 import { signOutAction } from '@/app/actions/auth';
 import { ScopeFilter } from '@/components/dashboard/scope-filter';
 
@@ -84,15 +85,22 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
         )}
       </div>
 
-      {/* Konteks DP aktif. Admin Cabang: dropdown filter CAKUPAN (memfilter
-          seluruh Dashboard). Admin DP: label statis DP miliknya. */}
+      {/* Konteks DP aktif. Full access (Admin Cabang/Manager Kota/Asisten
+          Manager Kota/Super Admin - Langkah 3): dropdown filter CAKUPAN
+          (memfilter seluruh Dashboard). SPV Drop Point: label statis generik
+          (DP yang disupervisi ditegakkan server-side, bukan dipilih di sini -
+          lihat resolveScopedDps). Admin DP: label statis DP miliknya. */}
       {!collapsed && (
         <div className="border-sidebar-border bg-sidebar-accent/50 mx-3 mb-2 rounded-lg border px-2.5 py-1.5">
           <div className="text-[10px] tracking-wide uppercase opacity-60">
-            {role === 'Admin Cabang' ? 'Cakupan' : 'DP Aktif'}
+            {hasFullAccess(role) ? 'Cakupan' : role === 'SPV Drop Point' ? 'Cakupan' : 'DP Aktif'}
           </div>
-          {role === 'Admin Cabang' ? (
+          {hasFullAccess(role) ? (
             <ScopeFilter />
+          ) : role === 'SPV Drop Point' ? (
+            <div className="truncate text-[13px] font-semibold text-sidebar-accent-foreground">
+              Drop Point disupervisi
+            </div>
           ) : (
             <div className="truncate text-[13px] font-semibold text-sidebar-accent-foreground">
               {dropPoint || '-'}

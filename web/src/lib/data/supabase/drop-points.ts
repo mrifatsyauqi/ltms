@@ -1,6 +1,7 @@
 import { db } from './client';
 import { aktifText, assertKotaExists, assertUserExists, requireActor, requireRole } from './helpers';
 import { ApiError } from '@/lib/errors';
+import { FULL_ACCESS_ROLES } from '@/lib/roles';
 import type {
   CreateDropPointInput,
   DropPointRow,
@@ -86,7 +87,7 @@ export async function createDropPoint(
   actorEmail: string,
   data: CreateDropPointInput,
 ): Promise<{ kodeDp: string }> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   const kodeDp = String(data?.kodeDp ?? '').trim();
   const namaDp = String(data?.namaDp ?? '').trim();
   if (!kodeDp || !namaDp) throw new ApiError('VALIDATION_ERROR', 'Kode DP dan Nama DP wajib diisi');
@@ -123,7 +124,7 @@ export async function updateDropPoint(
   kodeDp: string,
   data: UpdateDropPointInput,
 ): Promise<DropPointRow> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   const patch: Record<string, unknown> = {};
   if (data.namaDp !== undefined) patch.nama_dp = data.namaDp;
   if (data.wilayah !== undefined) patch.wilayah = data.wilayah;
@@ -154,7 +155,7 @@ export async function deleteDropPoint(
   actorEmail: string,
   kodeDp: string,
 ): Promise<{ kodeDp: string }> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   const { error } = await db().from('master_drop_point').delete().eq('kode_dp', kodeDp);
   if (error) throw new ApiError('INTERNAL_ERROR', error.message);
   return { kodeDp };

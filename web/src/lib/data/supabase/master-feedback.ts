@@ -1,6 +1,7 @@
 import { db } from './client';
 import { aktifText, requireActor, requireRole } from './helpers';
 import { ApiError } from '@/lib/errors';
+import { FULL_ACCESS_ROLES } from '@/lib/roles';
 import type { MasterFeedbackRow } from '@/lib/data/types';
 
 type DbRow = { id: number; nama_feedback: string; status_aktif: boolean };
@@ -17,7 +18,7 @@ export async function listMasterFeedback(actorEmail: string): Promise<MasterFeed
 }
 
 export async function createMasterFeedback(actorEmail: string, namaFeedback: string): Promise<{ id: number }> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   const nama = String(namaFeedback ?? '').trim();
   if (!nama) throw new ApiError('VALIDATION_ERROR', 'Nama Feedback wajib diisi');
 
@@ -39,7 +40,7 @@ export async function updateMasterFeedback(
   id: number | string,
   data: Partial<{ namaFeedback: string; statusAktif: boolean }>,
 ): Promise<MasterFeedbackRow> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   const patch: Record<string, unknown> = {};
   if (data.namaFeedback !== undefined) patch.nama_feedback = data.namaFeedback;
   if (data.statusAktif !== undefined) patch.status_aktif = !!data.statusAktif;
@@ -59,7 +60,7 @@ export async function deleteMasterFeedback(
   actorEmail: string,
   id: number | string,
 ): Promise<{ id: number | string }> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   const { error } = await db().from('master_feedback').delete().eq('id', Number(id));
   if (error) throw new ApiError('INTERNAL_ERROR', error.message);
   return { id };

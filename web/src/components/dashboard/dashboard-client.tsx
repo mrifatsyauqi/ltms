@@ -27,6 +27,7 @@ import { SelectFilter } from '@/components/ui/select-filter';
 import { StatCard } from '@/components/ui/stat-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ALL_SCOPE, useDashboardScope } from '@/components/dashboard/scope-context';
+import { hasFullAccess } from '@/lib/roles';
 import type { DashboardData } from '@/lib/data/dashboard';
 
 /** Tanggal Jakarta (UTC+7) `daysAgo` hari lalu sebagai ISO 'YYYY-MM-DD'. */
@@ -95,7 +96,12 @@ export function DashboardClient({ title, description }: { title: string; descrip
     placeholderData: keepPreviousData,
   });
 
-  const isCabang = data?.role === 'Admin Cabang';
+  // Full access (Langkah 3): sama seperti Admin Cabang. SPV Drop Point ikut
+  // tampilan multi-DP krn bisa disupervisi >1 DP - filter Cakupan (scope)
+  // tetap tak bisa dipakai SPV krn ScopeFilter di Sidebar hanya dirender utk
+  // full access; dpFilter di bawah otomatis tetap undefined utk SPV, data
+  // sebenarnya sudah di-scope server-side (getDashboard/resolveScopedDps).
+  const isCabang = hasFullAccess(data?.role) || data?.role === 'SPV Drop Point';
   const s = data?.summary;
 
   // Mode DP Spesifik = Admin Cabang memfilter ke 1 DP lewat CAKUPAN.

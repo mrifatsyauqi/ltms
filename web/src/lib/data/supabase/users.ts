@@ -1,6 +1,7 @@
 import { db } from './client';
 import { aktifText, assertDropPointActive, requireActor, requireRole, resolveJabatanIdByRole } from './helpers';
 import { ApiError } from '@/lib/errors';
+import { FULL_ACCESS_ROLES } from '@/lib/roles';
 import type { CreateGeneralAccountResult, CreateUserInput, UpdateUserInput, UserRow } from '@/lib/data/types';
 
 const SELECT_COLUMNS = 'id, nama, email, nik, nama_tampilan, tipe_akun, role, drop_point, status_aktif';
@@ -40,14 +41,14 @@ function conflictMessage(message: string): string {
 }
 
 export async function listUsers(actorEmail: string): Promise<UserRow[]> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   const { data, error } = await db().from('users').select(SELECT_COLUMNS).order('email');
   if (error) throw new ApiError('INTERNAL_ERROR', error.message);
   return (data ?? []).map((r) => toRow(r as DbRow));
 }
 
 export async function createUser(actorEmail: string, data: CreateUserInput): Promise<{ email: string }> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   const nama = String(data?.nama ?? '').trim();
   const email = norm(data?.email);
   const nik = String(data?.nik ?? '').trim();
@@ -93,7 +94,7 @@ export async function updateUser(
   targetEmail: string,
   data: UpdateUserInput,
 ): Promise<UserRow> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   if (!targetEmail) throw new ApiError('VALIDATION_ERROR', 'targetEmail wajib diisi');
   if (data.role === 'Admin DP') {
     if (!data.dropPoint) throw new ApiError('VALIDATION_ERROR', 'Admin DP wajib dikaitkan ke minimal satu Drop Point');
@@ -150,7 +151,7 @@ export async function createGeneralAccount(
   kodeDp: string,
   passwordHash: string,
 ): Promise<CreateGeneralAccountResult> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   const kode = String(kodeDp ?? '').trim();
   if (!kode) throw new ApiError('VALIDATION_ERROR', 'Kode DP wajib diisi');
   if (!passwordHash) throw new ApiError('VALIDATION_ERROR', 'Password awal wajib diisi');
@@ -184,7 +185,7 @@ export async function createGeneralAccount(
 }
 
 export async function deleteUser(actorEmail: string, targetEmail: string): Promise<{ email: string }> {
-  const actor = requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   if (!targetEmail) throw new ApiError('VALIDATION_ERROR', 'targetEmail wajib diisi');
   if (norm(targetEmail) === norm(actor.email)) {
     throw new ApiError('VALIDATION_ERROR', 'Tidak bisa menghapus akun sendiri');
@@ -199,7 +200,7 @@ export async function setUserPassword(
   targetEmail: string,
   passwordHash: string,
 ): Promise<{ email: string }> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   if (!targetEmail || !passwordHash) {
     throw new ApiError('VALIDATION_ERROR', 'targetEmail dan passwordHash wajib diisi');
   }

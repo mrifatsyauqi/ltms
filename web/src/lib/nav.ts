@@ -14,6 +14,7 @@ import {
   UserRound,
   type LucideIcon,
 } from 'lucide-react';
+import { hasFullAccess } from '@/lib/roles';
 
 export type NavItem = {
   label: string;
@@ -28,16 +29,20 @@ export type NavGroup = {
 };
 
 /**
- * Menu per role sesuai PRD Bagian 5 + konfirmasi user:
- * - Admin DP  : flat, hanya 4 menu. TIDAK punya akses Master Data / Import / Laporan Import.
- * - Admin Cabang: menu utama + grup Master Data, Laporan, Pengaturan.
+ * Menu per role (Langkah 3 - Perluasan Role):
+ * - Full access (Super Admin/Admin Cabang/Manager Kota/Asisten Manager Kota):
+ *   menu utama + grup Master Data, Laporan, Pengaturan - SAMA PERSIS, tidak
+ *   dibedakan berdasar jabatan (lihat lib/roles.ts).
+ * - Admin DP & SPV Drop Point: flat, hanya 4 menu. TIDAK punya akses Master
+ *   Data / Import / Laporan Import - SPV Drop Point dapat menu SAMA PERSIS
+ *   dgn Admin DP (cakupan >1 DP ditegakkan server-side, bukan lewat menu).
  * "Data Long Tail" & "Feedback Long Tail" memakai halaman yang sama (/feedback)
  * dengan view berbeda lewat query param.
  * "Drop Point" nested sbg children di bawah "Cabang" (struktur organisasi
  * Kota -> Drop Point) - lihat rendering submenu expand/collapse di Sidebar.
  */
 export function navForRole(role: string | undefined): NavGroup[] {
-  if (role === 'Admin Cabang') {
+  if (hasFullAccess(role)) {
     return [
       {
         items: [
@@ -78,7 +83,7 @@ export function navForRole(role: string | undefined): NavGroup[] {
     ];
   }
 
-  // Admin DP
+  // Admin DP & SPV Drop Point
   return [
     {
       items: [

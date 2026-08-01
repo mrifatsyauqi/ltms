@@ -3,6 +3,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { auth } from '@/auth';
 import { MonitoringClient } from '@/components/monitoring-delivery/monitoring-client';
 import { MonitoringRefineClient } from '@/components/monitoring-delivery/monitoring-refine-client';
+import { hasFullAccess } from '@/lib/roles';
 
 export const metadata = {
   title: 'Monitoring Delivery - LTMS',
@@ -10,13 +11,18 @@ export const metadata = {
 
 export default async function MonitoringDeliveryPage() {
   const session = await auth();
+  const role = session?.user.role;
+  const isFullAccess = hasFullAccess(role);
 
-  // Fitur ini ditujukan untuk Admin Cabang dan Admin DP
-  if (session?.user.role !== 'Admin Cabang' && session?.user.role !== 'Admin DP' && session?.user.role !== 'Admin Pusat') {
+  // Fitur ini ditujukan untuk full access (Admin Cabang/Manager Kota/Asisten
+  // Manager Kota/Super Admin - Langkah 3), Admin DP, dan SPV Drop Point.
+  // 'Admin Pusat' TETAP TIDAK DISENTUH (sisa kode lama, di luar scope - lihat
+  // catatan audit Langkah Jabatan sebelumnya).
+  if (!isFullAccess && role !== 'Admin DP' && role !== 'SPV Drop Point' && (role as string) !== 'Admin Pusat') {
     redirect('/dashboard');
   }
 
-  const isCabang = session?.user.role === 'Admin Cabang';
+  const isCabang = isFullAccess || role === 'SPV Drop Point';
   const dpName = session?.user.dropPoint || 'SEMUA DP';
 
   return (
