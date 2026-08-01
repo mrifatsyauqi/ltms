@@ -9,6 +9,7 @@
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { type Row, fakeDbFactory } from './fake-db.test-support.ts';
+import { jakartaTodayIso } from './longtail-pure.ts';
 
 const SPV_ID = 'u-spv-dua-dp';
 const SPV_SATU_ID = 'u-spv-satu-dp';
@@ -347,5 +348,59 @@ describe('Langkah 3 - Perluasan Role: full access & SPV Drop Point (eksekusi nya
       () => dropPoints.syncSupervisedDropPoints('admindp@ltms.test', SPV, ['BATANG01']),
       (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
     );
+  });
+
+  // --------------------------------------------------------------------------
+  // Fix bug: "Sudah" per DP di tabel Progress per Drop Point HARUS scoped
+  // HARI INI (activity_log), konsisten dgn gauge "Progress Hari Ini" - bukan
+  // status feedback longtail saat ini (cumulative, all-time).
+  // --------------------------------------------------------------------------
+
+  it('34. getDashboard: monitoringDp[].sudah per DP HARUS scoped HARI INI (activity_log), bukan status feedback longtail saat ini (cumulative) - sum semua DP == progressHariIni', async () => {
+    const today = jakartaTodayIso();
+    const rows = store.get('longtail')!;
+    (rows.find((r) => r.no_waybill === 'WB-BATANG') as Row).feedback = 'On Delivery';
+    (rows.find((r) => r.no_waybill === 'WB-BANDAR') as Row).feedback = 'On Delivery'; // cumulative feedback ada, TAPI TANPA activity_log hari ini
+    store.set('activity_log', [
+      { waybill: 'WB-BATANG', user_email: ADMIN_CABANG, dp: 'BATANG01', attempt_ke: 1, data_baru: 'On Delivery', sumber: 'Manual Feedback', created_at: `${today}T09:00:00+07:00` },
+    ]);
+
+    const dash = await dashboard.getDashboard(ADMIN_CABANG);
+    assert.equal(dash.summary.progressHariIni, 1, 'gauge Progress Hari Ini cuma WB-BATANG yang punya activity_log hari ini');
+    assert.equal(dash.summary.sudahFeedback, 2, 'metrik lain (Sudah Feedback Keseluruhan, cumulative) TIDAK BOLEH berubah oleh perbaikan ini');
+    assert.equal(dash.summary.total, 3, 'Total tidak boleh berubah');
+
+    const byDp = Object.fromEntries(dash.monitoringDp.map((d) => [d.dp, d]));
+    assert.equal(byDp['BATANG01'].sudah, 1, 'BATANG01 punya activity_log hari ini -> sudah=1');
+    assert.equal(byDp['BANDAR01'].sudah, 0, 'BANDAR01 cumulative feedback-nya sudah terisi TAPI tanpa activity_log hari ini -> sudah=0 (bug lama akan gagal di assert ini)');
+    assert.equal(byDp['SUBAH01'].sudah, 0);
+    assert.equal(byDp['BATANG01'].total, 1, 'Total per-DP tidak boleh berubah oleh perbaikan ini');
+    assert.equal(byDp['BANDAR01'].total, 1);
+
+    const sumSudah = dash.monitoringDp.reduce((acc, d) => acc + d.sudah, 0);
+    assert.equal(sumSudah, dash.summary.progressHariIni, 'INVARIANT: jumlah kolom Sudah semua baris Progress per Drop Point HARUS SAMA PERSIS dgn gauge Progress Hari Ini');
+  });
+
+  it('35. getDashboard: activity_log dari HARI SEBELUMNYA tidak ikut terhitung di Sudah per DP (tetap scoped hari ini saja)', async () => {
+    store.set('activity_log', [
+      { waybill: 'WB-BANDAR', user_email: ADMIN_CABANG, dp: 'BANDAR01', attempt_ke: 1, data_baru: 'On Delivery', sumber: 'Manual Feedback', created_at: '2020-01-01T09:00:00+07:00' },
+    ]);
+    const dash = await dashboard.getDashboard(ADMIN_CABANG);
+    assert.equal(dash.summary.progressHariIni, 0);
+    const byDp = Object.fromEntries(dash.monitoringDp.map((d) => [d.dp, d]));
+    assert.equal(byDp['BANDAR01'].sudah, 0, 'activity_log tanggal lampau tidak boleh dihitung sbg "hari ini"');
+  });
+
+  it('36. getDashboard: waybill dgn activity_log.dp BERBEDA dari dp_sampai SAAT INI tetap dihitung di DP saat ini (bukan DP lama di activity_log) - sum tetap konsisten', async () => {
+    const today = jakartaTodayIso();
+    store.set('activity_log', [
+      { waybill: 'WB-BATANG', user_email: ADMIN_CABANG, dp: 'SUBAH01', attempt_ke: 1, data_baru: 'On Delivery', sumber: 'Manual Feedback', created_at: `${today}T09:00:00+07:00` },
+    ]);
+    const dash = await dashboard.getDashboard(ADMIN_CABANG);
+    const byDp = Object.fromEntries(dash.monitoringDp.map((d) => [d.dp, d]));
+    assert.equal(byDp['BATANG01'].sudah, 1, 'dikelompokkan ke dp_sampai SAAT INI (BATANG01), bukan dp lama di activity_log (SUBAH01)');
+    assert.equal(byDp['SUBAH01'].sudah, 0);
+    const sumSudah = dash.monitoringDp.reduce((acc, d) => acc + d.sudah, 0);
+    assert.equal(sumSudah, dash.summary.progressHariIni);
   });
 });

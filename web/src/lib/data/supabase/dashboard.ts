@@ -103,10 +103,11 @@ async function computeDashboard(dpFilter: DpFilter, role: string, dropPoint: str
     'Alamat Tidak Ditemukan': 0, 'Lainnya': 0, 'Belum Feedback': 0,
   };
   const agingBuckets: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7+': 0 };
-  const perDp: Record<string, { dp: string; total: number; sudah: number; clearTTD: number; lebih3: number }> = {};
+  const perDp: Record<string, { dp: string; total: number; clearTTD: number; lebih3: number }> = {};
   const perSprinter: Record<string, { sprinter: string; total: number; sudah: number }> = {};
 
   const currentWb = new Set<string>();
+  const wbToDpKey: Record<string, string> = {};
 
   for (const r of rows) {
     const fb = String(r.feedback ?? '').trim();
@@ -129,9 +130,8 @@ async function computeDashboard(dpFilter: DpFilter, role: string, dropPoint: str
     }
 
     const dpKey = String(r.dp_sampai ?? '').trim() || '(kosong)';
-    if (!perDp[dpKey]) perDp[dpKey] = { dp: dpKey, total: 0, sudah: 0, clearTTD: 0, lebih3: 0 };
+    if (!perDp[dpKey]) perDp[dpKey] = { dp: dpKey, total: 0, clearTTD: 0, lebih3: 0 };
     perDp[dpKey].total++;
-    if (fb !== '') perDp[dpKey].sudah++;
     if (isTTD) perDp[dpKey].clearTTD++;
     if (!isTTD && umurNum != null && umurNum >= 3) perDp[dpKey].lebih3++;
 
@@ -140,26 +140,43 @@ async function computeDashboard(dpFilter: DpFilter, role: string, dropPoint: str
     perSprinter[sp].total++;
     if (fb !== '') perSprinter[sp].sudah++;
 
-    currentWb.add(String(r.no_waybill ?? '').trim().toLowerCase());
+    const wb = String(r.no_waybill ?? '').trim().toLowerCase();
+    currentWb.add(wb);
+    wbToDpKey[wb] = dpKey;
   }
 
+  // "Sudah" per DP di tabel Progress per Drop Point HARUS pakai definisi yang
+  // SAMA dgn gauge "Progress Hari Ini" di atasnya (activity_log hari ini,
+  // bukan status feedback longtail saat ini yg cumulative). Dikelompokkan
+  // per DP SAAT INI milik waybill itu (wbToDpKey, sama dgn key yg dipakai
+  // perDp/total/clearTTD/lebih3) - BUKAN dp yg tercatat di activity_log saat
+  // event terjadi - supaya tiap waybill hari ini selalu jatuh ke key yg
+  // sudah pasti ada di perDp, dan total across-DP selalu sama persis dgn
+  // progressHariIni (invariant yg diminta), termasuk kasus waybill sempat
+  // berpindah DP sejak event dicatat.
   const todayWb = new Set<string>();
+  const perDpTodayWb: Record<string, Set<string>> = {};
   (alData ?? []).forEach((a) => {
     const k = String((a as { waybill: string }).waybill ?? '').trim().toLowerCase();
-    if (currentWb.has(k)) todayWb.add(k);
+    if (!currentWb.has(k)) return;
+    todayWb.add(k);
+    const dpKey = wbToDpKey[k];
+    if (!perDpTodayWb[dpKey]) perDpTodayWb[dpKey] = new Set<string>();
+    perDpTodayWb[dpKey].add(k);
   });
   const progressHariIni = todayWb.size;
 
   const monitoringDp = Object.keys(perDp).map((k) => {
     const d = perDp[k];
+    const sudah = perDpTodayWb[k]?.size ?? 0;
     return {
       dp: d.dp,
       total: d.total,
-      sudah: d.sudah,
-      belum: d.total - d.sudah,
+      sudah,
+      belum: d.total - sudah,
       clearTTD: d.clearTTD,
       lebih3: d.lebih3,
-      progressPct: d.total ? Math.round((d.sudah / d.total) * 100) : 0,
+      progressPct: d.total ? Math.round((sudah / d.total) * 100) : 0,
       lastUpdate: '', // tidak dirender UI; dikosongkan utk hemat query.
     };
   });
