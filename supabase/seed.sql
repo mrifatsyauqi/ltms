@@ -6,14 +6,23 @@
 -- backend Supabase. Email HARUS lowercase (dibandingkan lowercase di kode).
 -- ============================================================================
 
--- Akun admin utama (sesuaikan email/nama bila perlu).
-insert into users (email, nama, role, drop_point, status_aktif)
-values ('m.rifatsyauqii@gmail.com', 'M. Rifat Syauqi', 'Admin Cabang', null, true)
+-- Akun admin utama (sesuaikan email/nama bila perlu). jabatan_id wajib diisi
+-- (NOT NULL) - dicocokkan by nama ke tabel jabatan yang di-seed schema.sql.
+insert into users (email, nama, role, drop_point, jabatan_id, status_aktif)
+values (
+  'm.rifatsyauqii@gmail.com', 'M. Rifat Syauqi', 'Admin Cabang', null,
+  (select id from jabatan where nama = 'Admin Cabang'),
+  true
+)
 on conflict (email) do nothing;
 
 -- Tambahkan user lain di sini bila perlu, contoh Admin DP:
--- insert into users (email, nama, role, drop_point, status_aktif)
--- values ('admin.dp@gmail.com', 'Nama Admin DP', 'Admin DP', 'BATANG01', true)
+-- insert into users (email, nama, role, drop_point, jabatan_id, status_aktif)
+-- values (
+--   'admin.dp@gmail.com', 'Nama Admin DP', 'Admin DP', 'BATANG01',
+--   (select id from jabatan where nama = 'Admin DP'),
+--   true
+-- )
 -- on conflict (email) do nothing;
 
 -- Master Drop Point & Master Feedback bisa kamu isi lewat aplikasi (halaman

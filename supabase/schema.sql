@@ -45,9 +45,11 @@ $$ language plpgsql;
 -- ---------------------------------------------------------------------------
 -- JABATAN — normalisasi role/label organisasi jadi entitas resmi dgn id,
 -- LEPAS dari kolom users.role (text) yang TETAP DIPERTAHANKAN sbg
--- fallback/cross-check selama masa transisi (lihat supabase/jabatan_migration.sql
--- utk setup produksi yang sudah live). jabatan_id di users masih NULLABLE di
--- sini (dev-recreate) - backfill + NOT NULL menyusul di file migrasi terpisah.
+-- fallback/cross-check selama masa transisi (lihat supabase/jabatan_migration.sql,
+-- jabatan_backfill.sql, jabatan_not_null.sql utk setup produksi yang sudah
+-- live - 3 file terpisah krn tiap tahap butuh konfirmasi sebelum lanjut).
+-- Dev-recreate (file ini) langsung seed 6 baris supaya jabatan_id bisa
+-- NOT NULL sejak awal tanpa perlu backfill (tak ada data lama di setup baru).
 -- ---------------------------------------------------------------------------
 create table jabatan (
   id        uuid primary key default gen_random_uuid(),
@@ -55,6 +57,13 @@ create table jabatan (
   tingkat   integer not null,
   deskripsi text
 );
+insert into jabatan (nama, tingkat, deskripsi) values
+  ('Super Admin',           1, null),
+  ('Admin Cabang',          2, null),
+  ('Manager Kota',          3, null),
+  ('Asisten Manager Kota',  4, null),
+  ('SPV Drop Point',        5, null),
+  ('Admin DP',              6, null);
 
 -- ---------------------------------------------------------------------------
 -- USERS (store login; NextAuth resolve role + drop_point dari sini)
@@ -77,7 +86,7 @@ create table users (
                 check (tipe_akun in ('individual', 'general')),
   role          text not null check (role in ('Admin Cabang', 'Admin DP')),
   drop_point    text,                       -- kode DP; kosong utk Admin Cabang
-  jabatan_id    uuid references jabatan(id) on delete set null, -- normalisasi role, lihat blok JABATAN di atas
+  jabatan_id    uuid not null references jabatan(id) on delete set null, -- normalisasi role, lihat blok JABATAN di atas
   password_hash text,                       -- scrypt "salt:hash"; kosong = hanya Google
   status_aktif  boolean not null default true,
   created_at    timestamptz not null default now(),
