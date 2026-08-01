@@ -317,4 +317,142 @@ describe('Role & Akses (UI backend): summary/accounts/per-role/per-akun (eksekus
       (e: unknown) => (e as { code?: string }).code === 'VALIDATION_ERROR',
     );
   });
+
+  // --------------------------------------------------------------------------
+  // CHECKPOINT 2: menu_key 'role_akses' ditegakkan di requireManagerActor()
+  // (satu titik, menutup KETUJUH fungsi export). Lapis GRANULAR yang MENUMPUK
+  // di ATAS requireRole(FULL_ACCESS_ROLES), BUKAN menggantikannya:
+  // - Super Admin: bypass permanen, nilai role_akses apa pun diabaikan.
+  // - Admin Cabang/Manager Kota/Asisten Manager Kota: satu-satunya kelompok
+  //   yang benar-benar terpengaruh - Super Admin bisa mencabut kemampuan
+  //   mengedit matrix TANPA menurunkan status full access mereka.
+  // - SPV Drop Point/Admin DP: sudah diblokir requireRole sejak awal &
+  //   TETAP diblokir walau baris role_akses mereka bernilai true (mereka
+  //   memang tak punya barisnya - fallback fetchGatedPermissionMap `?? true`).
+  // --------------------------------------------------------------------------
+
+  /** KETUJUH fungsi export, dgn argumen yang di kondisi normal PASTI berhasil
+   *  utk actor full access - dipakai membuktikan gate-nya menutup semuanya
+   *  (requireManagerActor dipanggil paling awal di tiap fungsi, jadi FORBIDDEN
+   *  mendahului VALIDATION_ERROR/NOT_FOUND). */
+  function tujuhExport(email: string): [string, () => Promise<unknown>][] {
+    return [
+      ['listRoleAksesSummary', () => roleAkses.listRoleAksesSummary(email)],
+      ['listAccountsByRole', () => roleAkses.listAccountsByRole(email, 'SPV Drop Point')],
+      ['getRoleDefaultPermissions', () => roleAkses.getRoleDefaultPermissions(email, 'SPV Drop Point')],
+      ['setRoleDefaultPermission', () => roleAkses.setRoleDefaultPermission(email, 'SPV Drop Point', 'dashboard', false)],
+      ['getAccountPermissions', () => roleAkses.getAccountPermissions(email, SPV_ID)],
+      ['setUserPermissionOverride', () => roleAkses.setUserPermissionOverride(email, SPV_ID, 'dashboard', false)],
+      ['resetUserPermissionOverride', () => roleAkses.resetUserPermissionOverride(email, SPV_ID, 'dashboard')],
+    ];
+  }
+
+  it("24. CHECKPOINT 2: 'role_akses' dimatikan (default role) utk Admin Cabang -> KETUJUH fungsi export FORBIDDEN", async () => {
+    store.get('role_permissions')!.find((r) => r.role === 'Admin Cabang' && r.menu_key === 'role_akses')!.enabled = false;
+    for (const [nama, call] of tujuhExport(ADMIN_CABANG)) {
+      await assert.rejects(
+        call,
+        (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+        `${nama} harus FORBIDDEN setelah role_akses dimatikan`,
+      );
+    }
+  });
+
+  it("25. CHECKPOINT 2: 'role_akses' dimatikan lewat OVERRIDE AKUN (user_permissions) - cuma akun itu yang terkunci, akun full access lain (Manager Kota) tetap normal", async () => {
+    store.get('user_permissions')!.push({ user_id: 'u-admincabang', menu_key: 'role_akses', enabled: false });
+    for (const [nama, call] of tujuhExport(ADMIN_CABANG)) {
+      await assert.rejects(
+        call,
+        (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+        `${nama} harus FORBIDDEN utk akun yang di-override`,
+      );
+    }
+    const summary = await roleAkses.listRoleAksesSummary(MANAGER_KOTA);
+    assert.equal(summary.length, 2, 'akun full access LAIN tak ikut terkunci - override berlaku per akun');
+  });
+
+  it("26. CHECKPOINT 2: role_akses dimatikan per ROLE utk Manager Kota/Asisten Manager Kota -> keduanya terkunci independen, Admin Cabang TIDAK ikut", async () => {
+    for (const role of ['Manager Kota', 'Asisten Manager Kota']) {
+      store.get('role_permissions')!.find((r) => r.role === role && r.menu_key === 'role_akses')!.enabled = false;
+    }
+    for (const email of [MANAGER_KOTA, ASISTEN_MANAGER]) {
+      await assert.rejects(
+        () => roleAkses.listRoleAksesSummary(email),
+        (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+      );
+    }
+    const summary = await roleAkses.listRoleAksesSummary(ADMIN_CABANG);
+    assert.equal(summary.length, 2, 'Admin Cabang tak ikut terpengaruh - matinya per role');
+  });
+
+  it('27. REGRESI NOL (seed produksi, semua role_akses=true): Admin Cabang/Manager Kota/Asisten Manager Kota TETAP bisa memanggil KETUJUH fungsi export persis spt sebelum checkpoint ini', async () => {
+    for (const email of [ADMIN_CABANG, MANAGER_KOTA, ASISTEN_MANAGER]) {
+      for (const [nama, call] of tujuhExport(email)) {
+        const hasil = await call();
+        assert.ok(hasil !== undefined && hasil !== null, `${email}: ${nama} harus tetap berhasil dgn seed default`);
+      }
+    }
+  });
+
+  it("28. REGRESI: baris role_akses HILANG sama sekali dari role_permissions (data tak lengkap) -> jaring pengaman `?? true` -> TETAP bisa akses, BUKAN terkunci massal", async () => {
+    store.set(
+      'role_permissions',
+      store.get('role_permissions')!.filter((r) => r.menu_key !== 'role_akses'),
+    );
+    for (const email of [ADMIN_CABANG, MANAGER_KOTA, ASISTEN_MANAGER]) {
+      const summary = await roleAkses.listRoleAksesSummary(email);
+      assert.equal(summary.length, 2, `${email} tak boleh terkunci cuma krn barisnya hilang`);
+    }
+  });
+
+  it('29. Super Admin: TIDAK terpengaruh sama sekali - tetap bisa KETUJUH fungsi walau SEMUA baris role_permissions dimatikan + ada baris role_akses=false atas namanya (mustahil di produksi, disimulasikan utk buktikan bypass permanen)', async () => {
+    for (const r of store.get('role_permissions')!) r.enabled = false;
+    store.get('role_permissions')!.push({ role: 'Super Admin', menu_key: 'role_akses', enabled: false });
+    store.get('user_permissions')!.push({ user_id: 'u-superadmin', menu_key: 'role_akses', enabled: false });
+    for (const [nama, call] of tujuhExport(SUPER_ADMIN)) {
+      const hasil = await call();
+      assert.ok(hasil !== undefined && hasil !== null, `Super Admin: ${nama} harus tetap berhasil`);
+    }
+  });
+
+  it('30. LAPIS, BUKAN PENGGANTI: SPV Drop Point/Admin DP TETAP FORBIDDEN (requireRole FULL_ACCESS_ROLES) walau role_akses mereka bernilai true - baik lewat default role maupun override akun', async () => {
+    store.get('role_permissions')!.push(
+      { role: 'SPV Drop Point', menu_key: 'role_akses', enabled: true },
+      { role: 'Admin DP', menu_key: 'role_akses', enabled: true },
+    );
+    store.get('user_permissions')!.push(
+      { user_id: SPV_ID, menu_key: 'role_akses', enabled: true },
+      { user_id: 'u-admindp2', menu_key: 'role_akses', enabled: true },
+    );
+    for (const email of [SPV, ADMIN_DP_LAIN]) {
+      for (const [nama, call] of tujuhExport(email)) {
+        await assert.rejects(
+          call,
+          (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+          `${email}: ${nama} harus tetap FORBIDDEN - lapis kasar requireRole tak boleh tergantikan lapis granular`,
+        );
+      }
+    }
+  });
+
+  it('31. assertManageableRole TIDAK berubah: Admin Cabang dgn role_akses=true tetap DITOLAK (VALIDATION_ERROR, bukan FORBIDDEN) mengatur kartu role-nya sendiri - dua pembatasan terpisah, tak saling mengganggu', async () => {
+    await assert.rejects(
+      () => roleAkses.listAccountsByRole(ADMIN_CABANG, 'Admin Cabang'),
+      (e: unknown) => (e as { code?: string }).code === 'VALIDATION_ERROR',
+    );
+    // ...dan Super Admin memang boleh mematikan role_akses milik Admin Cabang
+    // (tak ada jalur self-lockout: Admin Cabang sendiri tak bisa menyentuh
+    // kartu rolenya sendiri, lihat penolakan di atas).
+    const detail = await roleAkses.setUserPermissionOverride(SUPER_ADMIN, 'u-admincabang', 'role_akses', false);
+    assert.equal(detail.permissions.find((p) => p.menuKey === 'role_akses')!.enabled, false);
+    await assert.rejects(
+      () => roleAkses.listRoleAksesSummary(ADMIN_CABANG),
+      (e: unknown) => (e as { code?: string }).code === 'FORBIDDEN',
+      'setelah dicabut Super Admin, akun itu tak bisa lagi membuka Role & Akses',
+    );
+    // Dinyalakan lagi -> normal kembali (bukti reversibel).
+    await roleAkses.resetUserPermissionOverride(SUPER_ADMIN, 'u-admincabang', 'role_akses');
+    const summary = await roleAkses.listRoleAksesSummary(ADMIN_CABANG);
+    assert.equal(summary.length, 2, 'kembali normal setelah di-reset ke default');
+  });
 });

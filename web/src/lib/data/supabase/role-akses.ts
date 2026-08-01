@@ -2,7 +2,7 @@ import { db } from './client';
 import { requireActor, requireRole, type Actor } from './helpers';
 import { ApiError } from '@/lib/errors';
 import { FULL_ACCESS_ROLES } from '@/lib/roles';
-import { isMenuKey, manageableRolesFor, type ManageableRole, type MenuKey } from './permissions';
+import { isMenuKey, manageableRolesFor, requirePermission, type ManageableRole, type MenuKey } from './permissions';
 import type {
   RoleAksesAccount,
   RoleAksesAccountDetail,
@@ -18,9 +18,30 @@ import type {
  *  aman dipanggil langsung (mis. dari test) tanpa lewat route. Otorisasi
  *  KASAR ini ("boleh panggil fungsi role-akses sama sekali") dipasangkan dgn
  *  assertManageableRole() (otorisasi HALUS - "boleh atur role SPESIFIK ini")
- *  di tiap fungsi yang menyentuh 1 role/akun. */
+ *  di tiap fungsi yang menyentuh 1 role/akun.
+ *
+ *  DUA LAPIS, BUKAN PENGGANTI:
+ *  1. requireRole(FULL_ACCESS_ROLES) - lapis KASAR yang sudah ada sejak awal,
+ *     JANGAN DIHAPUS: inilah satu-satunya yang memblokir SPV Drop Point/Admin
+ *     DP. Lapis granular di bawah TIDAK bisa menggantikannya krn baris
+ *     role_akses memang tak pernah ada utk kedua role itu & fallback
+ *     fetchGatedPermissionMap() adalah `?? true` (lihat permissions.ts) -
+ *     kalau requireRole dicabut, mereka justru LOLOS.
+ *  2. requirePermission(actor, 'role_akses') - lapis GRANULAR baru: Super
+ *     Admin bisa mencabut kemampuan SATU akun Admin Cabang/Manager
+ *     Kota/Asisten Manager Kota utk mengedit matrix, TANPA menurunkan status
+ *     full access-nya yang lain. Super Admin sendiri tak pernah kena (bypass
+ *     permanen di hasPermission()). Dgn seed produksi (semua baris
+ *     role_akses enabled=true) lapis ini NOL perubahan perilaku - baru
+ *     terasa setelah Super Admin sengaja mematikannya utk akun/role tertentu.
+ *
+ *  Tidak ada jalur self-lockout baru: assertManageableRole() sudah melarang
+ *  Admin Cabang/Manager Kota/Asisten Manager Kota menyentuh kartu role mereka
+ *  SENDIRI, jadi cuma Super Admin yang bisa mematikan role_akses utk mereka. */
 async function requireManagerActor(actorEmail: string): Promise<Actor> {
-  return requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'role_akses');
+  return actor;
 }
 
 /** Super Admin: boleh atur SEMUA 5 role (termasuk Admin Cabang/Manager

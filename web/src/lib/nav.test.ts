@@ -123,11 +123,46 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
   it('11. GUARD: item full access yang backend-nya BELUM digating SENGAJA masih tanpa menuKey (dipasang nanti barengan gate page + endpoint-nya)', () => {
     const groups = navForRole('Admin Cabang');
     const all = groups.flatMap((g) => [...g.items, ...(g.items.flatMap((i) => i.children ?? []))]);
-    const belumDigating = ['Data Long Tail', 'Import Long Tail', 'Cabang', 'Drop Point', 'Master Feedback', 'User Management', 'Role & Akses', 'Riwayat Import', 'Pengaturan'];
+    // "Role & Akses" TIDAK LAGI di daftar ini sejak CHECKPOINT 2 - backend-nya
+    // (requireManagerActor + gate page) sudah menegakkan 'role_akses'.
+    const belumDigating = ['Data Long Tail', 'Import Long Tail', 'Cabang', 'Drop Point', 'Master Feedback', 'User Management', 'Riwayat Import', 'Pengaturan'];
     for (const label of belumDigating) {
       const item = all.find((i) => i.label === label);
       assert.ok(item, `item "${label}" harus ada di nav full access`);
       assert.equal(item!.menuKey, undefined, `"${label}" belum punya penegakan backend - JANGAN pasang menuKey duluan`);
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // CHECKPOINT 2: 'role_akses' - menu_key ke-4 (setelah dashboard,
+  // feedback_longtail_view, riwayat_feedback + monitoring_delivery_cabang)
+  // yang penegakan backend-nya sudah ada, jadi menuKey-nya BOLEH dipasang.
+  // --------------------------------------------------------------------------
+
+  it("11b. CHECKPOINT 2: item \"Role & Akses\" (grup Master Data) SEKARANG punya menuKey 'role_akses' - dipasang BARENGAN requirePermission() di requireManagerActor + gate page", () => {
+    const groups = navForRole('Admin Cabang');
+    const item = groups.flatMap((g) => g.items).find((i) => i.label === 'Role & Akses');
+    assert.equal(item?.menuKey, 'role_akses');
+  });
+
+  it('11c. role_akses=false utk Admin Cabang -> item "Role & Akses" HILANG dari sidebar, item lain grup Master Data (belum digating) TETAP UTUH', () => {
+    const groups = navForRole('Admin Cabang');
+    const filtered = filterNavByAccess(groups, access({ role_akses: false }));
+    const labels = filtered.flatMap((g) => g.items.map((i) => i.label));
+    assert.ok(!labels.includes('Role & Akses'), 'harus hilang - backend-nya sudah FORBIDDEN utk akun ini');
+    assert.ok(labels.includes('Cabang'));
+    assert.ok(labels.includes('Master Feedback'));
+    assert.ok(labels.includes('User Management'));
+    assert.ok(labels.includes('Dashboard'), 'menu di grup lain tak ikut terpengaruh');
+  });
+
+  it('11d. REGRESI: SPV Drop Point/Admin DP tak pernah punya item "Role & Akses" di nav-nya - nilai role_akses apa pun tak berpengaruh ke mereka', () => {
+    for (const role of ['SPV Drop Point', 'Admin DP']) {
+      const groups = navForRole(role);
+      const before = filterNavByAccess(groups, access());
+      const afterOff = filterNavByAccess(groups, access({ role_akses: false }));
+      assert.deepEqual(afterOff, before, `${role}: mematikan role_akses tak boleh mengubah apa pun`);
+      assert.ok(!before.flatMap((g) => g.items.map((i) => i.label)).includes('Role & Akses'));
     }
   });
 

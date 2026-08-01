@@ -57,12 +57,12 @@ export function navForRole(role: string | undefined): NavGroup[] {
   if (hasFullAccess(role)) {
     // menuKey di cabang ini SENGAJA baru dipasang utk menu_key yang penegakan
     // backend-nya SUDAH ADA (dashboard, feedback_longtail_view,
-    // riwayat_feedback, monitoring_delivery_cabang). Sisanya (data_longtail,
-    // import_longtail, master_*, user_management, riwayat_import, pengaturan,
-    // role_akses) BELUM digating di backend - menuKey-nya dipasang nanti
-    // BARENGAN gate page + requirePermission() endpoint-nya, jangan dipasang
-    // duluan (menu hilang tapi URL-nya masih bisa dibuka = false sense of
-    // security).
+    // riwayat_feedback, monitoring_delivery_cabang, role_akses). Sisanya
+    // (data_longtail, import_longtail, master_cabang, master_drop_point,
+    // master_feedback, user_management, riwayat_import, pengaturan) BELUM
+    // digating di backend - menuKey-nya dipasang nanti BARENGAN gate page +
+    // requirePermission() endpoint-nya, jangan dipasang duluan (menu hilang
+    // tapi URL-nya masih bisa dibuka = false sense of security).
     return [
       {
         items: [
@@ -84,7 +84,7 @@ export function navForRole(role: string | undefined): NavGroup[] {
           },
           { label: 'Master Feedback', href: '/master/feedback', icon: ClipboardList },
           { label: 'User Management', href: '/master/users', icon: UserCog },
-          { label: 'Role & Akses', href: '/master/role-akses', icon: ShieldCheck },
+          { label: 'Role & Akses', href: '/master/role-akses', icon: ShieldCheck, menuKey: 'role_akses' },
         ],
       },
       {
