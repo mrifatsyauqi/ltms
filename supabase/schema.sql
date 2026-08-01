@@ -104,13 +104,16 @@ create trigger users_updated before update on users
   for each row execute function set_updated_at();
 
 -- ---------------------------------------------------------------------------
--- ROLE_PERMISSIONS / USER_PERMISSIONS (Role & Akses) — matrix menu HANYA utk
--- 'SPV Drop Point' & 'Admin DP' (2 role "diatur"); Super Admin/Admin Cabang/
--- Manager Kota/Asisten Manager Kota TIDAK PERNAH masuk matrix ini - akses
--- mereka given/hardcoded dari Langkah 3 (hasFullAccess), tak berubah oleh
--- fitur ini sama sekali. menu_key dibatasi ke 4 menu yang memang dimiliki
--- SPV DP/Admin DP di sidebar (lihat lib/nav.ts) - Monitoring Delivery &
--- Profil SENGAJA tak masuk matrix (selalu accessible, tak pernah digating).
+-- ROLE_PERMISSIONS / USER_PERMISSIONS (Role & Akses) — matrix menu utk 5 role
+-- "diatur": SPV Drop Point/Admin DP (4 menu_key, cakupan sidebar mereka) DAN
+-- Admin Cabang/Manager Kota/Asisten Manager Kota (15 menu_key, cakupan
+-- sidebar full access - lebih luas). Super Admin TIDAK PERNAH masuk matrix
+-- ini - satu-satunya yang hardcode bypass (hasPermission()), bisa atur
+-- SEMUA 5 role di atas lewat UI Role & Akses. Admin Cabang/Manager
+-- Kota/Asisten Manager Kota SENDIRI cuma bisa atur SPV Drop Point/Admin DP
+-- (ditegakkan di kode - requireRole 'Super Admin' only utk kelola 3 role
+-- baru ini, lihat lib/data/supabase/role-akses.ts), TIDAK BISA lihat/atur
+-- kartu role mereka sendiri.
 --
 -- role_permissions = default per role; user_permissions = override per akun
 -- individual (menimpa default HANYA utk akun itu). Resolusi (lib/data/
@@ -118,9 +121,16 @@ create trigger users_updated before update on users
 -- ada barisnya, baru fallback ke role_permissions.
 -- ---------------------------------------------------------------------------
 create table role_permissions (
-  role       text not null check (role in ('SPV Drop Point', 'Admin DP')),
+  role       text not null check (role in (
+               'Admin Cabang', 'Manager Kota', 'Asisten Manager Kota', 'SPV Drop Point', 'Admin DP'
+             )),
   menu_key   text not null check (menu_key in (
-               'dashboard', 'feedback_longtail_view', 'feedback_longtail_edit', 'riwayat_feedback'
+               'dashboard', 'feedback_longtail_view', 'feedback_longtail_edit',
+               'data_longtail', 'import_longtail',
+               'monitoring_delivery_dp', 'monitoring_delivery_cabang',
+               'master_cabang', 'master_drop_point', 'master_feedback', 'user_management',
+               'riwayat_import', 'riwayat_feedback',
+               'pengaturan', 'role_akses'
              )),
   enabled    boolean not null default true,
   updated_at timestamptz not null default now(),
@@ -132,7 +142,12 @@ create trigger role_permissions_updated before update on role_permissions
 create table user_permissions (
   user_id    uuid not null references users(id) on delete cascade,
   menu_key   text not null check (menu_key in (
-               'dashboard', 'feedback_longtail_view', 'feedback_longtail_edit', 'riwayat_feedback'
+               'dashboard', 'feedback_longtail_view', 'feedback_longtail_edit',
+               'data_longtail', 'import_longtail',
+               'monitoring_delivery_dp', 'monitoring_delivery_cabang',
+               'master_cabang', 'master_drop_point', 'master_feedback', 'user_management',
+               'riwayat_import', 'riwayat_feedback',
+               'pengaturan', 'role_akses'
              )),
   enabled    boolean not null default true,
   updated_at timestamptz not null default now(),
@@ -141,13 +156,26 @@ create table user_permissions (
 create trigger user_permissions_updated before update on user_permissions
   for each row execute function set_updated_at();
 
--- Seed default: SAMA PERSIS perilaku yang sudah ada dari Langkah 3 (semua
--- true) - matrix ini baru "berguna" kalau nanti ada yang sengaja dimatikan,
--- tidak ada perubahan visual/akses mendadak begitu fitur ini live.
+-- Seed default: SAMA PERSIS perilaku yang sudah ada sebelum fitur ini
+-- (semua true) - matrix baru "berguna" kalau nanti Super Admin sengaja
+-- mematikan sesuatu, tidak ada perubahan visual/akses mendadak begitu fitur
+-- ini live (cegah lockout Admin Cabang/Manager Kota/Asisten Manager Kota
+-- dari sistem mereka sendiri).
 insert into role_permissions (role, menu_key, enabled)
 select r.role, k.menu_key, true
 from (values ('SPV Drop Point'), ('Admin DP')) as r(role),
-     (values ('dashboard'), ('feedback_longtail_view'), ('feedback_longtail_edit'), ('riwayat_feedback')) as k(menu_key);
+     (values ('dashboard'), ('feedback_longtail_view'), ('feedback_longtail_edit'), ('riwayat_feedback')) as k(menu_key)
+union all
+select r.role, k.menu_key, true
+from (values ('Admin Cabang'), ('Manager Kota'), ('Asisten Manager Kota')) as r(role),
+     (values
+       ('dashboard'), ('feedback_longtail_view'), ('feedback_longtail_edit'),
+       ('data_longtail'), ('import_longtail'),
+       ('monitoring_delivery_dp'), ('monitoring_delivery_cabang'),
+       ('master_cabang'), ('master_drop_point'), ('master_feedback'), ('user_management'),
+       ('riwayat_import'), ('riwayat_feedback'),
+       ('pengaturan'), ('role_akses')
+     ) as k(menu_key);
 
 -- ---------------------------------------------------------------------------
 -- LOGIN_ATTEMPTS (rate limiting login per NIK — anti brute-force; berbasis DB
