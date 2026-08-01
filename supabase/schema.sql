@@ -19,6 +19,8 @@
 -- ============================================================================
 
 -- Bersihkan (urut mundur dependensi) supaya bisa dijalankan ulang saat dev.
+drop table if exists user_permissions   cascade;
+drop table if exists role_permissions   cascade;
 drop table if exists dashboard_snapshot cascade;
 drop table if exists favorite_feedback cascade;
 drop table if exists activity_log      cascade;
@@ -100,6 +102,52 @@ create index users_jabatan_id_idx on users (jabatan_id);
 create unique index users_nik_unique_idx on users (nik) where nik is not null;
 create trigger users_updated before update on users
   for each row execute function set_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- ROLE_PERMISSIONS / USER_PERMISSIONS (Role & Akses) — matrix menu HANYA utk
+-- 'SPV Drop Point' & 'Admin DP' (2 role "diatur"); Super Admin/Admin Cabang/
+-- Manager Kota/Asisten Manager Kota TIDAK PERNAH masuk matrix ini - akses
+-- mereka given/hardcoded dari Langkah 3 (hasFullAccess), tak berubah oleh
+-- fitur ini sama sekali. menu_key dibatasi ke 4 menu yang memang dimiliki
+-- SPV DP/Admin DP di sidebar (lihat lib/nav.ts) - Monitoring Delivery &
+-- Profil SENGAJA tak masuk matrix (selalu accessible, tak pernah digating).
+--
+-- role_permissions = default per role; user_permissions = override per akun
+-- individual (menimpa default HANYA utk akun itu). Resolusi (lib/data/
+-- supabase/permissions.ts, hasPermission()): user_permissions dulu kalau
+-- ada barisnya, baru fallback ke role_permissions.
+-- ---------------------------------------------------------------------------
+create table role_permissions (
+  role       text not null check (role in ('SPV Drop Point', 'Admin DP')),
+  menu_key   text not null check (menu_key in (
+               'dashboard', 'feedback_longtail_view', 'feedback_longtail_edit', 'riwayat_feedback'
+             )),
+  enabled    boolean not null default true,
+  updated_at timestamptz not null default now(),
+  primary key (role, menu_key)
+);
+create trigger role_permissions_updated before update on role_permissions
+  for each row execute function set_updated_at();
+
+create table user_permissions (
+  user_id    uuid not null references users(id) on delete cascade,
+  menu_key   text not null check (menu_key in (
+               'dashboard', 'feedback_longtail_view', 'feedback_longtail_edit', 'riwayat_feedback'
+             )),
+  enabled    boolean not null default true,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, menu_key)
+);
+create trigger user_permissions_updated before update on user_permissions
+  for each row execute function set_updated_at();
+
+-- Seed default: SAMA PERSIS perilaku yang sudah ada dari Langkah 3 (semua
+-- true) - matrix ini baru "berguna" kalau nanti ada yang sengaja dimatikan,
+-- tidak ada perubahan visual/akses mendadak begitu fitur ini live.
+insert into role_permissions (role, menu_key, enabled)
+select r.role, k.menu_key, true
+from (values ('SPV Drop Point'), ('Admin DP')) as r(role),
+     (values ('dashboard'), ('feedback_longtail_view'), ('feedback_longtail_edit'), ('riwayat_feedback')) as k(menu_key);
 
 -- ---------------------------------------------------------------------------
 -- LOGIN_ATTEMPTS (rate limiting login per NIK — anti brute-force; berbasis DB
