@@ -105,9 +105,12 @@ create trigger users_updated before update on users
 
 -- ---------------------------------------------------------------------------
 -- ROLE_PERMISSIONS / USER_PERMISSIONS (Role & Akses) — matrix menu utk 5 role
--- "diatur": SPV Drop Point/Admin DP (4 menu_key, cakupan sidebar mereka) DAN
--- Admin Cabang/Manager Kota/Asisten Manager Kota (15 menu_key, cakupan
--- sidebar full access - lebih luas). Super Admin TIDAK PERNAH masuk matrix
+-- "diatur": SPV Drop Point/Admin DP (5 menu_key: dashboard,
+-- feedback_longtail_view, feedback_longtail_edit, riwayat_feedback,
+-- monitoring_delivery_dp - mode per-Sprinter) DAN Admin Cabang/Manager
+-- Kota/Asisten Manager Kota (15 menu_key, cakupan sidebar full access yang
+-- lebih luas, termasuk monitoring_delivery_cabang - mode Refine Total per
+-- DP). Super Admin TIDAK PERNAH masuk matrix
 -- ini - satu-satunya yang hardcode bypass (hasPermission()), bisa atur
 -- SEMUA 5 role di atas lewat UI Role & Akses. Admin Cabang/Manager
 -- Kota/Asisten Manager Kota SENDIRI cuma bisa atur SPV Drop Point/Admin DP
@@ -164,7 +167,7 @@ create trigger user_permissions_updated before update on user_permissions
 insert into role_permissions (role, menu_key, enabled)
 select r.role, k.menu_key, true
 from (values ('SPV Drop Point'), ('Admin DP')) as r(role),
-     (values ('dashboard'), ('feedback_longtail_view'), ('feedback_longtail_edit'), ('riwayat_feedback')) as k(menu_key)
+     (values ('dashboard'), ('feedback_longtail_view'), ('feedback_longtail_edit'), ('riwayat_feedback'), ('monitoring_delivery_dp')) as k(menu_key)
 union all
 select r.role, k.menu_key, true
 from (values ('Admin Cabang'), ('Manager Kota'), ('Asisten Manager Kota')) as r(role),
