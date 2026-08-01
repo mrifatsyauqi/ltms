@@ -92,3 +92,18 @@ export async function assertKotaExists(kodeKota: string): Promise<void> {
   if (error) throw new ApiError('INTERNAL_ERROR', error.message);
   if (!data) throw new ApiError('VALIDATION_ERROR', `Kota "${kodeKota}" tidak ditemukan`);
 }
+
+/**
+ * jabatan.id yang `nama`-nya persis sama dengan `role` - mapping otomatis
+ * role->jabatan selama masa transisi (migrasi Jabatan). `role` TETAP sumber
+ * kebenaran utk akses (tidak diubah task ini); `jabatan_id` cuma disinkronkan
+ * mengikuti role setiap kali akun dibuat/role-nya berubah, supaya tak pernah
+ * ada akun dengan jabatan_id kosong/menyimpang dari role-nya. Lihat
+ * supabase/jabatan_migration.sql.
+ */
+export async function resolveJabatanIdByRole(role: string): Promise<string> {
+  const { data, error } = await db().from('jabatan').select('id').eq('nama', role).maybeSingle();
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  if (!data) throw new ApiError('INTERNAL_ERROR', `Jabatan untuk role "${role}" tidak ditemukan di tabel jabatan`);
+  return String(data.id);
+}

@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { SLOW_STALE_TIME } from '@/lib/query-config';
 import type { UserRow } from '@/lib/data/users';
 import type { DropPointRow } from '@/lib/data/drop-points';
+import type { JabatanRow } from '@/lib/data/jabatan';
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -34,6 +35,17 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 type Role = 'Admin Cabang' | 'Admin DP';
 type FormState = { nama: string; email: string; nik: string; role: Role; dropPoint: string; statusAktif: boolean };
 const EMPTY: FormState = { nama: '', email: '', nik: '', role: 'Admin DP', dropPoint: '', statusAktif: true };
+
+// Tabel jabatan sudah punya 6 baris (Super Admin, Admin Cabang, Manager Kota,
+// Asisten Manager Kota, SPV Drop Point, Admin DP), TAPI dropdown ini SENGAJA
+// cuma menawarkan 2 - Admin Cabang & Admin DP - satu-satunya yang punya
+// pemetaan akses nyata sekarang (role tetap sumber kebenaran akses, lihat
+// resolveJabatanIdByRole di helpers.ts). 4 jabatan lain BELUM bisa dipilih
+// sbg jabatan utama sampai task Role & Akses berikutnya mendefinisikan akses
+// nyatanya - keputusan eksplisit, BUKAN oversight (opsi "pemetaan tingkat"
+// ditolak krn berisiko kasih akses penuh/salah ke label yang kelihatan
+// terbatas).
+const SELECTABLE_JABATAN = new Set<string>(['Admin Cabang', 'Admin DP']);
 
 export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const qc = useQueryClient();
@@ -49,6 +61,17 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
     staleTime: SLOW_STALE_TIME, // jarang berubah (data master)
   });
   const activeDps = useMemo(() => (dps ?? []).filter((d) => isAktif(d['Status Aktif'])), [dps]);
+  // Sumber dropdown Jabatan - lihat SELECTABLE_JABATAN utk kenapa cuma 2 dari
+  // 6 baris yang tampil di sini.
+  const { data: jabatanList } = useQuery({
+    queryKey: ['jabatan'],
+    queryFn: () => api<JabatanRow[]>('/api/jabatan'),
+    staleTime: SLOW_STALE_TIME,
+  });
+  const selectableJabatan = useMemo(
+    () => (jabatanList ?? []).filter((j) => SELECTABLE_JABATAN.has(j.Nama)).sort((a, b) => a.Tingkat - b.Tingkat),
+    [jabatanList],
+  );
 
   const [q, setQ] = useState('');
   const [pageIndex, setPageIndex] = useState(0);
@@ -180,7 +203,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
 
   // WAJIB: base-ui Select butuh peta value->label eksplisit (`items`) supaya
   // trigger menampilkan label yang benar, bukan value mentah.
-  const roleItems: Record<string, string> = { 'Admin DP': 'Admin DP', 'Admin Cabang': 'Admin Cabang' };
+  const jabatanItems = Object.fromEntries(selectableJabatan.map((j) => [j.Nama, j.Nama]));
   const dpItems = Object.fromEntries(activeDps.map((d) => [d['Kode DP'], `${d['Kode DP']} — ${d['Nama DP']}`]));
 
   return (
@@ -375,14 +398,21 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="role">Role</Label>
-              <Select items={roleItems} value={form.role} onValueChange={(v) => setForm({ ...form, role: (v ?? 'Admin DP') as Role })}>
-                <SelectTrigger id="role" className="h-9 w-full text-sm">
+              <Label htmlFor="jabatan">Jabatan</Label>
+              <Select
+                items={jabatanItems}
+                value={form.role}
+                onValueChange={(v) => setForm({ ...form, role: (v ?? 'Admin DP') as Role })}
+              >
+                <SelectTrigger id="jabatan" className="h-9 w-full text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Admin DP">Admin DP</SelectItem>
-                  <SelectItem value="Admin Cabang">Admin Cabang</SelectItem>
+                  {selectableJabatan.map((j) => (
+                    <SelectItem key={j.Id} value={j.Nama}>
+                      {j.Nama}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

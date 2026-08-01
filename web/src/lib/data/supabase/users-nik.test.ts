@@ -16,6 +16,10 @@ function freshStore(): Map<string, Row[]> {
     { kode_dp: 'BATANG01', nama_dp: 'Batang 01', wilayah: 'Batang', status_aktif: true },
     { kode_dp: 'SUBAH01', nama_dp: 'Subah 01', wilayah: 'Batang', status_aktif: true },
   ]);
+  store.set('jabatan', [
+    { id: 'jab-admin-cabang', nama: 'Admin Cabang', tingkat: 2, deskripsi: null },
+    { id: 'jab-admin-dp', nama: 'Admin DP', tingkat: 6, deskripsi: null },
+  ]);
   return store;
 }
 

@@ -33,6 +33,14 @@ export type UpdateDropPointInput = Partial<{
   spvDropPointUserId: string | null;
 }>;
 
+// ---- Jabatan ------------------------------------------------------------------
+export type JabatanRow = {
+  Id: string;
+  Nama: string;
+  Tingkat: number;
+  Deskripsi: string;
+};
+
 // ---- Cabang (Kota) ------------------------------------------------------------
 // Manager Kota/Asisten Manager = LABEL ORGANISASI, bukan role otorisasi -
 // menunjuk ke akun users existing manapun (users.id), tak mengubah hak akses

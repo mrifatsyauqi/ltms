@@ -1,5 +1,5 @@
 import { db } from './client';
-import { aktifText, assertDropPointActive, requireActor, requireRole } from './helpers';
+import { aktifText, assertDropPointActive, requireActor, requireRole, resolveJabatanIdByRole } from './helpers';
 import { ApiError } from '@/lib/errors';
 import type { CreateGeneralAccountResult, CreateUserInput, UpdateUserInput, UserRow } from '@/lib/data/types';
 
@@ -60,6 +60,7 @@ export async function createUser(actorEmail: string, data: CreateUserInput): Pro
     if (!data.dropPoint) throw new ApiError('VALIDATION_ERROR', 'Admin DP wajib dikaitkan ke minimal satu Drop Point');
     await assertDropPointActive(data.dropPoint);
   }
+  const jabatanId = await resolveJabatanIdByRole(role);
 
   // Cek konflik eksplisit dulu (email = PK, nik = unique) supaya pesan
   // spesifik ("Email sudah terdaftar" vs "NIK sudah dipakai user lain") -
@@ -76,6 +77,7 @@ export async function createUser(actorEmail: string, data: CreateUserInput): Pro
     nik,
     tipe_akun: 'individual',
     role,
+    jabatan_id: jabatanId,
     drop_point: role === 'Admin DP' ? data.dropPoint : '',
     status_aktif: true,
   });
@@ -112,7 +114,10 @@ export async function updateUser(
     patch.nama_tampilan = data.nama; // akun individual: nama_tampilan ikut nama (akun general tak diedit lewat sini)
   }
   if (nikPatch !== undefined) patch.nik = nikPatch;
-  if (data.role !== undefined) patch.role = data.role;
+  if (data.role !== undefined) {
+    patch.role = data.role;
+    patch.jabatan_id = await resolveJabatanIdByRole(data.role); // ikut disinkronkan, lihat helpers.ts
+  }
   // Role Admin Cabang -> DP dikosongkan (cakupan semua DP).
   if (data.role === 'Admin Cabang') patch.drop_point = '';
   else if (data.dropPoint !== undefined) patch.drop_point = data.dropPoint;
@@ -158,6 +163,7 @@ export async function createGeneralAccount(
   const { data: existingNik } = await db().from('users').select('email').eq('nik', nik).maybeSingle();
   if (existingNik) throw new ApiError('CONFLICT', `Akun General untuk DP "${kode}" sudah ada.`);
 
+  const jabatanId = await resolveJabatanIdByRole('Admin DP');
   const { error } = await db().from('users').insert({
     nama: namaTampilan,
     nama_tampilan: namaTampilan,
@@ -165,6 +171,7 @@ export async function createGeneralAccount(
     nik,
     tipe_akun: 'general',
     role: 'Admin DP',
+    jabatan_id: jabatanId,
     drop_point: kode,
     password_hash: passwordHash,
     status_aktif: true,
