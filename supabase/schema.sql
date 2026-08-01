@@ -84,7 +84,10 @@ create table users (
   nama_tampilan text,                        -- yg ditulis ke Activity_Log; general = "DP <KODE_DP>"
   tipe_akun     text not null default 'individual'
                 check (tipe_akun in ('individual', 'general')),
-  role          text not null check (role in ('Admin Cabang', 'Admin DP')),
+  role          text not null check (role in (
+                  'Super Admin', 'Admin Cabang', 'Manager Kota',
+                  'Asisten Manager Kota', 'SPV Drop Point', 'Admin DP'
+                )),
   drop_point    text,                       -- kode DP; kosong utk Admin Cabang
   jabatan_id    uuid not null references jabatan(id) on delete set null, -- normalisasi role, lihat blok JABATAN di atas
   password_hash text,                       -- scrypt "salt:hash"; kosong = hanya Google
