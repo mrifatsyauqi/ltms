@@ -141,7 +141,7 @@ export function PublicDashboardClient({ token }: { token: string }) {
                     <TableRow>
                       <TableHead className="h-8 px-3">DP</TableHead>
                       <TableHead className="h-8 px-2 text-right">Total</TableHead>
-                      <TableHead className="h-8 px-2 text-right">Sudah</TableHead>
+                      <TableHead className="h-8 px-2 text-right">Sudah (Total)</TableHead>
                       <TableHead className="h-8 px-2 text-right">&gt;3 Hr</TableHead>
                       <TableHead className="h-8 w-28 px-2">Progress</TableHead>
                     </TableRow>
