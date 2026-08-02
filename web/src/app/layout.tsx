@@ -18,8 +18,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LTMS - LongTail Dashboard Management System",
-  description: "Sistem monitoring & feedback Long Tail",
+  title: "LTMS - LongTail Monitoring System",
+  description: "LongTail Monitoring System - Sistem monitoring & feedback Long Tail",
 };
 
 export default function RootLayout({
