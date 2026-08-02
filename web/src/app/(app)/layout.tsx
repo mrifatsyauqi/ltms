@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { Sidebar } from '@/components/layout/sidebar';
 import { DashboardScopeProvider } from '@/components/dashboard/scope-context';
+import { getMyMenuAccess, isGatedRole } from '@/lib/data/permissions';
 
 /**
  * Shell aplikasi: sidebar gelap (kiri) + area konten terang (kanan).
@@ -17,12 +18,33 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { user } = session;
 
+  // Akses efektif per menu_key (Role & Akses) dihitung utk SEMUA 5 role yang
+  // "diatur" (GATED_ROLES: Admin Cabang/Manager Kota/Asisten Manager Kota/SPV
+  // Drop Point/Admin DP) - BUKAN lagi cuma 2 role DP. Sejak bypass
+  // hasPermission() utk grup full access dihapus, Admin Cabang dkk BENAR-BENAR
+  // dicek matrix di backend, jadi sidebar-nya HARUS ikut difilter supaya menu
+  // yang backend-nya sudah FORBIDDEN tak tetap kelihatan (pakai predikat
+  // isGatedRole yg sama dgn otorisasi runtime -> tak bisa drift).
+  // menuAccess = null (TIDAK difilter) sengaja utk 2 kasus:
+  //  - Super Admin: satu-satunya bypass permanen, getEffectiveMenuAccess()
+  //    toh selalu all-true utk dia -> query DB-nya dilewati (optimasi, bukan
+  //    lubang otorisasi).
+  //  - role di luar 6 yg dikenal (mis. legacy 'Admin Pusat'): matrix akan
+  //    mengembalikan SEMUA false -> menu habis total; biarkan apa adanya spt
+  //    perilaku sebelumnya, gating-nya ada di masing-masing page.
+  const menuAccess = isGatedRole(user.role ?? '') ? await getMyMenuAccess(user.email ?? '') : null;
+
   return (
     <DashboardScopeProvider>
       <div className="flex h-dvh overflow-hidden">
         {/* Sidebar pakai useSearchParams -> perlu Suspense boundary. */}
         <Suspense fallback={<div className="bg-sidebar w-[200px] shrink-0" />}>
-          <Sidebar role={user.role} nama={user.nama ?? user.name ?? undefined} dropPoint={user.dropPoint} />
+          <Sidebar
+            role={user.role}
+            nama={user.nama ?? user.name ?? undefined}
+            dropPoint={user.dropPoint}
+            menuAccess={menuAccess}
+          />
         </Suspense>
         {/*
           @container: semua halaman mengukur lebar AREA KONTEN (viewport - sidebar),

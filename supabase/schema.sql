@@ -19,6 +19,8 @@
 -- ============================================================================
 
 -- Bersihkan (urut mundur dependensi) supaya bisa dijalankan ulang saat dev.
+drop table if exists user_permissions   cascade;
+drop table if exists role_permissions   cascade;
 drop table if exists dashboard_snapshot cascade;
 drop table if exists favorite_feedback cascade;
 drop table if exists activity_log      cascade;
@@ -28,7 +30,10 @@ drop table if exists import_batch      cascade;
 drop table if exists import_mapping    cascade;
 drop table if exists master_feedback   cascade;
 drop table if exists master_drop_point cascade;
+drop table if exists cabang            cascade;
+drop table if exists login_attempts    cascade;
 drop table if exists users             cascade;
+drop table if exists jabatan           cascade;
 drop function if exists set_updated_at cascade;
 
 -- Trigger util: auto-set updated_at.
@@ -40,30 +45,196 @@ end;
 $$ language plpgsql;
 
 -- ---------------------------------------------------------------------------
+-- JABATAN — normalisasi role/label organisasi jadi entitas resmi dgn id,
+-- LEPAS dari kolom users.role (text) yang TETAP DIPERTAHANKAN sbg
+-- fallback/cross-check selama masa transisi (lihat supabase/jabatan_migration.sql,
+-- jabatan_backfill.sql, jabatan_not_null.sql utk setup produksi yang sudah
+-- live - 3 file terpisah krn tiap tahap butuh konfirmasi sebelum lanjut).
+-- Dev-recreate (file ini) langsung seed 6 baris supaya jabatan_id bisa
+-- NOT NULL sejak awal tanpa perlu backfill (tak ada data lama di setup baru).
+-- ---------------------------------------------------------------------------
+create table jabatan (
+  id        uuid primary key default gen_random_uuid(),
+  nama      text not null unique,
+  tingkat   integer not null,
+  deskripsi text
+);
+insert into jabatan (nama, tingkat, deskripsi) values
+  ('Super Admin',           1, null),
+  ('Admin Cabang',          2, null),
+  ('Manager Kota',          3, null),
+  ('Asisten Manager Kota',  4, null),
+  ('SPV Drop Point',        5, null),
+  ('Admin DP',              6, null);
+
+-- ---------------------------------------------------------------------------
 -- USERS (store login; NextAuth resolve role + drop_point dari sini)
+--
+-- Migrasi auth NIK+password (dual-mode): `email` DIPERTAHANKAN sebagai PK &
+-- login Google selama transisi; `nik` UNIQUE = identifier login baru
+-- (Credentials). Untuk setup produksi yang sudah live, pakai file additive
+-- supabase/auth_nik_migration.sql (bukan schema.sql yang destruktif).
 -- ---------------------------------------------------------------------------
 create table users (
+  id            uuid not null default gen_random_uuid(), -- identitas stabil utk FK (Cabang/SPV dll),
+                                                           -- LEPAS dari mekanisme login (email/NIK).
+                                                           -- email TETAP primary key (lihat catatan di
+                                                           -- atas + FK nyata di favorite_feedback).
   email         text primary key,
+  nik           text,                       -- identifier login baru; nullable selama migrasi
   nama          text not null,
-  role          text not null check (role in ('Admin Cabang', 'Admin DP')),
+  nama_tampilan text,                        -- yg ditulis ke Activity_Log; general = "DP <KODE_DP>"
+  tipe_akun     text not null default 'individual'
+                check (tipe_akun in ('individual', 'general')),
+  role          text not null check (role in (
+                  'Super Admin', 'Admin Cabang', 'Manager Kota',
+                  'Asisten Manager Kota', 'SPV Drop Point', 'Admin DP'
+                )),
   drop_point    text,                       -- kode DP; kosong utk Admin Cabang
+  jabatan_id    uuid not null references jabatan(id) on delete set null, -- normalisasi role, lihat blok JABATAN di atas
   password_hash text,                       -- scrypt "salt:hash"; kosong = hanya Google
   status_aktif  boolean not null default true,
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
+create unique index users_id_unique_idx on users (id);
+create index users_jabatan_id_idx on users (jabatan_id);
+create unique index users_nik_unique_idx on users (nik) where nik is not null;
 create trigger users_updated before update on users
   for each row execute function set_updated_at();
 
 -- ---------------------------------------------------------------------------
+-- ROLE_PERMISSIONS / USER_PERMISSIONS (Role & Akses) — matrix menu utk 5 role
+-- "diatur": SPV Drop Point/Admin DP (5 menu_key: dashboard,
+-- feedback_longtail_view, feedback_longtail_edit, riwayat_feedback,
+-- monitoring_delivery_dp - mode per-Sprinter) DAN Admin Cabang/Manager
+-- Kota/Asisten Manager Kota (15 menu_key, cakupan sidebar full access yang
+-- lebih luas, termasuk monitoring_delivery_cabang - mode Refine Total per
+-- DP). Super Admin TIDAK PERNAH masuk matrix
+-- ini - satu-satunya yang hardcode bypass (hasPermission()), bisa atur
+-- SEMUA 5 role di atas lewat UI Role & Akses. Admin Cabang/Manager
+-- Kota/Asisten Manager Kota SENDIRI cuma bisa atur SPV Drop Point/Admin DP
+-- (ditegakkan di kode - requireRole 'Super Admin' only utk kelola 3 role
+-- baru ini, lihat lib/data/supabase/role-akses.ts), TIDAK BISA lihat/atur
+-- kartu role mereka sendiri.
+--
+-- role_permissions = default per role; user_permissions = override per akun
+-- individual (menimpa default HANYA utk akun itu). Resolusi (lib/data/
+-- supabase/permissions.ts, hasPermission()): user_permissions dulu kalau
+-- ada barisnya, baru fallback ke role_permissions.
+-- ---------------------------------------------------------------------------
+create table role_permissions (
+  role       text not null check (role in (
+               'Admin Cabang', 'Manager Kota', 'Asisten Manager Kota', 'SPV Drop Point', 'Admin DP'
+             )),
+  menu_key   text not null check (menu_key in (
+               'dashboard', 'feedback_longtail_view', 'feedback_longtail_edit',
+               'data_longtail', 'import_longtail',
+               'monitoring_delivery_dp', 'monitoring_delivery_cabang',
+               'master_cabang', 'master_drop_point', 'master_feedback', 'user_management',
+               'riwayat_import', 'riwayat_feedback',
+               'pengaturan', 'role_akses'
+             )),
+  enabled    boolean not null default true,
+  updated_at timestamptz not null default now(),
+  primary key (role, menu_key)
+);
+create trigger role_permissions_updated before update on role_permissions
+  for each row execute function set_updated_at();
+
+create table user_permissions (
+  user_id    uuid not null references users(id) on delete cascade,
+  menu_key   text not null check (menu_key in (
+               'dashboard', 'feedback_longtail_view', 'feedback_longtail_edit',
+               'data_longtail', 'import_longtail',
+               'monitoring_delivery_dp', 'monitoring_delivery_cabang',
+               'master_cabang', 'master_drop_point', 'master_feedback', 'user_management',
+               'riwayat_import', 'riwayat_feedback',
+               'pengaturan', 'role_akses'
+             )),
+  enabled    boolean not null default true,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, menu_key)
+);
+create trigger user_permissions_updated before update on user_permissions
+  for each row execute function set_updated_at();
+
+-- Seed default: SAMA PERSIS perilaku yang sudah ada sebelum fitur ini
+-- (semua true) - matrix baru "berguna" kalau nanti Super Admin sengaja
+-- mematikan sesuatu, tidak ada perubahan visual/akses mendadak begitu fitur
+-- ini live (cegah lockout Admin Cabang/Manager Kota/Asisten Manager Kota
+-- dari sistem mereka sendiri). PENGECUALIAN: 'master_cabang'/
+-- 'master_drop_point' utk Admin Cabang/Manager Kota/Asisten Manager Kota
+-- default FALSE (bukan bug - keputusan kebijakan: mengelola struktur Kota
+-- antar cabang jadi tanggung jawab EKSKLUSIF Super Admin secara default,
+-- lihat master_cabang_drop_point_default_false_migration.sql) - menu_key
+-- ini TETAP ada di matrix & tetap bisa dinyalakan per-akun oleh Super Admin,
+-- cuma DEFAULT-nya dibalik.
+insert into role_permissions (role, menu_key, enabled)
+select r.role, k.menu_key, true
+from (values ('SPV Drop Point'), ('Admin DP')) as r(role),
+     (values ('dashboard'), ('feedback_longtail_view'), ('feedback_longtail_edit'), ('riwayat_feedback'), ('monitoring_delivery_dp')) as k(menu_key)
+union all
+select r.role, k.menu_key, true
+from (values ('Admin Cabang'), ('Manager Kota'), ('Asisten Manager Kota')) as r(role),
+     (values
+       ('dashboard'), ('feedback_longtail_view'), ('feedback_longtail_edit'),
+       ('data_longtail'), ('import_longtail'),
+       ('monitoring_delivery_dp'), ('monitoring_delivery_cabang'),
+       ('master_feedback'), ('user_management'),
+       ('riwayat_import'), ('riwayat_feedback'),
+       ('pengaturan'), ('role_akses')
+     ) as k(menu_key)
+union all
+select r.role, k.menu_key, false
+from (values ('Admin Cabang'), ('Manager Kota'), ('Asisten Manager Kota')) as r(role),
+     (values ('master_cabang'), ('master_drop_point')) as k(menu_key);
+
+-- ---------------------------------------------------------------------------
+-- LOGIN_ATTEMPTS (rate limiting login per NIK — anti brute-force; berbasis DB
+-- supaya konsisten lintas instance serverless). Max 5 gagal/15 menit -> kunci
+-- sementara via `locked_until`; login sukses me-reset baris. Penegakan di API.
+-- ---------------------------------------------------------------------------
+create table login_attempts (
+  nik          text primary key,
+  failed_count int         not null default 0,
+  locked_until timestamptz,
+  updated_at   timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------------
+-- CABANG (Kota) — struktur organisasi di atas Drop Point. Manager Kota &
+-- Asisten Manager adalah LABEL ORGANISASI (bukan role otorisasi baru) yang
+-- menunjuk ke akun users existing manapun (role apapun, cukup status_aktif).
+-- ---------------------------------------------------------------------------
+create table cabang (
+  kode_kota                text primary key,
+  nama_kota                text not null,
+  manager_kota_user_id     uuid references users(id) on delete set null,
+  asisten_manager_user_id  uuid references users(id) on delete set null,
+  created_at               timestamptz not null default now(),
+  updated_at               timestamptz not null default now()
+);
+create trigger cabang_updated before update on cabang
+  for each row execute function set_updated_at();
+
+-- ---------------------------------------------------------------------------
 -- MASTER DROP POINT
+--
+-- kode_kota nullable: DP existing tetap tampil ("Belum ada Kota") sampai
+-- di-assign manual. spv_drop_point_user_id = label organisasi (lihat cabang
+-- di atas). Admin Drop Point TIDAK punya kolom sendiri di sini - REUSE
+-- users.role='Admin DP' + users.drop_point=kode_dp yang sudah ada.
 -- ---------------------------------------------------------------------------
 create table master_drop_point (
-  kode_dp      text primary key,
-  nama_dp      text not null,
-  wilayah      text,
-  status_aktif boolean not null default true
+  kode_dp                text primary key,
+  nama_dp                text not null,
+  wilayah                text,
+  status_aktif           boolean not null default true,
+  kode_kota              text references cabang(kode_kota) on delete set null,
+  spv_drop_point_user_id  uuid references users(id) on delete set null
 );
+create index master_drop_point_kode_kota_idx on master_drop_point (kode_kota);
 
 -- ---------------------------------------------------------------------------
 -- MASTER FEEDBACK

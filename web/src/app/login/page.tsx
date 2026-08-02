@@ -1,7 +1,6 @@
 import Image from 'next/image';
 import { redirect } from 'next/navigation';
-import { auth, signIn } from '@/auth';
-import { Button } from '@/components/ui/button';
+import { auth } from '@/auth';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { CredentialsLoginForm } from '@/components/auth/credentials-login-form';
 
@@ -28,23 +27,6 @@ export default async function LoginPage() {
           />
         </CardHeader>
         <CardContent>
-          <form
-            action={async () => {
-              'use server';
-              await signIn('google', { redirectTo: '/' });
-            }}
-          >
-            <Button type="submit" className="w-full">
-              Sign in with Google
-            </Button>
-          </form>
-
-          <div className="my-4 flex items-center gap-2">
-            <div className="bg-border h-px flex-1" />
-            <span className="text-muted-foreground text-xs">atau</span>
-            <div className="bg-border h-px flex-1" />
-          </div>
-
           <CredentialsLoginForm />
         </CardContent>
       </Card>

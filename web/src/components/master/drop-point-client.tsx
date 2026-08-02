@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Pencil, Plus, Search, Trash2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/layout/page-header';
 import { StatusBadge, isAktif } from '@/components/master/status-badge';
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { TablePager } from '@/components/ui/table-pager';
+import { CopyButton } from '@/components/ui/copy-button';
 import {
   Dialog,
   DialogContent,
@@ -18,8 +19,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SLOW_STALE_TIME } from '@/lib/query-config';
 import type { DropPointRow } from '@/lib/data/drop-points';
+import type { CreateGeneralAccountResult, UserRow } from '@/lib/data/users';
+import type { CabangRow } from '@/lib/data/cabang';
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -28,8 +32,24 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return body.data as T;
 }
 
-type FormState = { kodeDp: string; namaDp: string; wilayah: string; statusAktif: boolean };
-const EMPTY: FormState = { kodeDp: '', namaDp: '', wilayah: '', statusAktif: true };
+const NONE = ''; // sentinel "belum di-assign" - Kota & SPV Drop Point opsional
+
+type FormState = {
+  kodeDp: string;
+  namaDp: string;
+  wilayah: string;
+  statusAktif: boolean;
+  kodeKota: string;
+  spvDropPointUserId: string;
+};
+const EMPTY: FormState = {
+  kodeDp: '',
+  namaDp: '',
+  wilayah: '',
+  statusAktif: true,
+  kodeKota: NONE,
+  spvDropPointUserId: NONE,
+};
 
 export function DropPointClient() {
   const qc = useQueryClient();
@@ -37,6 +57,27 @@ export function DropPointClient() {
     queryKey: ['drop-points'],
     queryFn: () => api<DropPointRow[]>('/api/drop-points'),
     staleTime: SLOW_STALE_TIME, // jarang berubah (data master)
+  });
+  // Dipakai utk: (1) tahu DP mana yg sudah punya akun General (tombol
+  // dinonaktifkan) - generalDpSet, dan (2) sumber dropdown SPV Drop Point.
+  const { data: users } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => api<UserRow[]>('/api/users'),
+    staleTime: SLOW_STALE_TIME,
+  });
+  const generalDpSet = useMemo(
+    () => new Set((users ?? []).filter((u) => u['Tipe Akun'] === 'general').map((u) => u['Drop Point'])),
+    [users],
+  );
+  const activeUsers = useMemo(
+    () => (users ?? []).filter((u) => isAktif(u['Status Aktif'])).sort((a, b) => a.Nama.localeCompare(b.Nama)),
+    [users],
+  );
+  // Sumber dropdown assignment Kota.
+  const { data: cabangList } = useQuery({
+    queryKey: ['cabang'],
+    queryFn: () => api<CabangRow[]>('/api/cabang'),
+    staleTime: SLOW_STALE_TIME,
   });
 
   const [q, setQ] = useState('');
@@ -46,6 +87,10 @@ export function DropPointClient() {
   const [editing, setEditing] = useState<DropPointRow | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [confirmDelete, setConfirmDelete] = useState<DropPointRow | null>(null);
+  const [generalFor, setGeneralFor] = useState<DropPointRow | null>(null);
+  const [generalPassword, setGeneralPassword] = useState('');
+  const [showGeneralPassword, setShowGeneralPassword] = useState(false);
+  const [generalResult, setGeneralResult] = useState<CreateGeneralAccountResult | null>(null);
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -69,7 +114,13 @@ export function DropPointClient() {
       api('/api/drop-points', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kodeDp: f.kodeDp.trim(), namaDp: f.namaDp.trim(), wilayah: f.wilayah.trim() }),
+        body: JSON.stringify({
+          kodeDp: f.kodeDp.trim(),
+          namaDp: f.namaDp.trim(),
+          wilayah: f.wilayah.trim(),
+          kodeKota: f.kodeKota || null,
+          spvDropPointUserId: f.spvDropPointUserId || null,
+        }),
       }),
     onSuccess: () => {
       toast.success('Drop Point ditambahkan.');
@@ -84,7 +135,13 @@ export function DropPointClient() {
       api(`/api/drop-points/${encodeURIComponent(f.kodeDp)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ namaDp: f.namaDp.trim(), wilayah: f.wilayah.trim(), statusAktif: f.statusAktif }),
+        body: JSON.stringify({
+          namaDp: f.namaDp.trim(),
+          wilayah: f.wilayah.trim(),
+          statusAktif: f.statusAktif,
+          kodeKota: f.kodeKota || null,
+          spvDropPointUserId: f.spvDropPointUserId || null,
+        }),
       }),
     onSuccess: () => {
       toast.success('Drop Point diperbarui.');
@@ -105,6 +162,31 @@ export function DropPointClient() {
     onError: (e: Error) => toast.error(`Gagal menghapus: ${e.message}`),
   });
 
+  const createGeneralMut = useMutation({
+    mutationFn: ({ kodeDp, password }: { kodeDp: string; password: string }) =>
+      api<CreateGeneralAccountResult>(`/api/drop-points/${encodeURIComponent(kodeDp)}/general-account`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      }),
+    onSuccess: (result) => {
+      setGeneralResult(result); // dialog beralih ke tampilan konfirmasi NIK
+      qc.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (e: Error) => toast.error(`Gagal membuat akun General: ${e.message}`),
+  });
+
+  function openGeneral(r: DropPointRow) {
+    setGeneralFor(r);
+    setGeneralPassword('');
+    setShowGeneralPassword(false);
+    setGeneralResult(null);
+  }
+  function closeGeneral() {
+    setGeneralFor(null);
+    setGeneralResult(null);
+  }
+
   function openCreate() {
     setEditing(null);
     setForm(EMPTY);
@@ -117,6 +199,8 @@ export function DropPointClient() {
       namaDp: r['Nama DP'],
       wilayah: r['Wilayah/Cabang'],
       statusAktif: isAktif(r['Status Aktif']),
+      kodeKota: r['Kode Kota'],
+      spvDropPointUserId: r['SPV Drop Point'],
     });
     setDialogOpen(true);
   }
@@ -127,6 +211,13 @@ export function DropPointClient() {
 
   const saving = createMut.isPending || updateMut.isPending;
   const canSave = editing ? form.namaDp.trim() : form.kodeDp.trim() && form.namaDp.trim();
+
+  // WAJIB: base-ui Select butuh peta value->label eksplisit (`items`) supaya
+  // trigger menampilkan label yang benar, bukan value mentah.
+  const kotaItems: Record<string, string> = { [NONE]: '— Belum ada Kota —' };
+  for (const c of cabangList ?? []) kotaItems[c['Kode Kota']] = `${c['Kode Kota']} — ${c['Nama Kota']}`;
+  const spvItems: Record<string, string> = { [NONE]: '— Belum ditunjuk —' };
+  for (const u of activeUsers) spvItems[u.Id] = `${u.Nama} (${u.Role})`;
 
   return (
     <>
@@ -179,8 +270,11 @@ export function DropPointClient() {
                     <th className="h-8 border-b px-3 text-left font-medium">Kode DP</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Nama DP</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Wilayah/Cabang</th>
+                    <th className="h-8 border-b px-3 text-left font-medium">Kota</th>
+                    <th className="h-8 border-b px-3 text-left font-medium">SPV Drop Point</th>
+                    <th className="h-8 border-b px-3 text-left font-medium">Admin DP</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Status</th>
-                    <th className="h-8 w-24 border-b px-3 text-right font-medium">Aksi</th>
+                    <th className="h-8 w-32 border-b px-3 text-right font-medium">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -189,11 +283,28 @@ export function DropPointClient() {
                       <td className="px-3 py-1.5 font-mono">{r['Kode DP']}</td>
                       <td className="px-3 py-1.5">{r['Nama DP']}</td>
                       <td className="px-3 py-1.5">{r['Wilayah/Cabang'] || '—'}</td>
+                      <td className="px-3 py-1.5">{r['Nama Kota'] || '—'}</td>
+                      <td className="px-3 py-1.5">{r['SPV Drop Point Nama'] || '—'}</td>
+                      <td className="px-3 py-1.5">{r['Admin DP'].length > 0 ? r['Admin DP'].join(', ') : '—'}</td>
                       <td className="px-3 py-1.5">
                         <StatusBadge aktif={isAktif(r['Status Aktif'])} />
                       </td>
                       <td className="px-3 py-1.5">
                         <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openGeneral(r)}
+                            disabled={generalDpSet.has(r['Kode DP'])}
+                            aria-label={`Buat Akun General ${r['Kode DP']}`}
+                            title={
+                              generalDpSet.has(r['Kode DP'])
+                                ? 'Akun General sudah ada untuk DP ini'
+                                : 'Buat Akun General untuk DP ini'
+                            }
+                            className="hover:bg-muted rounded-md p-1.5 transition-colors disabled:opacity-30"
+                          >
+                            <UserPlus className="size-3.5" aria-hidden />
+                          </button>
                           <button
                             type="button"
                             onClick={() => openEdit(r)}
@@ -216,7 +327,7 @@ export function DropPointClient() {
                   ))}
                   {pageRows.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="text-muted-foreground py-10 text-center">
+                      <td colSpan={8} className="text-muted-foreground py-10 text-center">
                         {q ? 'Tidak ada Drop Point yang cocok.' : 'Belum ada Drop Point. Klik “Tambah Drop Point”.'}
                       </td>
                     </tr>
@@ -273,6 +384,46 @@ export function DropPointClient() {
               <Label htmlFor="wilayah">Wilayah/Cabang</Label>
               <Input id="wilayah" value={form.wilayah} onChange={(e) => setForm({ ...form, wilayah: e.target.value })} />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="kodeKota">Kota</Label>
+              <Select items={kotaItems} value={form.kodeKota} onValueChange={(v) => setForm({ ...form, kodeKota: v ?? NONE })}>
+                <SelectTrigger id="kodeKota" className="h-9 w-full text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>— Belum ada Kota —</SelectItem>
+                  {(cabangList ?? []).map((c) => (
+                    <SelectItem key={c['Kode Kota']} value={c['Kode Kota']}>
+                      {c['Kode Kota']} — {c['Nama Kota']}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="spvDropPoint">SPV Drop Point</Label>
+              <Select
+                items={spvItems}
+                value={form.spvDropPointUserId}
+                onValueChange={(v) => setForm({ ...form, spvDropPointUserId: v ?? NONE })}
+              >
+                <SelectTrigger id="spvDropPoint" className="h-9 w-full text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>— Belum ditunjuk —</SelectItem>
+                  {activeUsers.map((u) => (
+                    <SelectItem key={u.Id} value={u.Id}>
+                      {u.Nama} ({u.Role})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-muted-foreground text-[11px]">
+                Label organisasi (dipilih dari akun User Management manapun), bukan role otorisasi baru. Admin DP
+                (hak akses login) tetap dikelola lewat User Management seperti biasa.
+              </p>
+            </div>
             {editing && (
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -317,6 +468,75 @@ export function DropPointClient() {
               {deleteMut.isPending ? 'Menghapus…' : 'Hapus'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Buat Akun General - satu per DP, tanpa identitas personal (login via NIK). */}
+      <Dialog open={!!generalFor} onOpenChange={(o) => !o && closeGeneral()}>
+        <DialogContent className="max-w-sm">
+          {generalResult ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Akun General dibuat</DialogTitle>
+                <DialogDescription>
+                  Catat NIK ini — dipakai staff DP {generalFor?.['Kode DP']} untuk login (bukan email).
+                </DialogDescription>
+              </DialogHeader>
+              <div className="bg-muted flex items-center justify-between gap-2 rounded-lg border p-3">
+                <div>
+                  <p className="text-muted-foreground text-[11px]">NIK Login</p>
+                  <p className="font-mono text-sm font-semibold">{generalResult.nik}</p>
+                </div>
+                <CopyButton text={generalResult.nik} title="Salin NIK" successMessage="NIK disalin" className="p-1.5" />
+              </div>
+              <DialogFooter>
+                <Button onClick={closeGeneral}>Tutup</Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Buat Akun General</DialogTitle>
+                <DialogDescription>
+                  Satu akun bersama untuk staff DP <span className="font-mono">{generalFor?.['Kode DP']}</span> —
+                  aktivitasnya tercatat sebagai nama DP, bukan nama personal. NIK login dibuat otomatis (format
+                  GENERAL-{generalFor?.['Kode DP']}). Set password awal, minimal 8 karakter.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-1.5">
+                <Label htmlFor="general-password">Password awal</Label>
+                <div className="relative">
+                  <Input
+                    id="general-password"
+                    type={showGeneralPassword ? 'text' : 'password'}
+                    value={generalPassword}
+                    onChange={(e) => setGeneralPassword(e.target.value)}
+                    autoComplete="new-password"
+                    className="pr-9"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowGeneralPassword((v) => !v)}
+                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
+                    title={showGeneralPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                  >
+                    {showGeneralPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeGeneral} disabled={createGeneralMut.isPending}>
+                  Batal
+                </Button>
+                <Button
+                  onClick={() => generalFor && createGeneralMut.mutate({ kodeDp: generalFor['Kode DP'], password: generalPassword })}
+                  disabled={generalPassword.length < 8 || createGeneralMut.isPending}
+                >
+                  {createGeneralMut.isPending ? 'Membuat…' : 'Buat Akun'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </>

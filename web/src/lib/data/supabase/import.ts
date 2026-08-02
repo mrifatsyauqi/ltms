@@ -1,6 +1,8 @@
 import { db } from './client';
 import { requireActor, requireRole } from './helpers';
+import { requirePermission } from './permissions';
 import { ApiError } from '@/lib/errors';
+import { FULL_ACCESS_ROLES } from '@/lib/roles';
 import { isClearTTD, jakartaParts, jakartaStamp, planAutoClose } from './longtail-shared';
 import type { LongtailDbRow } from './longtail-shared';
 import type { ImportBatchRow, ImportResult, MappingTemplate } from '@/lib/data/types';
@@ -98,7 +100,8 @@ export async function importLongTail(
   fileName: string,
   rows: MappedRow[],
 ): Promise<ImportResult> {
-  const actor = requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'import_longtail');
   const incoming = Array.isArray(rows) ? rows : [];
 
   // Kumpulkan baris valid (punya waybill), hitung skip utk yang kosong.
@@ -359,7 +362,7 @@ export async function importLongTail(
 }
 
 export async function listImportBatches(actorEmail: string): Promise<ImportBatchRow[]> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   const { data, error } = await db()
     .from('import_batch')
     .select('*')
@@ -405,7 +408,7 @@ export async function saveMappingTemplate(
   namaTemplate: string,
   mapping: Record<string, string | null>,
 ): Promise<{ namaTemplate: string }> {
-  const actor = requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   if (!namaTemplate || !mapping) throw new ApiError('VALIDATION_ERROR', 'namaTemplate & mapping wajib diisi');
   const { error } = await db()
     .from('import_mapping')
@@ -418,7 +421,7 @@ export async function deleteMappingTemplate(
   actorEmail: string,
   namaTemplate: string,
 ): Promise<{ namaTemplate: string }> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   const { error } = await db().from('import_mapping').delete().eq('nama_template', namaTemplate);
   if (error) throw new ApiError('INTERNAL_ERROR', error.message);
   return { namaTemplate };

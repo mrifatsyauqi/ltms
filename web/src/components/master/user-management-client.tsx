@@ -21,8 +21,10 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { SLOW_STALE_TIME } from '@/lib/query-config';
+import { ASSIGNABLE_ROLES, hasFullAccess, isAssignableRole, type AssignableRole } from '@/lib/roles';
 import type { UserRow } from '@/lib/data/users';
 import type { DropPointRow } from '@/lib/data/drop-points';
+import type { JabatanRow } from '@/lib/data/jabatan';
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -31,9 +33,36 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return body.data as T;
 }
 
-type Role = 'Admin Cabang' | 'Admin DP';
-type FormState = { nama: string; email: string; role: Role; dropPoint: string; statusAktif: boolean };
-const EMPTY: FormState = { nama: '', email: '', role: 'Admin DP', dropPoint: '', statusAktif: true };
+type FormState = {
+  nama: string;
+  email: string;
+  nik: string;
+  role: AssignableRole;
+  dropPoint: string;
+  statusAktif: boolean;
+  /** Kode DP terpilih di multi-select "Drop Point yang Disupervisi" (Jabatan
+   *  SPV Drop Point saja) - CUMA yang aktif & tampil di checklist, lihat
+   *  hiddenSupervised utk DP nonaktif yang sudah ter-assign sebelumnya. */
+  supervisedDps: string[];
+};
+const EMPTY: FormState = {
+  nama: '',
+  email: '',
+  nik: '',
+  role: 'Admin DP',
+  dropPoint: '',
+  statusAktif: true,
+  supervisedDps: [],
+};
+
+// Tabel jabatan punya 6 baris (Super Admin, Admin Cabang, Manager Kota,
+// Asisten Manager Kota, SPV Drop Point, Admin DP). Dropdown ini menawarkan 5
+// - SEMUA KECUALI Super Admin (lihat ASSIGNABLE_ROLES) - Super Admin sengaja
+// TIDAK BISA dibuat lewat form, cuma lewat SQL manual (mencegah risiko
+// privilege escalation via UI). Manager Kota/Asisten Manager Kota punya
+// akses PENUH setara Admin Cabang (Langkah 3); SPV Drop Point di-assign ke
+// DP-nya lewat halaman Drop Point, BUKAN field di form ini.
+const SELECTABLE_JABATAN = new Set<string>(ASSIGNABLE_ROLES);
 
 export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const qc = useQueryClient();
@@ -49,6 +78,17 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
     staleTime: SLOW_STALE_TIME, // jarang berubah (data master)
   });
   const activeDps = useMemo(() => (dps ?? []).filter((d) => isAktif(d['Status Aktif'])), [dps]);
+  // Sumber dropdown Jabatan - lihat SELECTABLE_JABATAN utk kenapa cuma 2 dari
+  // 6 baris yang tampil di sini.
+  const { data: jabatanList } = useQuery({
+    queryKey: ['jabatan'],
+    queryFn: () => api<JabatanRow[]>('/api/jabatan'),
+    staleTime: SLOW_STALE_TIME,
+  });
+  const selectableJabatan = useMemo(
+    () => (jabatanList ?? []).filter((j) => SELECTABLE_JABATAN.has(j.Nama)).sort((a, b) => a.Tingkat - b.Tingkat),
+    [jabatanList],
+  );
 
   const [q, setQ] = useState('');
   const [pageIndex, setPageIndex] = useState(0);
@@ -60,6 +100,12 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const [passwordFor, setPasswordFor] = useState<UserRow | null>(null);
   const [passwordValue, setPasswordValue] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  // DP nonaktif yang sudah ter-assign ke user ini SEBELUM dialog dibuka -
+  // tak ditampilkan di checklist (checklist cuma DP aktif, konsisten dgn
+  // field Drop Point Admin DP), TAPI ikut disertakan lagi saat submit supaya
+  // tak diam-diam terlepas cuma krn dialog User dibuka & disimpan.
+  const [hiddenSupervised, setHiddenSupervised] = useState<string[]>([]);
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -69,6 +115,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
       (r) =>
         String(r.Nama).toLowerCase().includes(needle) ||
         String(r.Email).toLowerCase().includes(needle) ||
+        String(r.NIK).toLowerCase().includes(needle) ||
         String(r.Role).toLowerCase().includes(needle) ||
         String(r['Drop Point']).toLowerCase().includes(needle),
     );
@@ -78,6 +125,9 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   const pageRows = rows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
   const invalidate = () => qc.invalidateQueries({ queryKey: ['users'] });
 
+  // Tanpa onSuccess/onError - hasilnya (toast, tutup dialog, invalidate)
+  // ditangani terpusat di submit() krn ada langkah lanjutan (sync Drop Point
+  // yang disupervisi) yang harus ikut sukses dulu sebelum dialog ditutup.
   const createMut = useMutation({
     mutationFn: (f: FormState) =>
       api('/api/users', {
@@ -86,16 +136,11 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
         body: JSON.stringify({
           nama: f.nama.trim(),
           email: f.email.trim(),
+          nik: f.nik.trim(),
           role: f.role,
           dropPoint: f.role === 'Admin DP' ? f.dropPoint : '',
         }),
       }),
-    onSuccess: () => {
-      toast.success('User ditambahkan.');
-      setDialogOpen(false);
-      invalidate();
-    },
-    onError: (e: Error) => toast.error(`Gagal menambah: ${e.message}`),
   });
 
   const updateMut = useMutation({
@@ -105,18 +150,13 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nama: f.nama.trim(),
+          nik: f.nik.trim(),
           role: f.role,
           // Admin Cabang -> DP dikosongkan (dijaga juga di backend).
           dropPoint: f.role === 'Admin DP' ? f.dropPoint : '',
           statusAktif: f.statusAktif,
         }),
       }),
-    onSuccess: () => {
-      toast.success('User diperbarui.');
-      setDialogOpen(false);
-      invalidate();
-    },
-    onError: (e: Error) => toast.error(`Gagal memperbarui: ${e.message}`),
   });
 
   const deleteMut = useMutation({
@@ -147,32 +187,68 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
   function openCreate() {
     setEditing(null);
     setForm({ ...EMPTY, dropPoint: activeDps[0]?.['Kode DP'] ?? '' });
+    setHiddenSupervised([]);
     setDialogOpen(true);
   }
   function openEdit(r: UserRow) {
     setEditing(r);
+    const activeKodeSet = new Set(activeDps.map((d) => d['Kode DP']));
+    const assignedKodes = (dps ?? []).filter((d) => d['SPV Drop Point'] === r.Id).map((d) => d['Kode DP']);
+    setHiddenSupervised(assignedKodes.filter((k) => !activeKodeSet.has(k)));
     setForm({
       nama: r.Nama,
       email: r.Email,
-      role: (r.Role as Role) === 'Admin Cabang' ? 'Admin Cabang' : 'Admin DP',
+      nik: r.NIK,
+      // Super Admin (satu-satunya role di luar ASSIGNABLE_ROLES) tak bisa
+      // dibuat/diubah lewat form ini - fallback ke Admin DP kalau baris yang
+      // dibuka edit-nya kebetulan Super Admin, supaya dropdown tetap valid.
+      role: isAssignableRole(r.Role) ? r.Role : 'Admin DP',
       dropPoint: r['Drop Point'] || activeDps[0]?.['Kode DP'] || '',
       statusAktif: isAktif(r['Status Aktif']),
+      supervisedDps: assignedKodes.filter((k) => activeKodeSet.has(k)),
     });
     setDialogOpen(true);
   }
-  function submit() {
-    if (editing) updateMut.mutate(form);
-    else createMut.mutate(form);
+  async function submit() {
+    setSubmitting(true);
+    try {
+      if (editing) await updateMut.mutateAsync(form);
+      else await createMut.mutateAsync(form);
+
+      if (form.role === 'SPV Drop Point') {
+        const targetEmail = editing ? editing.Email : form.email.trim();
+        const kodeDpList = [...new Set([...form.supervisedDps, ...hiddenSupervised])];
+        await api(`/api/users/${encodeURIComponent(targetEmail)}/supervised-drop-points`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kodeDpList }),
+        });
+        qc.invalidateQueries({ queryKey: ['drop-points'] });
+      }
+
+      toast.success(editing ? 'User diperbarui.' : 'User ditambahkan.');
+      setDialogOpen(false);
+      invalidate();
+    } catch (e) {
+      toast.error(`Gagal menyimpan: ${(e as Error).message}`);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  const saving = createMut.isPending || updateMut.isPending;
+  const saving = submitting;
   const needDp = form.role === 'Admin DP';
+  const needSupervised = form.role === 'SPV Drop Point';
   const canSave =
-    form.nama.trim() && (editing || form.email.trim()) && (!needDp || form.dropPoint) && (!needDp || activeDps.length > 0);
+    form.nama.trim() &&
+    (editing || form.email.trim()) &&
+    form.nik.trim() &&
+    (!needDp || form.dropPoint) &&
+    (!needDp || activeDps.length > 0);
 
   // WAJIB: base-ui Select butuh peta value->label eksplisit (`items`) supaya
   // trigger menampilkan label yang benar, bukan value mentah.
-  const roleItems: Record<string, string> = { 'Admin DP': 'Admin DP', 'Admin Cabang': 'Admin Cabang' };
+  const jabatanItems = Object.fromEntries(selectableJabatan.map((j) => [j.Nama, j.Nama]));
   const dpItems = Object.fromEntries(activeDps.map((d) => [d['Kode DP'], `${d['Kode DP']} — ${d['Nama DP']}`]));
 
   return (
@@ -223,6 +299,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                   <tr>
                     <th className="h-8 border-b px-3 text-left font-medium">Nama</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Email</th>
+                    <th className="h-8 border-b px-3 text-left font-medium">NIK</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Role</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Drop Point</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Status</th>
@@ -232,13 +309,23 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                 <tbody>
                   {pageRows.map((r) => (
                     <tr key={r.Email} className="border-b last:border-0">
-                      <td className="px-3 py-1.5 font-medium">{r.Nama}</td>
+                      <td className="px-3 py-1.5 font-medium">
+                        <span className="inline-flex items-center gap-1.5">
+                          {r.Nama}
+                          {r['Tipe Akun'] === 'general' && (
+                            <span className="bg-accent-blue/12 text-accent-blue rounded px-1.5 py-0.5 text-[10px] font-medium">
+                              General
+                            </span>
+                          )}
+                        </span>
+                      </td>
                       <td className="text-muted-foreground px-3 py-1.5">{r.Email}</td>
+                      <td className="text-muted-foreground px-3 py-1.5 font-mono">{r.NIK || '—'}</td>
                       <td className="px-3 py-1.5">
                         <span
                           className={cn(
                             'rounded px-1.5 py-0.5 text-[11px] font-medium',
-                            r.Role === 'Admin Cabang'
+                            hasFullAccess(r.Role)
                               ? 'bg-brand-muted text-brand'
                               : 'bg-accent-blue/12 text-accent-blue',
                           )}
@@ -293,7 +380,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                   ))}
                   {pageRows.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="text-muted-foreground py-10 text-center">
+                      <td colSpan={7} className="text-muted-foreground py-10 text-center">
                         {q ? 'Tidak ada user yang cocok.' : 'Belum ada user. Klik “Tambah User”.'}
                       </td>
                     </tr>
@@ -324,7 +411,9 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit User' : 'Tambah User'}</DialogTitle>
             <DialogDescription>
-              {editing ? 'Email tidak bisa diubah (jadi identitas login SSO).' : 'Email harus akun Google yang dipakai login.'}
+              {editing
+                ? 'Email tidak bisa diubah (identitas unik akun). NIK dipakai untuk login utama.'
+                : 'Email jadi identitas unik akun. NIK dipakai untuk login utama.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -333,7 +422,7 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
               <Input id="nama" value={form.nama} onChange={(e) => setForm({ ...form, nama: e.target.value })} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email (akun Google)</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -344,14 +433,31 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="role">Role</Label>
-              <Select items={roleItems} value={form.role} onValueChange={(v) => setForm({ ...form, role: (v ?? 'Admin DP') as Role })}>
-                <SelectTrigger id="role" className="h-9 w-full text-sm">
+              <Label htmlFor="nik">NIK</Label>
+              <Input
+                id="nik"
+                value={form.nik}
+                onChange={(e) => setForm({ ...form, nik: e.target.value })}
+                placeholder="Nomor Induk Karyawan"
+                className="font-mono"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="jabatan">Jabatan</Label>
+              <Select
+                items={jabatanItems}
+                value={form.role}
+                onValueChange={(v) => setForm({ ...form, role: (v ?? 'Admin DP') as AssignableRole })}
+              >
+                <SelectTrigger id="jabatan" className="h-9 w-full text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Admin DP">Admin DP</SelectItem>
-                  <SelectItem value="Admin Cabang">Admin Cabang</SelectItem>
+                  {selectableJabatan.map((j) => (
+                    <SelectItem key={j.Id} value={j.Nama}>
+                      {j.Nama}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -378,6 +484,45 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                 )}
                 <p className="text-muted-foreground text-[11px]">
                   Dipilih dari daftar Master Drop Point (bukan ketik bebas) supaya cocok dengan data Long Tail.
+                </p>
+              </div>
+            )}
+            {needSupervised && (
+              <div className="space-y-1.5">
+                <Label>Drop Point yang Disupervisi</Label>
+                {activeDps.length === 0 ? (
+                  <p className="text-destructive text-xs">
+                    Belum ada Drop Point aktif. Tambahkan di Master Drop Point dulu.
+                  </p>
+                ) : (
+                  <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-2">
+                    {activeDps.map((d) => {
+                      const kode = d['Kode DP'];
+                      const checked = form.supervisedDps.includes(kode);
+                      return (
+                        <label key={kode} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                supervisedDps: e.target.checked
+                                  ? [...form.supervisedDps, kode]
+                                  : form.supervisedDps.filter((k) => k !== kode),
+                              })
+                            }
+                          />
+                          {kode} — {d['Nama DP']}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                <p className="text-muted-foreground text-[11px]">
+                  Bisa pilih lebih dari satu, atau kosongkan dulu & assign belakangan. DP yang di-uncheck akan
+                  dilepas dari supervisi user ini. Cara lain yang tetap sinkron: assign per-DP satu-satu lewat
+                  halaman Cabang → Drop Point.
                 </p>
               </div>
             )}

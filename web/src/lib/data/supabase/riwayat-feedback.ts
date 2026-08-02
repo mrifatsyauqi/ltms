@@ -1,5 +1,6 @@
 import { db } from './client';
-import { requireActor } from './helpers';
+import { requireActor, resolveScopedDps } from './helpers';
+import { requirePermission } from './permissions';
 import { ApiError } from '@/lib/errors';
 import { isClearTTD, jakartaParts } from './longtail-shared';
 import type { RiwayatFeedbackRow } from '@/lib/data/types';
@@ -31,15 +32,16 @@ export async function listRiwayatFeedback(
   dpFilter?: string,
 ): Promise<RiwayatFeedbackRow[]> {
   const actor = await requireActor(actorEmail);
-  const isCabang = actor.role === 'Admin Cabang';
+  await requirePermission(actor, 'riwayat_feedback');
+  const scopedDps = await resolveScopedDps(actor);
 
   let q = db()
     .from('activity_log')
     .select('waybill, user_email, dp, attempt_ke, data_baru, sumber, created_at')
     .in('sumber', ['Manual Feedback', AUTO_CLOSE])
     .order('created_at', { ascending: false });
-  if (!isCabang) {
-    q = q.eq('dp', actor.dropPoint);
+  if (scopedDps) {
+    q = q.in('dp', scopedDps);
   } else if (dpFilter) {
     q = q.eq('dp', dpFilter);
   }

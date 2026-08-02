@@ -12,7 +12,7 @@ export function CredentialsLoginForm() {
   const [error, formAction, pending] = useActionState(credentialsSignInAction, undefined);
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
 
   useEffect(() => {
     // localStorage tidak tersedia saat SSR; baca setelah mount (bukan lazy
@@ -21,14 +21,14 @@ export function CredentialsLoginForm() {
     const saved = localStorage.getItem('ltms-remember-email');
     if (saved) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setEmail(saved);
+      setIdentifier(saved);
       setRemember(true);
     }
   }, []);
 
   const handleSubmit = (formData: FormData) => {
     if (remember) {
-      localStorage.setItem('ltms-remember-email', formData.get('email') as string);
+      localStorage.setItem('ltms-remember-email', formData.get('identifier') as string);
     } else {
       localStorage.removeItem('ltms-remember-email');
     }
@@ -38,8 +38,17 @@ export function CredentialsLoginForm() {
   return (
     <form action={handleSubmit} className="space-y-4">
       <div className="space-y-1.5">
-        <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" required autoComplete="username" placeholder="nama@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <Label htmlFor="identifier">NIK / Email</Label>
+        <Input
+          id="identifier"
+          name="identifier"
+          type="text"
+          required
+          autoComplete="username"
+          placeholder="NIK atau email terdaftar"
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
+        />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="password">Password</Label>
@@ -58,7 +67,7 @@ export function CredentialsLoginForm() {
       <div className="flex items-center space-x-2">
         <Checkbox id="remember" name="remember" checked={remember} onCheckedChange={(c) => setRemember(c === true)} />
         <label htmlFor="remember" className="text-muted-foreground text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-          Simpan username
+          Simpan NIK/Email
         </label>
       </div>
       {error && (
@@ -66,8 +75,8 @@ export function CredentialsLoginForm() {
           {error}
         </p>
       )}
-      <Button type="submit" variant="outline" className="w-full" disabled={pending}>
-        {pending ? 'Masuk…' : 'Masuk dengan Email'}
+      <Button type="submit" className="w-full" disabled={pending}>
+        {pending ? 'Masuk…' : 'Masuk'}
       </Button>
     </form>
   );

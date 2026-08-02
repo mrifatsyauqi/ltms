@@ -1,6 +1,8 @@
 import { db } from './client';
-import { requireActor, requireRole } from './helpers';
+import { attributionName, requireActor, requireRole, resolveScopedDps, type Actor } from './helpers';
+import { requirePermission } from './permissions';
 import { ApiError } from '@/lib/errors';
+import { FULL_ACCESS_ROLES } from '@/lib/roles';
 import {
   appendActivityLog,
   decideFeedbackTransition,
@@ -21,8 +23,19 @@ async function findRow(waybill: string): Promise<LongtailDbRow | null> {
 const sameDp = (a: string | null, b: string) =>
   String(a ?? '').trim().toLowerCase() === String(b).trim().toLowerCase();
 
+/** FORBIDDEN kalau dp_sampai waybill di luar cakupan actor. Full access = tak
+ *  pernah ditolak; SPV Drop Point = boleh kalau salah satu DP disupervisi;
+ *  Admin DP = boleh kalau DP-nya sendiri (perilaku sama seperti sebelumnya). */
+async function assertCanAccessDp(actor: Actor, dpSampai: string | null): Promise<void> {
+  const scopedDps = await resolveScopedDps(actor);
+  if (scopedDps && !scopedDps.some((dp) => sameDp(dpSampai, dp))) {
+    throw new ApiError('FORBIDDEN', 'Tidak punya akses ke waybill ini');
+  }
+}
+
 export async function listLongTail(actorEmail: string, dpFilter?: string): Promise<LongTailRow[]> {
   const actor = await requireActor(actorEmail);
+  await requirePermission(actor, 'feedback_longtail_view');
   const rows = await fetchLongtailScoped(actor, dpFilter);
   return rows.map(decorateLongTailRow);
 }
@@ -31,22 +44,21 @@ export async function listLongTail(actorEmail: string, dpFilter?: string): Promi
  * Semua baris LongTail TANPA auth, selalu "Semua DP" - dipakai endpoint
  * publik (Link Berbagi Laporan) setelah token divalidasi terpisah. Aktor
  * sintetis ('Admin Cabang', dropPoint kosong) hanya utk lolos syarat
- * `fetchLongtailScoped` (role !== 'Admin Cabang' -> scope ke 1 DP) - tak
- * pernah benar2 dipakai utk otorisasi krn tak ada requireActor/requireRole
- * di jalur ini sama sekali.
+ * `fetchLongtailScoped`/`resolveScopedDps` (role di luar FULL_ACCESS_ROLES ->
+ * scope terbatas) - tak pernah benar2 dipakai utk otorisasi krn tak ada
+ * requireActor/requireRole di jalur ini sama sekali.
  */
 export async function listLongTailPublic(): Promise<LongTailRow[]> {
-  const rows = await fetchLongtailScoped({ email: '', role: 'Admin Cabang', dropPoint: '' });
+  const rows = await fetchLongtailScoped({ id: '', email: '', role: 'Admin Cabang', dropPoint: '', nik: '', namaTampilan: '', tipeAkun: 'individual' });
   return rows.map(decorateLongTailRow);
 }
 
 export async function getLongTail(actorEmail: string, waybill: string): Promise<LongTailRow> {
   const actor = await requireActor(actorEmail);
+  await requirePermission(actor, 'feedback_longtail_view');
   const row = await findRow(waybill);
   if (!row) throw new ApiError('NOT_FOUND', 'Waybill tidak ditemukan');
-  if (actor.role !== 'Admin Cabang' && !sameDp(row.dp_sampai, actor.dropPoint)) {
-    throw new ApiError('FORBIDDEN', 'Tidak punya akses ke waybill ini');
-  }
+  await assertCanAccessDp(actor, row.dp_sampai);
   return decorateLongTailRow(row);
 }
 
@@ -57,15 +69,14 @@ export async function submitFeedback(
   baseVersion?: string,
 ): Promise<LongTailRow> {
   const actor = await requireActor(actorEmail);
+  await requirePermission(actor, 'feedback_longtail_edit');
   const feedback = String(feedbackRaw ?? '').trim();
   if (!waybill) throw new ApiError('VALIDATION_ERROR', 'waybill wajib diisi');
   if (!feedback) throw new ApiError('VALIDATION_ERROR', 'feedback tidak boleh kosong');
 
   const current = await findRow(waybill);
   if (!current) throw new ApiError('NOT_FOUND', 'Waybill tidak ditemukan');
-  if (actor.role !== 'Admin Cabang' && !sameDp(current.dp_sampai, actor.dropPoint)) {
-    throw new ApiError('FORBIDDEN', 'Tidak punya akses ke waybill ini');
-  }
+  await assertCanAccessDp(actor, current.dp_sampai);
   // Baris Clear TTD di LongTail AKTIF (belum diarsipkan) TETAP BISA disubmit
   // ulang - mis. koreksi salah tandai Clear TTD kembali ke status lain (lihat
   // logic wasClearTTD/willBeClearTTD di bawah utk aturan freeze/resume &
@@ -111,7 +122,7 @@ export async function submitFeedback(
   }
 
   await appendActivityLog({
-    user: actor.email,
+    user: attributionName(actor),
     dp: String(current.dp_sampai ?? ''),
     waybill,
     attempt: await nextAttempt(waybill),
@@ -127,7 +138,7 @@ export async function createLongTail(
   actorEmail: string,
   data: CreateLongTailInput,
 ): Promise<{ noWaybill: string }> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   const noWaybill = String(data?.noWaybill ?? '').trim();
   if (!noWaybill) throw new ApiError('VALIDATION_ERROR', 'No. Waybill wajib diisi');
 
@@ -157,13 +168,14 @@ export async function updateLongTail(
   waybill: string,
   data: UpdateLongTailInput,
 ): Promise<LongTailRow> {
-  // Admin Cabang SAJA (bukan sameDp spt getLongTail/submitFeedback) - fungsi
-  // ini bisa mengubah field `dp_sampai` sendiri (lihat map di bawah), jadi
-  // TIDAK BOLEH diberikan ke Admin DP sekalipun untuk baris di DP-nya sendiri
-  // (kalau tidak, Admin DP bisa memindahkan waybill-nya keluar dari DP-nya
-  // sendiri via field itu). PRD Bagian 5: Admin DP "hanya dapat MELIHAT data
-  // sesuai DP" - tidak ada hak edit baris LongTail umum, cuma submitFeedback.
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  // FULL_ACCESS_ROLES SAJA (bukan assertCanAccessDp spt getLongTail/submitFeedback)
+  // - fungsi ini bisa mengubah field `dp_sampai` sendiri (lihat map di bawah),
+  // jadi TIDAK BOLEH diberikan ke Admin DP/SPV Drop Point sekalipun untuk
+  // baris di cakupan mereka sendiri (kalau tidak, mereka bisa memindahkan
+  // waybill keluar dari cakupannya via field itu). PRD Bagian 5: Admin DP
+  // "hanya dapat MELIHAT data sesuai DP" - tidak ada hak edit baris LongTail
+  // umum, cuma submitFeedback (sama berlaku utk SPV Drop Point).
+  requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   const current = await findRow(waybill);
   if (!current) throw new ApiError('NOT_FOUND', 'Waybill tidak ditemukan');
   // Feedback SENGAJA tidak diubah di sini (hanya lewat submitFeedback).
@@ -193,13 +205,13 @@ export async function updateLongTail(
 }
 
 export async function deleteLongTail(actorEmail: string, waybill: string): Promise<{ waybill: string }> {
-  const actor = requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
   if (!waybill) throw new ApiError('VALIDATION_ERROR', 'waybill wajib diisi');
   const target = await findRow(waybill);
   if (!target) throw new ApiError('NOT_FOUND', 'Waybill tidak ditemukan');
 
   await appendActivityLog({
-    user: actor.email,
+    user: attributionName(actor),
     dp: String(target.dp_sampai ?? ''),
     waybill,
     attempt: await nextAttempt(waybill),
@@ -230,14 +242,16 @@ async function countTable(table: string): Promise<number> {
 }
 
 export async function previewResetLongTail(actorEmail: string): Promise<ResetPreview> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'pengaturan');
   const counts: Record<string, number> = {};
   for (const t of RESET_TARGETS) counts[t.key] = await countTable(t.table);
   return { dryRun: true, counts };
 }
 
 export async function resetLongTailData(actorEmail: string, targets?: string[]): Promise<ResetResult> {
-  requireRole(await requireActor(actorEmail), ['Admin Cabang']);
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'pengaturan');
   const cleared: Record<string, number> = {};
   
   const tablesToReset = targets 

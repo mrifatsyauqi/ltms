@@ -1,5 +1,7 @@
 import { db } from './client';
-import { requireActor } from './helpers';
+import { requireActor, resolveScopedDps } from './helpers';
+import { hasFullAccess } from '@/lib/roles';
+import { requirePermission } from './permissions';
 import { ApiError } from '@/lib/errors';
 import {
   categorizeFeedback,
@@ -10,13 +12,17 @@ import {
 } from './longtail-shared';
 import type { DashboardData } from '@/lib/data/types';
 
-/** Ambil baris LongTail ter-scope: Admin DP -> DP-nya; Admin Cabang -> semua atau 1 DP (filter CAKUPAN). */
-async function fetchScoped(dpFilter: string | null): Promise<LongtailDbRow[]> {
+type DpFilter = string | string[] | null;
+
+/** Ambil baris LongTail ter-scope: Admin DP -> DP-nya; SPV Drop Point -> semua
+ *  DP yang disupervisi (array); full access -> semua atau 1 DP (filter CAKUPAN). */
+async function fetchScoped(dpFilter: DpFilter): Promise<LongtailDbRow[]> {
   const PAGE = 1000;
   const out: LongtailDbRow[] = [];
   for (let from = 0; ; from += PAGE) {
     let q = db().from('longtail').select('*').order('no_waybill').range(from, from + PAGE - 1);
-    if (dpFilter) q = q.eq('dp_sampai', dpFilter);
+    if (Array.isArray(dpFilter)) q = q.in('dp_sampai', dpFilter);
+    else if (dpFilter) q = q.eq('dp_sampai', dpFilter);
     const { data, error } = await q;
     if (error) throw new ApiError('INTERNAL_ERROR', error.message);
     const batch = (data ?? []) as LongtailDbRow[];
@@ -26,19 +32,69 @@ async function fetchScoped(dpFilter: string | null): Promise<LongtailDbRow[]> {
   return out;
 }
 
+/** Ambil SEMUA baris Activity_Log "Manual Feedback" hari ini (Jakarta) ter-scope
+ *  DP, dipakai HANYA utk gauge "Progress Hari Ini" (bukan kolom "Sudah (Total)"
+ *  di tabel Progress per Drop Point - itu cumulative, lihat computeDashboard).
+ *  Dipaginasi spt fetchScoped() di atas sbg defensive hardening: PostgREST/
+ *  Supabase default memotong response unbounded di 1000 baris - kalau
+ *  volume "Manual Feedback" hari ini (system-wide) suatu saat lewat 1000,
+ *  select tanpa .range() akan diam-diam terpotong. (Dicek: BUKAN penyebab
+ *  under-count BATANG01 yg dilaporkan - volume hari itu cuma 43 baris,
+ *  jauh di bawah 1000; root cause sebenarnya adalah kolom "Sudah" sempat
+ *  keliru di-scope ke hari ini padahal seharusnya cumulative - lihat commit
+ *  history. Paginasi ini tetap dipertahankan sbg pencegahan ke depan.) */
+async function fetchTodayActivityLog(dpFilter: DpFilter, today: string): Promise<{ waybill: string }[]> {
+  const PAGE = 1000;
+  const out: { waybill: string }[] = [];
+  for (let from = 0; ; from += PAGE) {
+    let q = db()
+      .from('activity_log')
+      .select('waybill')
+      .eq('sumber', 'Manual Feedback')
+      .gte('created_at', `${today}T00:00:00+07:00`)
+      .lte('created_at', `${today}T23:59:59.999+07:00`)
+      .order('id')
+      .range(from, from + PAGE - 1);
+    if (Array.isArray(dpFilter)) q = q.in('dp', dpFilter);
+    else if (dpFilter) q = q.eq('dp', dpFilter);
+    const { data, error } = await q;
+    if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+    const batch = (data ?? []) as { waybill: string }[];
+    out.push(...batch);
+    if (batch.length < PAGE) break;
+  }
+  return out;
+}
+
 /**
- * Semua angka dihitung & di-scope server-side (Admin DP hanya DP-nya). `dp`
- * opsional: bila diisi (Admin Cabang memilih 1 DP di filter CAKUPAN) memfilter
- * ke DP itu memakai jalur yang sama dengan Admin DP. Read-only.
+ * Semua angka dihitung & di-scope server-side (Admin DP hanya DP-nya, SPV
+ * Drop Point semua DP yang disupervisi - atau 1 DP tunggal kalau `dp` diisi
+ * & tervalidasi ada di daftar yang disupervisinya, lihat SupervisedScopeBox
+ * di sidebar). `dp` utk full access: bila diisi (memilih 1 DP di filter
+ * CAKUPAN) memfilter ke DP itu tanpa perlu validasi tambahan (sudah bebas
+ * DP manapun). Read-only.
  */
 export async function getDashboard(actorEmail: string, dp?: string): Promise<DashboardData> {
   const actor = await requireActor(actorEmail);
-  const isCabang = actor.role === 'Admin Cabang';
+  await requirePermission(actor, 'dashboard');
+  const isFullAccess = hasFullAccess(actor.role);
 
   // Tentukan filter DP efektif.
-  let dpFilter: string | null = null;
-  if (!isCabang) dpFilter = actor.dropPoint;
-  else if (dp && String(dp) !== 'ALL') dpFilter = String(dp);
+  let dpFilter: DpFilter = null;
+  if (isFullAccess) {
+    if (dp && String(dp) !== 'ALL') dpFilter = String(dp);
+  } else {
+    const scopedDps = await resolveScopedDps(actor);
+    // `dp` dari SPV Drop Point HANYA dipakai kalau memang salah satu DP yang
+    // disupervisinya sendiri (tervalidasi thd resolveScopedDps, bukan
+    // dipercaya mentah2 dari client) - persempit ke 1 DP itu; selain itu
+    // (tak diisi/'ALL'/tak valid) tetap agregat SEMUA DP yang disupervisi.
+    if (dp && String(dp) !== 'ALL' && scopedDps?.includes(String(dp))) {
+      dpFilter = String(dp);
+    } else {
+      dpFilter = scopedDps;
+    }
+  }
 
   return computeDashboard(dpFilter, actor.role, actor.dropPoint || '');
 }
@@ -54,26 +110,19 @@ export async function getDashboardPublic(): Promise<DashboardData> {
 }
 
 /** Inti agregasi Dashboard tanpa auth — dipakai getDashboard (live) & snapshot cron. */
-async function computeDashboard(dpFilter: string | null, role: string, dropPoint: string): Promise<DashboardData> {
+async function computeDashboard(dpFilter: DpFilter, role: string, dropPoint: string): Promise<DashboardData> {
   // Progress Hari Ini: waybill (yang masih ada, ter-scope) dengan Manual Feedback hari ini (Jakarta).
   const today = jakartaTodayIso();
-  let alQ = db()
-    .from('activity_log')
-    .select('waybill')
-    .eq('sumber', 'Manual Feedback')
-    .gte('created_at', `${today}T00:00:00+07:00`)
-    .lte('created_at', `${today}T23:59:59.999+07:00`);
-  if (dpFilter) alQ = alQ.eq('dp', dpFilter);
 
-  // fetchScoped() (paginasi longtail) & query activity_log di atas SALING
-  // INDEPENDEN (activity_log tak butuh hasil longtail sama sekali, baru
-  // digabung lewat currentWb SETELAH loop di bawah) -> jalankan BERSAMAAN,
-  // bukan menunggu satu selesai baru mulai yang lain. Urutan pemrosesan
-  // `rows` di loop bawah TIDAK berubah sama sekali (masih sequential,
-  // masih urutan yg sama dari fetchScoped) - yang paralel murni fetch-nya.
-  const [rows, alRes] = await Promise.all([fetchScoped(dpFilter), alQ]);
-  const { data: alData, error: alErr } = alRes;
-  if (alErr) throw new ApiError('INTERNAL_ERROR', alErr.message);
+  // fetchScoped() (longtail) & fetchTodayActivityLog() (activity_log) di atas
+  // SALING INDEPENDEN (activity_log tak butuh hasil longtail sama sekali,
+  // baru digabung lewat currentWb SETELAH loop di bawah) -> jalankan
+  // BERSAMAAN, bukan menunggu satu selesai baru mulai yang lain. Urutan
+  // pemrosesan `rows` di loop bawah TIDAK berubah sama sekali (masih
+  // sequential, masih urutan yg sama dari fetchScoped) - yang paralel murni
+  // fetch-nya. Keduanya sudah dipaginasi masing-masing (lihat komentar
+  // fetchTodayActivityLog).
+  const [rows, alData] = await Promise.all([fetchScoped(dpFilter), fetchTodayActivityLog(dpFilter, today)]);
 
   const total = rows.length;
   let sudah = 0, clearTTD = 0, lebih3 = 0, paketTertua = 0, paketTertuaWb = '';
@@ -122,9 +171,17 @@ async function computeDashboard(dpFilter: string | null, role: string, dropPoint
     currentWb.add(String(r.no_waybill ?? '').trim().toLowerCase());
   }
 
+  // "Sudah" di tabel Progress per Drop Point = CUMULATIVE (all-time, sama
+  // spt "Sudah Feedback Keseluruhan" di ringkasan atas) - BUKAN "hari ini".
+  // Ini SENGAJA beda cakupan waktu dari gauge "Progress Hari Ini" di
+  // bawahnya (activity_log hari ini) - dua metrik berbeda tujuan (coverage
+  // total vs kecepatan harian), bukan bug. Sempat "disamakan" ke hari ini
+  // (lihat riwayat commit), lalu DICABUT setelah dikonfirmasi ke lapangan:
+  // definisi yang benar utk kolom tabel ini memang cumulative. UI melabeli
+  // kolom ini "Sudah (Total)" persis krn ini - lihat dashboard-client.tsx.
   const todayWb = new Set<string>();
-  (alData ?? []).forEach((a) => {
-    const k = String((a as { waybill: string }).waybill ?? '').trim().toLowerCase();
+  alData.forEach((a) => {
+    const k = String(a.waybill ?? '').trim().toLowerCase();
     if (currentWb.has(k)) todayWb.add(k);
   });
   const progressHariIni = todayWb.size;
@@ -198,9 +255,20 @@ export async function writeDailySnapshot(): Promise<{ tanggal: string; scopes: n
 
 /**
  * Baca Dashboard "keadaan tanggal X" dari snapshot. Scope ditentukan role/DP
- * aktor (Admin DP -> DP-nya; Admin Cabang -> 'ALL' atau DP terpilih). Null bila
+ * aktor (Admin DP -> DP-nya; full access -> 'ALL' atau DP terpilih). Null bila
  * snapshot tanggal itu belum ada (mis. sebelum fitur aktif). role/dropPoint
  * di-override dari aktor supaya UI konsisten.
+ *
+ * Snapshot harian (writeDailySnapshot) granularitasnya per-DP TUNGGAL ('ALL'
+ * + 1 baris/DP aktif) - belum ada agregat historis multi-DP. SPV Drop Point
+ * BISA lihat snapshot kalau: disupervisi TEPAT 1 DP (jalur sama dgn Admin
+ * DP), ATAU mempersempit sendiri ke 1 DP lewat `dp` (tervalidasi thd
+ * resolveScopedDps - lihat getDashboard, pola sama). Kalau masih "Semua DP
+ * Disupervisi" (agregat, >1 DP, tanpa `dp` valid) sengaja pulang null (bukan
+ * menggabungkan angka snapshot per-DP secara serampangan - beberapa field
+ * spt progress% & paket tertua tidak valid kalau cuma dijumlah). Dashboard
+ * LIVE (getDashboard, bukan fungsi ini) sudah benar mengagregasi real-time
+ * utk SPV multi-DP - keterbatasan ini CUMA di fitur "keadaan tanggal X".
  */
 export async function getDashboardSnapshot(
   actorEmail: string,
@@ -208,10 +276,21 @@ export async function getDashboardSnapshot(
   dp?: string,
 ): Promise<DashboardData | null> {
   const actor = await requireActor(actorEmail);
-  const isCabang = actor.role === 'Admin Cabang';
+  await requirePermission(actor, 'dashboard');
+  const isFullAccess = hasFullAccess(actor.role);
   let scope = 'ALL';
-  if (!isCabang) scope = actor.dropPoint;
-  else if (dp && String(dp) !== 'ALL') scope = String(dp);
+  if (isFullAccess) {
+    if (dp && String(dp) !== 'ALL') scope = String(dp);
+  } else {
+    const scopedDps = await resolveScopedDps(actor);
+    if (dp && String(dp) !== 'ALL' && scopedDps?.includes(String(dp))) {
+      scope = String(dp);
+    } else if (scopedDps && scopedDps.length === 1) {
+      scope = scopedDps[0];
+    } else {
+      return null;
+    }
+  }
 
   const { data, error } = await db()
     .from('dashboard_snapshot')

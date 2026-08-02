@@ -40,6 +40,10 @@ export class FakeQuery {
   limit(n: number) { this.limitCount = n; return this; }
   range(from: number, to: number) { this.rangeFrom = from; this.rangeTo = to; return this; }
   maybeSingle() { this.wantSingle = true; return this; }
+  /** Postgrest .single() - beda dari .maybeSingle() (throw kalau 0/>1 baris)
+   *  di klien asli, tapi utk fake ini disamakan (rows[0] ?? null) - test yg
+   *  memakainya selalu memastikan tepat 1 baris cocok. */
+  single() { this.wantSingle = true; return this; }
   update(patch: Row) { this.mode = 'update'; this.payload = patch; return this; }
   upsert(rows: Row | Row[], opts?: { onConflict?: string }) {
     this.mode = 'upsert'; this.payload = rows; this.upsertKey = opts?.onConflict ?? 'id'; return this;
@@ -83,12 +87,16 @@ export class FakeQuery {
     if (this.mode === 'insert') {
       const rows = (Array.isArray(this.payload) ? this.payload : [this.payload!]).map((r) => ({ ...r }));
       table.push(...rows);
-      return resolve({ data: rows, error: null });
+      return resolve({ data: this.wantSingle ? (rows[0] ?? null) : rows, error: null });
     }
     if (this.mode === 'upsert') {
+      // onConflict bisa composite ('role,menu_key') - cocokkan SEMUA kolomnya,
+      // bukan cuma treat string gabungan itu sbg satu nama kolom literal
+      // (yg tak pernah match apa pun -> upsert jadi selalu INSERT/duplikat).
+      const keyCols = this.upsertKey!.split(',').map((c) => c.trim());
       const rows = Array.isArray(this.payload) ? this.payload : [this.payload!];
       for (const r of rows) {
-        const idx = table.findIndex((t) => t[this.upsertKey!] === r[this.upsertKey!]);
+        const idx = table.findIndex((t) => keyCols.every((col) => t[col] === r[col]));
         if (idx >= 0) table[idx] = { ...table[idx], ...r };
         else table.push({ ...r });
       }

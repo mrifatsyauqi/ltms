@@ -1,22 +1,77 @@
 // Tipe kanonik lapisan data (Supabase-only sejak Tahap 8). Bentuk respons tetap
 // "shape sheet lama" (mis. 'No. Waybill') supaya API & frontend tidak berubah.
 
+import type { AssignableRole } from '@/lib/roles';
+import type { ManageableRole, MenuKey } from '@/lib/data/supabase/permissions';
+
 // ---- Drop Point -------------------------------------------------------------
 export type DropPointRow = {
   'Kode DP': string;
   'Nama DP': string;
   'Wilayah/Cabang': string;
   'Status Aktif': string;
+  /** '' = belum di-assign ke Kota manapun (lihat cabang.ts). */
+  'Kode Kota': string;
+  'Nama Kota': string;
+  /** users.id (uuid) SPV Drop Point - label organisasi, '' = belum ditunjuk. */
+  'SPV Drop Point': string;
+  'SPV Drop Point Nama': string;
+  /** Admin DP yang ter-assign (users.role='Admin DP' + drop_point=kode_dp) -
+   *  REUSE data existing, TANPA constraint unique di DB (bisa 0/1/banyak).
+   *  Ditampilkan apa adanya, bukan diasumsikan selalu satu. */
+  'Admin DP': string[];
 };
 export type CreateDropPointInput = {
   kodeDp: string;
   namaDp: string;
   wilayah?: string;
+  kodeKota?: string | null;
+  spvDropPointUserId?: string | null;
 };
 export type UpdateDropPointInput = Partial<{
   namaDp: string;
   wilayah: string;
   statusAktif: boolean;
+  kodeKota: string | null;
+  spvDropPointUserId: string | null;
+}>;
+/** DP yang disupervisi SPV Drop Point yang sedang login (dipakai sidebar -
+ *  lihat SupervisedScopeBox), BUKAN daftar DP lengkap sistem. */
+export type SupervisedDropPointRow = {
+  'Kode DP': string;
+  'Nama DP': string;
+};
+
+// ---- Jabatan ------------------------------------------------------------------
+export type JabatanRow = {
+  Id: string;
+  Nama: string;
+  Tingkat: number;
+  Deskripsi: string;
+};
+
+// ---- Cabang (Kota) ------------------------------------------------------------
+// Manager Kota/Asisten Manager = LABEL ORGANISASI, bukan role otorisasi -
+// menunjuk ke akun users existing manapun (users.id), tak mengubah hak akses
+// login akun tsb. Field kosong ('') = belum ditunjuk.
+export type CabangRow = {
+  'Kode Kota': string;
+  'Nama Kota': string;
+  'Manager Kota': string;
+  'Manager Kota Nama': string;
+  'Asisten Manager': string;
+  'Asisten Manager Nama': string;
+};
+export type CreateCabangInput = {
+  kodeKota: string;
+  namaKota: string;
+  managerKotaUserId?: string | null;
+  asistenManagerUserId?: string | null;
+};
+export type UpdateCabangInput = Partial<{
+  namaKota: string;
+  managerKotaUserId: string | null;
+  asistenManagerUserId: string | null;
 }>;
 
 // ---- Master Feedback --------------------------------------------------------
@@ -35,8 +90,12 @@ export type FavoriteFeedbackRow = {
 
 // ---- Users ------------------------------------------------------------------
 export type UserRow = {
+  /** users.id (uuid) - identitas stabil lepas dari email/NIK, dipakai FK Cabang/SPV. */
+  Id: string;
   Nama: string;
   Email: string;
+  NIK: string;
+  'Tipe Akun': 'individual' | 'general';
   Role: string;
   'Drop Point': string;
   'Status Aktif': string;
@@ -44,16 +103,32 @@ export type UserRow = {
 export type CreateUserInput = {
   nama: string;
   email: string;
-  role: 'Admin Cabang' | 'Admin DP';
+  nik: string;
+  role: AssignableRole;
   dropPoint?: string;
 };
 export type UpdateUserInput = Partial<{
   nama: string;
-  role: 'Admin Cabang' | 'Admin DP';
+  nik: string;
+  role: AssignableRole;
   dropPoint: string;
   statusAktif: boolean;
 }>;
-export type CredentialsUser = { nama: string; email: string; role: string; dropPoint: string };
+/** Akun General satu per Drop Point (dibuat dari halaman Master Drop Point). */
+export type CreateGeneralAccountResult = {
+  email: string;
+  nik: string;
+  namaTampilan: string;
+};
+export type CredentialsUser = {
+  nama: string;
+  namaTampilan: string;
+  email: string;
+  nik: string;
+  tipeAkun: 'individual' | 'general';
+  role: string;
+  dropPoint: string;
+};
 
 /** Resolusi role + Drop Point dari tabel users (untuk NextAuth). */
 export type AuthUser = {
@@ -193,3 +268,25 @@ export type DashboardData = {
   monitoringDp: MonitoringDpRow[];
   progressPerSprinter: { sprinter: string; total: number; sudah: number; progressPct: number }[];
 };
+
+// ---- Role & Akses -------------------------------------------------------------
+// UI Role & Akses bisa menampilkan/mengedit 5 role total (ManageableRole) -
+// TAPI siapa BOLEH melihat kartu jabatan yang mana dibatasi per actor (Super
+// Admin: semua 5; Admin Cabang/Manager Kota/Asisten Manager Kota: hanya SPV
+// Drop Point/Admin DP) - lihat manageableRolesFor() di
+// lib/data/supabase/permissions.ts.
+export type RoleAksesSummary = { role: ManageableRole; count: number };
+export type RolePermissionRow = { menuKey: MenuKey; enabled: boolean };
+export type UserPermissionRow = { menuKey: MenuKey; enabled: boolean; isOverride: boolean };
+export type RoleAksesAccount = {
+  id: string;
+  nama: string;
+  email: string;
+  nik: string;
+  role: ManageableRole;
+  /** SPV: "Supervisi X Drop Point"; Admin DP: "Drop Point <kode>"; Manager
+   *  Kota/Asisten Manager Kota: "Kota <nama>"; Admin Cabang: label statis. */
+  konteks: string;
+  customCount: number;
+};
+export type RoleAksesAccountDetail = RoleAksesAccount & { permissions: UserPermissionRow[] };

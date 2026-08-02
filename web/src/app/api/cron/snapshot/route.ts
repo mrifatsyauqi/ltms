@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { writeDailySnapshot } from '@/lib/data/dashboard';
+import { hasFullAccess } from '@/lib/roles';
 
 /**
  * Rekam snapshot Dashboard harian (v1.3). Dipanggil:
@@ -20,7 +21,7 @@ async function authorized(request: Request): Promise<boolean> {
   const secret = process.env.CRON_SECRET;
   if (secret && request.headers.get('authorization') === `Bearer ${secret}`) return true;
   const session = await auth();
-  return session?.user?.role === 'Admin Cabang';
+  return hasFullAccess(session?.user?.role);
 }
 
 export async function GET(request: Request) {

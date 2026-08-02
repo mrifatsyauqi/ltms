@@ -4,23 +4,37 @@ import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { ChevronLeft, LogOut } from 'lucide-react';
+import { ChevronDown, ChevronLeft, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { navForRole } from '@/lib/nav';
+import { filterNavByAccess, navForRole, type NavItem } from '@/lib/nav';
+import { hasFullAccess } from '@/lib/roles';
+import type { MenuKey } from '@/lib/data/supabase/permissions';
 import { signOutAction } from '@/app/actions/auth';
 import { ScopeFilter } from '@/components/dashboard/scope-filter';
+import { SupervisedScopeBox } from '@/components/dashboard/supervised-scope-box';
 
 type SidebarProps = {
   role?: string;
   nama?: string;
   dropPoint?: string;
+  /** Akses efektif per menu_key (Role & Akses) - diisi utk SEMUA role gated
+   *  (GATED_ROLES, 5 role termasuk Admin Cabang/Manager Kota/Asisten Manager
+   *  Kota); null HANYA utk Super Admin & role tak dikenal (tak difilter,
+   *  lihat filterNavByAccess & app/(app)/layout.tsx). Dihitung SEKALI di
+   *  Server Component (AppLayout) sebelum render, bukan fetch client-side -
+   *  supaya menu yang dimatikan tak pernah sempat "kelihatan lalu hilang". */
+  menuAccess?: Record<MenuKey, boolean> | null;
 };
 
-export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
+export function Sidebar({ role, nama, dropPoint, menuAccess = null }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
+  // Override manual per item (toggle chevron). Tanpa override, submenu ikut
+  // status default (kebuka otomatis kalau lagi ada di salah satu halaman
+  // anaknya) - dihitung langsung tiap render, bukan lewat effect+setState.
+  const [manualExpand, setManualExpand] = useState<Map<string, boolean>>(new Map());
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const groups = navForRole(role);
+  const groups = filterNavByAccess(navForRole(role, menuAccess), menuAccess);
   const currentView = searchParams.get('view');
 
   function isActive(href: string) {
@@ -29,6 +43,22 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
     // Bedakan "Feedback Long Tail" (/feedback) vs "Data Long Tail" (/feedback?view=data)
     const wantView = query ? new URLSearchParams(query).get('view') : null;
     return (wantView ?? null) === (currentView ?? null);
+  }
+
+  function hasActiveChild(item: NavItem) {
+    return item.children?.some((c) => isActive(c.href)) ?? false;
+  }
+
+  function isExpanded(item: NavItem) {
+    return manualExpand.get(item.href) ?? hasActiveChild(item);
+  }
+
+  function toggleExpanded(item: NavItem) {
+    setManualExpand((prev) => {
+      const next = new Map(prev);
+      next.set(item.href, !isExpanded(item));
+      return next;
+    });
   }
 
   return (
@@ -64,19 +94,28 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
         )}
       </div>
 
-      {/* Konteks DP aktif. Admin Cabang: dropdown filter CAKUPAN (memfilter
-          seluruh Dashboard). Admin DP: label statis DP miliknya. */}
+      {/* Konteks DP aktif. Full access (Admin Cabang/Manager Kota/Asisten
+          Manager Kota/Super Admin - Langkah 3): dropdown filter CAKUPAN ke
+          SEMUA DP di sistem. SPV Drop Point: SupervisedScopeBox merender
+          label+isi sendiri (statis kalau cuma 0/1 DP disupervisi - sama
+          persis pola Admin DP, atau dropdown kalau >1 DP TAPI opsinya cuma
+          DP yang disupervisi). Admin DP: label statis DP miliknya. */}
       {!collapsed && (
         <div className="border-sidebar-border bg-sidebar-accent/50 mx-3 mb-2 rounded-lg border px-2.5 py-1.5">
-          <div className="text-[10px] tracking-wide uppercase opacity-60">
-            {role === 'Admin Cabang' ? 'Cakupan' : 'DP Aktif'}
-          </div>
-          {role === 'Admin Cabang' ? (
-            <ScopeFilter />
+          {hasFullAccess(role) ? (
+            <>
+              <div className="text-[10px] tracking-wide uppercase opacity-60">Cakupan</div>
+              <ScopeFilter />
+            </>
+          ) : role === 'SPV Drop Point' ? (
+            <SupervisedScopeBox />
           ) : (
-            <div className="truncate text-[13px] font-semibold text-sidebar-accent-foreground">
-              {dropPoint || '-'}
-            </div>
+            <>
+              <div className="text-[10px] tracking-wide uppercase opacity-60">DP Aktif</div>
+              <div className="truncate text-[13px] font-semibold text-sidebar-accent-foreground">
+                {dropPoint || '-'}
+              </div>
+            </>
           )}
         </div>
       )}
@@ -94,24 +133,69 @@ export function Sidebar({ role, nama, dropPoint }: SidebarProps) {
               {group.items.map((item) => {
                 const active = isActive(item.href);
                 const Icon = item.icon;
+                const isOpen = isExpanded(item);
 
                 return (
                   <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      aria-current={active ? 'page' : undefined}
-                      title={collapsed ? item.label : undefined}
-                      className={cn(
-                        'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
-                        'focus-visible:ring-sidebar-ring focus-visible:ring-2 focus-visible:outline-none',
-                        active
-                          ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
-                          : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                    <div className="flex items-center">
+                      <Link
+                        href={item.href}
+                        aria-current={active ? 'page' : undefined}
+                        title={collapsed ? item.label : undefined}
+                        className={cn(
+                          'flex flex-1 items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
+                          'focus-visible:ring-sidebar-ring focus-visible:ring-2 focus-visible:outline-none',
+                          active
+                            ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
+                            : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                        )}
+                      >
+                        <Icon className="size-[17px] shrink-0" aria-hidden />
+                        {!collapsed && <span className="truncate">{item.label}</span>}
+                      </Link>
+                      {item.children && !collapsed && (
+                        <button
+                          type="button"
+                          onClick={() => toggleExpanded(item)}
+                          aria-expanded={isOpen}
+                          aria-label={isOpen ? `Tutup submenu ${item.label}` : `Buka submenu ${item.label}`}
+                          className="hover:bg-sidebar-accent focus-visible:ring-sidebar-ring shrink-0 rounded-lg p-1.5 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                        >
+                          <ChevronDown
+                            className={cn('size-3.5 shrink-0 transition-transform', isOpen && 'rotate-180')}
+                            aria-hidden
+                          />
+                        </button>
                       )}
-                    >
-                      <Icon className="size-[17px] shrink-0" aria-hidden />
-                      {!collapsed && <span className="truncate">{item.label}</span>}
-                    </Link>
+                    </div>
+
+                    {item.children && !collapsed && isOpen && (
+                      <ul className="border-sidebar-border mt-0.5 ml-4 space-y-0.5 border-l pl-2">
+                        {item.children.map((child) => {
+                          const childActive = isActive(child.href);
+                          const ChildIcon = child.icon;
+
+                          return (
+                            <li key={child.href}>
+                              <Link
+                                href={child.href}
+                                aria-current={childActive ? 'page' : undefined}
+                                className={cn(
+                                  'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
+                                  'focus-visible:ring-sidebar-ring focus-visible:ring-2 focus-visible:outline-none',
+                                  childActive
+                                    ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
+                                    : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                                )}
+                              >
+                                <ChildIcon className="size-[17px] shrink-0" aria-hidden />
+                                <span className="truncate">{child.label}</span>
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
                   </li>
                 );
               })}

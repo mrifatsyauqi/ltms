@@ -1,19 +1,22 @@
 import { db } from './client';
 import { ApiError } from '@/lib/errors';
-import type { Actor } from './helpers';
+import { resolveScopedDps, type Actor } from './helpers';
 import type { LongtailDbRow } from './longtail-pure';
 
 // Re-export semua helper MURNI supaya import lama dari './longtail-shared' tetap jalan.
 export * from './longtail-pure';
 
-/** Ambil semua baris LongTail ter-scope (Admin DP -> DP-nya, Admin Cabang -> opsional filter dpFilter). */
+/** Ambil semua baris LongTail ter-scope: full access -> opsional filter
+ *  dpFilter (mis. Admin Cabang pilih 1 DP di CAKUPAN); Admin DP -> DP-nya;
+ *  SPV Drop Point -> semua DP yang disupervisi (bisa >1, lihat resolveScopedDps). */
 export async function fetchLongtailScoped(actor: Actor, dpFilter?: string): Promise<LongtailDbRow[]> {
   const PAGE = 1000;
   const out: LongtailDbRow[] = [];
+  const scopedDps = await resolveScopedDps(actor);
   for (let from = 0; ; from += PAGE) {
     let q = db().from('longtail').select('*').order('no_waybill').range(from, from + PAGE - 1);
-    if (actor.role !== 'Admin Cabang') {
-      q = q.eq('dp_sampai', actor.dropPoint);
+    if (scopedDps) {
+      q = q.in('dp_sampai', scopedDps);
     } else if (dpFilter) {
       q = q.eq('dp_sampai', dpFilter);
     }
