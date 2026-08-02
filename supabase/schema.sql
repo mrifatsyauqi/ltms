@@ -163,7 +163,13 @@ create trigger user_permissions_updated before update on user_permissions
 -- (semua true) - matrix baru "berguna" kalau nanti Super Admin sengaja
 -- mematikan sesuatu, tidak ada perubahan visual/akses mendadak begitu fitur
 -- ini live (cegah lockout Admin Cabang/Manager Kota/Asisten Manager Kota
--- dari sistem mereka sendiri).
+-- dari sistem mereka sendiri). PENGECUALIAN: 'master_cabang'/
+-- 'master_drop_point' utk Admin Cabang/Manager Kota/Asisten Manager Kota
+-- default FALSE (bukan bug - keputusan kebijakan: mengelola struktur Kota
+-- antar cabang jadi tanggung jawab EKSKLUSIF Super Admin secara default,
+-- lihat master_cabang_drop_point_default_false_migration.sql) - menu_key
+-- ini TETAP ada di matrix & tetap bisa dinyalakan per-akun oleh Super Admin,
+-- cuma DEFAULT-nya dibalik.
 insert into role_permissions (role, menu_key, enabled)
 select r.role, k.menu_key, true
 from (values ('SPV Drop Point'), ('Admin DP')) as r(role),
@@ -175,10 +181,14 @@ from (values ('Admin Cabang'), ('Manager Kota'), ('Asisten Manager Kota')) as r(
        ('dashboard'), ('feedback_longtail_view'), ('feedback_longtail_edit'),
        ('data_longtail'), ('import_longtail'),
        ('monitoring_delivery_dp'), ('monitoring_delivery_cabang'),
-       ('master_cabang'), ('master_drop_point'), ('master_feedback'), ('user_management'),
+       ('master_feedback'), ('user_management'),
        ('riwayat_import'), ('riwayat_feedback'),
        ('pengaturan'), ('role_akses')
-     ) as k(menu_key);
+     ) as k(menu_key)
+union all
+select r.role, k.menu_key, false
+from (values ('Admin Cabang'), ('Manager Kota'), ('Asisten Manager Kota')) as r(role),
+     (values ('master_cabang'), ('master_drop_point')) as k(menu_key);
 
 -- ---------------------------------------------------------------------------
 -- LOGIN_ATTEMPTS (rate limiting login per NIK — anti brute-force; berbasis DB
