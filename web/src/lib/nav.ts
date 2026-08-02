@@ -60,21 +60,22 @@ export type NavGroup = {
  * master_cabang_drop_point_default_false_migration.sql), TAPI logic ini
  * murni ikut nilai akses aktual, BUKAN hardcode nama role - kalau Super
  * Admin suatu saat menyalakan master_cabang utk 1 akun spesifik lewat "Per
- * Akun", akun itu otomatis dapat struktur "Cabang" (+ Drop Point nested)
- * yang sama persis, tanpa perlu ubah kode ini lagi:
+ * Akun", akun itu otomatis dapat struktur "Cabang" yang sama persis, tanpa
+ * perlu ubah kode ini lagi:
  * - `canCabang` true (Super Admin, atau akun manapun yg diberi akses
- *   master_cabang): SATU item "Cabang", "Drop Point" NESTED sbg children-nya
- *   (struktur organisasi Kota -> Drop Point) - lihat rendering submenu
- *   expand/collapse di Sidebar.
+ *   master_cabang): SATU item "Cabang" SAJA - TIDAK ADA "Drop Point" terpisah
+ *   ATAU nested di sidebar. Drop Point tetap dikelola dari sini, tapi lewat
+ *   TAB di dalam halaman /master/cabang (lihat CabangDropPointTabs), bukan
+ *   lewat item nav terpisah - keputusan desain eksplisit, BUKAN kelalaian
+ *   (sempat salah diimplementasikan sbg nested child, diperbaiki setelah
+ *   dilaporkan muncul di sidebar produksi).
  * - `canCabang` false (praktiknya: Admin Cabang/Manager Kota/Asisten
  *   Manager Kota): TIDAK ADA item "Cabang" sama sekali (mereka memang tak
  *   punya menu itu) - "Drop Point" jadi item LEVEL ATAS tersendiri, sejajar
- *   dgn Master Feedback/User Management, TETAP mengarah ke halaman & data
- *   PERSIS SAMA (`/master/drop-point`, tabel `master_drop_point`) - tak ada
- *   duplikasi data, otomatis sinkron krn satu sumber. Kedua bentuk sama-sama
- *   pakai `menuKey: 'master_drop_point'` - filterNavByAccess yang lalu
- *   memutuskan tampil/tidaknya berdasar akses aktual ke key itu, terlepas
- *   dari bentuk (nested/top-level).
+ *   dgn Master Feedback/User Management, mengarah ke halaman & data PERSIS
+ *   SAMA (`/master/drop-point`, tabel `master_drop_point`) dgn yang dikelola
+ *   dari tab di halaman Cabang - tak ada duplikasi data, otomatis sinkron
+ *   krn satu sumber.
  */
 export function navForRole(role: string | undefined, access: Record<MenuKey, boolean> | null): NavGroup[] {
   if (hasFullAccess(role)) {
@@ -87,10 +88,9 @@ export function navForRole(role: string | undefined, access: Record<MenuKey, boo
     // yang "sengaja belum digating" (rollout 9 menu_key yang dimulai dari
     // audit PRD v2.0 selesai).
     const canCabang = access === null || access.master_cabang === true;
-    const dropPointItem: NavItem = { label: 'Drop Point', href: '/master/drop-point', icon: Database, menuKey: 'master_drop_point' };
     const masterDataItems: NavItem[] = canCabang
-      ? [{ label: 'Cabang', href: '/master/cabang', icon: Building2, menuKey: 'master_cabang', children: [dropPointItem] }]
-      : [dropPointItem];
+      ? [{ label: 'Cabang', href: '/master/cabang', icon: Building2, menuKey: 'master_cabang' }]
+      : [{ label: 'Drop Point', href: '/master/drop-point', icon: Database, menuKey: 'master_drop_point' }];
 
     return [
       {

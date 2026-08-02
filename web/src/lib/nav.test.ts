@@ -218,35 +218,38 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
   // 4 menu_key Master Data (write functions SAJA - listCabang/listDropPoints/
   // listMasterFeedback/listUsers SENGAJA tak digating, dipakai bersama
   // dropdown di halaman lain). Test di bawah ini pakai baseline access()
-  // (master_cabang=true) supaya struktur "Cabang > Drop Point nested" tetap
-  // dipakai (fokus test ini bukan restrukturisasi - itu di describe terpisah
-  // di bawah, ini fokus ke filterNavByAccess() mekanismenya).
+  // (master_cabang=true) supaya item "Cabang" tetap dipakai (fokus test ini
+  // bukan restrukturisasi Cabang/Drop Point - itu di describe terpisah di
+  // bawah, ini fokus ke filterNavByAccess() mekanismenya). "Cabang" SEKARANG
+  // item FLAT tanpa children (Drop Point dikelola via tab di halaman
+  // /master/cabang, BUKAN nested nav item - lihat CabangDropPointTabs).
   // --------------------------------------------------------------------------
 
-  it('11h. "Cabang"/"Drop Point"(nested)/"Master Feedback"/"User Management" punya menuKey masing2', () => {
+  it('11h. "Cabang"/"Master Feedback"/"User Management" punya menuKey masing2, "Cabang" TANPA children (Drop Point dikelola via tab, bukan nested nav)', () => {
     const groups = navForRole('Admin Cabang', access());
     const cabang = groups.flatMap((g) => g.items).find((i) => i.label === 'Cabang');
     assert.equal(cabang?.menuKey, 'master_cabang');
-    assert.equal(cabang?.children?.find((c) => c.label === 'Drop Point')?.menuKey, 'master_drop_point');
+    assert.equal('children' in cabang!, false, '"Cabang" harus flat - TIDAK ADA "Drop Point" nested/terpisah di sidebar utk actor yg punya akses master_cabang');
     const byLabel = new Map(groups.flatMap((g) => g.items).map((i) => [i.label, i]));
     assert.equal(byLabel.get('Master Feedback')?.menuKey, 'master_feedback');
     assert.equal(byLabel.get('User Management')?.menuKey, 'user_management');
   });
 
-  it('11j. BUKTI FIX REKURSI CHILDREN (data nav ASLI): master_drop_point=false SAJA (master_cabang=true) -> "Cabang" TETAP tampil TANPA anak "Drop Point", item lain utuh', () => {
+  it('11j. master_drop_point=false SAJA (master_cabang=true) -> TIDAK MEMPENGARUHI "Cabang" sama sekali (Cabang tak lagi punya children yg bisa disentuh oleh key ini)', () => {
     const acc = access({ master_drop_point: false });
     const groups = navForRole('Admin Cabang', acc);
     const filtered = filterNavByAccess(groups, acc);
     const masterData = filtered.find((g) => g.label === 'Master Data');
     const cabang = masterData?.items.find((i) => i.label === 'Cabang');
     assert.ok(cabang, '"Cabang" tetap tampil - menuKey-nya sendiri (master_cabang) masih true');
-    assert.equal('children' in cabang!, false, 'properti children harus dibuang total, bukan array kosong (lihat komentar filterItems)');
+    assert.equal('children' in cabang!, false, '"Cabang" tetap flat, tak ada children yg bisa dipengaruhi master_drop_point');
     const labels = filtered.flatMap((g) => g.items.map((i) => i.label));
+    assert.ok(!labels.includes('Drop Point'), 'Drop Point tak pernah jadi nav item terpisah saat master_cabang=true - dikelola via tab di /master/cabang');
     assert.ok(labels.includes('Master Feedback'));
     assert.ok(labels.includes('User Management'));
   });
 
-  it('11k. matikan master_feedback/user_management SATU-SATU utk Admin Cabang -> item terkait hilang, sisanya (termasuk Cabang/Drop Point) utuh', () => {
+  it('11k. matikan master_feedback/user_management SATU-SATU utk Admin Cabang -> item terkait hilang, sisanya (termasuk Cabang) utuh', () => {
     for (const [key, label] of [
       ['master_feedback', 'Master Feedback'],
       ['user_management', 'User Management'],
@@ -257,12 +260,10 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
       const labels = filtered.flatMap((g) => g.items.map((i) => i.label));
       assert.ok(!labels.includes(label), `${label} harus hilang krn ${key}=false`);
       assert.ok(labels.includes('Cabang'), `${key}=false tak boleh menyentuh Cabang`);
-      const masterData = filtered.find((g) => g.label === 'Master Data');
-      assert.ok(masterData?.items.some((i) => i.children?.some((c) => c.label === 'Drop Point')), `${key}=false tak boleh menyentuh Drop Point`);
     }
   });
 
-  it('11l. REGRESI: full access dgn SEMUA menu_key true -> Cabang/Drop Point/Master Feedback/User Management tetap tampil, nol perubahan', () => {
+  it('11l. REGRESI: full access dgn SEMUA menu_key true -> Cabang/Master Feedback/User Management tetap tampil, nol perubahan', () => {
     for (const role of ['Admin Cabang', 'Manager Kota', 'Asisten Manager Kota', 'Super Admin']) {
       const acc = access();
       const groups = navForRole(role, acc);
@@ -367,28 +368,35 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
 // Sejak kebijakan default master_cabang=false utk Admin Cabang/Manager Kota/
 // Asisten Manager Kota (master_cabang_drop_point_default_false_migration.sql),
 // struktur nav BUKAN lagi statis per-role - navForRole(role, access) ikut
-// akses NYATA ke 'master_cabang': punya akses -> 1 item "Cabang" + "Drop
-// Point" NESTED di dalamnya (Super Admin, praktiknya); tidak punya akses ->
-// TIDAK ADA "Cabang" sama sekali, "Drop Point" jadi item LEVEL ATAS sendiri
-// (Admin Cabang/Manager Kota/Asisten Manager Kota, praktiknya) - tapi
-// logicnya murni ikut access.master_cabang, BUKAN hardcode nama role, supaya
-// override "Per Akun" (Super Admin menyalakan master_cabang utk 1 akun
-// tertentu) otomatis dapat struktur yang sama tanpa perlu ubah kode.
+// akses NYATA ke 'master_cabang': punya akses -> HANYA 1 item "Cabang", FLAT
+// (TIDAK ADA "Drop Point" nested/terpisah - Drop Point dikelola lewat TAB di
+// dalam halaman /master/cabang, lihat CabangDropPointTabs) (Super Admin,
+// praktiknya); tidak punya akses -> TIDAK ADA "Cabang" sama sekali, "Drop
+// Point" jadi item LEVEL ATAS sendiri (Admin Cabang/Manager Kota/Asisten
+// Manager Kota, praktiknya) - tapi logicnya murni ikut access.master_cabang,
+// BUKAN hardcode nama role, supaya override "Per Akun" (Super Admin
+// menyalakan master_cabang utk 1 akun tertentu) otomatis dapat struktur yang
+// sama tanpa perlu ubah kode.
+//
+// CATATAN REGRESI: percobaan implementasi PERTAMA sempat SALAH memasang
+// "Drop Point" sbg nested child di bawah "Cabang" saat canCabang=true -
+// ketahuan dari laporan produksi (screenshot: Super Admin masih melihat item
+// "Drop Point" di sidebar-nya). Test 18 & 20 di bawah SENGAJA menegaskan
+// TIDAK ADA `children` sama sekali pada "Cabang" utk mengunci regresi ini.
 // ----------------------------------------------------------------------------
 describe('nav.ts: navForRole() - restrukturisasi Cabang (Super Admin) vs Drop Point (Admin Cabang dkk)', () => {
   const MASTER_DP_HREF = '/master/drop-point';
 
-  it('18. access null (Super Admin, bypass permanen) -> HANYA "Cabang" di grup Master Data, "Drop Point" NESTED di dalamnya, TIDAK ADA "Drop Point" level atas', () => {
+  it('18. access null (Super Admin, bypass permanen) -> HANYA "Cabang" di grup Master Data, FLAT (TIDAK ADA "Drop Point" nested ATAU level atas)', () => {
     const groups = navForRole('Super Admin', null);
     const masterData = groups.find((g) => g.label === 'Master Data');
     const topLevelLabels = masterData!.items.map((i) => i.label);
     assert.deepEqual(topLevelLabels, ['Cabang', 'Master Feedback', 'User Management', 'Role & Akses']);
+    assert.ok(!topLevelLabels.includes('Drop Point'), 'Drop Point TIDAK BOLEH jadi item terpisah - dikelola via tab di /master/cabang');
     const cabang = masterData!.items.find((i) => i.label === 'Cabang')!;
     assert.equal(cabang.menuKey, 'master_cabang');
-    assert.equal(cabang.children?.length, 1);
-    assert.equal(cabang.children?.[0].label, 'Drop Point');
-    assert.equal(cabang.children?.[0].href, MASTER_DP_HREF);
-    assert.equal(cabang.children?.[0].menuKey, 'master_drop_point');
+    assert.equal(cabang.href, '/master/cabang');
+    assert.equal('children' in cabang, false, 'REGRESI GUARD: "Cabang" tak boleh punya children sama sekali - Drop Point BUKAN nested nav item');
   });
 
   it("19. DEFAULT PRODUKSI Admin Cabang/Manager Kota/Asisten Manager Kota (master_cabang=false, master_drop_point=true) -> TIDAK ADA \"Cabang\" sama sekali, \"Drop Point\" jadi item LEVEL ATAS tersendiri (bukan nested)", () => {
@@ -407,17 +415,16 @@ describe('nav.ts: navForRole() - restrukturisasi Cabang (Super Admin) vs Drop Po
     }
   });
 
-  it('20. Admin Cabang DIBERI akses master_cabang=true lewat override "Per Akun" -> struktur BERUBAH OTOMATIS jadi SAMA PERSIS dgn Super Admin ("Cabang" + "Drop Point" nested), TANPA ubah kode', () => {
+  it('20. Admin Cabang DIBERI akses master_cabang=true lewat override "Per Akun" -> struktur BERUBAH OTOMATIS jadi SAMA PERSIS dgn Super Admin ("Cabang" flat, TANPA Drop Point terpisah), TANPA ubah kode', () => {
     const acc = access({ master_cabang: true, master_drop_point: true });
     const groups = navForRole('Admin Cabang', acc);
     const filtered = filterNavByAccess(groups, acc);
     const masterData = filtered.find((g) => g.label === 'Master Data');
     const topLevelLabels = masterData!.items.map((i) => i.label);
     assert.ok(topLevelLabels.includes('Cabang'), 'override master_cabang=true -> "Cabang" muncul');
-    assert.ok(!topLevelLabels.includes('Drop Point'), '"Drop Point" tak lagi level atas - sekarang nested di bawah Cabang');
+    assert.ok(!topLevelLabels.includes('Drop Point'), '"Drop Point" tak boleh jadi item terpisah apa pun - dikelola via tab di dalam Cabang');
     const cabang = masterData!.items.find((i) => i.label === 'Cabang')!;
-    assert.equal(cabang.children?.[0].label, 'Drop Point');
-    assert.equal(cabang.children?.[0].href, MASTER_DP_HREF);
+    assert.equal('children' in cabang, false, 'REGRESI GUARD: sama seperti Super Admin - "Cabang" flat, tak ada children');
   });
 
   it('21. Admin Cabang TANPA akses master_cabang MAUPUN master_drop_point -> grup Master Data kehilangan KEDUANYA, item lain (Master Feedback/User Management/Role & Akses) TETAP UTUH', () => {
