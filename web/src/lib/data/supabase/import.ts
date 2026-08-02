@@ -5,7 +5,7 @@ import { ApiError } from '@/lib/errors';
 import { FULL_ACCESS_ROLES } from '@/lib/roles';
 import { isClearTTD, jakartaParts, jakartaStamp, planAutoClose } from './longtail-shared';
 import type { LongtailDbRow } from './longtail-shared';
-import type { ImportBatchRow, ImportResult, MappingTemplate } from '@/lib/data/types';
+import type { AutoClosePreview, ImportBatchRow, ImportPreviewResult, ImportResult, MappingTemplate } from '@/lib/data/types';
 import type { MappedRow } from '@/lib/import/types';
 
 const CHUNK = 500;
@@ -13,6 +13,26 @@ function chunks<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
+}
+
+/** Ambil semua baris LongTail aktif di daftar DP tertentu (paginasi 1000 + chunk .in()). */
+async function fetchActiveForDps(dpsInFile: string[]): Promise<LongtailDbRow[]> {
+  const active: LongtailDbRow[] = [];
+  for (const dpChunk of chunks(dpsInFile, CHUNK)) {
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await db()
+        .from('longtail')
+        .select('*')
+        .in('dp_sampai', dpChunk)
+        .order('no_waybill')
+        .range(from, from + 999);
+      if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+      const batch = (data ?? []) as LongtailDbRow[];
+      active.push(...batch);
+      if (batch.length < 1000) break;
+    }
+  }
+  return active;
 }
 
 /** Kolom lengkap & seragam utk upsert longtail (union kolom harus sama di semua baris). */
@@ -196,7 +216,7 @@ export async function importLongTail(
     };
     const { patch, patchLog } = buildTrackingPatch(row);
 
-    const merged: LongtailUpsert = { ...existing, ...patch };
+    const merged: LongtailUpsert = { ...existing, ...patch, feedback: '' };
     finalRows.set(wb, merged);
     workIndex.set(wb, merged);
     updated++;
@@ -284,23 +304,7 @@ export async function importLongTail(
   let closed = 0, closedClearTTD = 0, closedAlur = 0;
 
   if (dpsInFile.length) {
-    // Ambil semua baris AKTIF di DP tsb (paginasi 1000 + chunk .in()).
-    const active: LongtailDbRow[] = [];
-    for (const dpChunk of chunks(dpsInFile, CHUNK)) {
-      for (let from = 0; ; from += 1000) {
-        const { data, error } = await db()
-          .from('longtail')
-          .select('*')
-          .in('dp_sampai', dpChunk)
-          .order('no_waybill')
-          .range(from, from + 999);
-        if (error) throw new ApiError('INTERNAL_ERROR', error.message);
-        const batch = (data ?? []) as LongtailDbRow[];
-        active.push(...batch);
-        if (batch.length < 1000) break;
-      }
-    }
-
+    const active = await fetchActiveForDps(dpsInFile);
     const plan = planAutoClose(active, presentLower);
     if (plan.length) {
       const archiveRows = plan.map(({ row, decision }) => ({
@@ -359,6 +363,107 @@ export async function importLongTail(
   if (batchErr) throw new ApiError('INTERNAL_ERROR', batchErr.message);
 
   return { batchId, total: incoming.length, inserted, updated, koreksiOtomatis, skipped, closed, closedClearTTD, closedAlur };
+}
+
+/**
+ * Preview kalkulasi import (Read-Only) - menghitung potensi baris baru, update,
+ * koreksi otomatis, dan Auto-Close per DP & per tipe close tanpa mengubah database.
+ */
+export async function previewImport(
+  actorEmail: string,
+  fileName: string,
+  rows: MappedRow[],
+): Promise<ImportPreviewResult> {
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'import_longtail');
+  const incoming = Array.isArray(rows) ? rows : [];
+
+  const items: { wb: string; row: MappedRow }[] = [];
+  let skipped = 0;
+  for (const row of incoming) {
+    const wb = s(row?.noWaybill).trim();
+    if (!wb) { skipped++; continue; }
+    items.push({ wb, row });
+  }
+
+  const wbList = [...new Set(items.map((i) => i.wb))];
+
+  const existingMap = new Map<string, LongtailUpsert>();
+  for (const chunk of chunks(wbList, CHUNK)) {
+    const { data, error } = await db().from('longtail').select('*').in('no_waybill', chunk);
+    if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+    (data ?? []).forEach((r) => existingMap.set((r as LongtailDbRow).no_waybill, fromDb(r as LongtailDbRow)));
+  }
+
+  const workIndex = new Map<string, LongtailUpsert>(existingMap);
+  let inserted = 0, updated = 0, koreksiOtomatis = 0;
+
+  for (const { wb } of items) {
+    const existing = workIndex.get(wb);
+    if (!existing) {
+      inserted++;
+      workIndex.set(wb, { feedback: '' } as LongtailUpsert);
+      continue;
+    }
+
+    if (isClearTTD(existing.feedback)) {
+      koreksiOtomatis++;
+      workIndex.set(wb, { ...existing, feedback: '' });
+    } else {
+      updated++;
+      workIndex.set(wb, { ...existing, feedback: '' });
+    }
+  }
+
+  const presentLower = new Set(items.map((i) => i.wb.toLowerCase()));
+  const dpsInFile = [...new Set(items.map((i) => s(i.row.dpSampai).trim()).filter(Boolean))];
+  const autoClosePreview: AutoClosePreview = {
+    total: 0,
+    clearTTD: 0,
+    closeAlur: 0,
+    perDp: [],
+  };
+
+  if (dpsInFile.length) {
+    const active = await fetchActiveForDps(dpsInFile);
+    const plan = planAutoClose(active, presentLower);
+    if (plan.length) {
+      const dpMap = new Map<string, { dp: string; count: number; clearTTD: number; closeAlur: number }>();
+      let clearCount = 0;
+      let alurCount = 0;
+
+      for (const { row, decision } of plan) {
+        const dpName = s(row.dp_sampai).trim() || '(kosong)';
+        let dpStat = dpMap.get(dpName);
+        if (!dpStat) {
+          dpStat = { dp: dpName, count: 0, clearTTD: 0, closeAlur: 0 };
+          dpMap.set(dpName, dpStat);
+        }
+        dpStat.count++;
+        if (decision.tipeClose === 'Clear TTD') {
+          dpStat.clearTTD++;
+          clearCount++;
+        } else {
+          dpStat.closeAlur++;
+          alurCount++;
+        }
+      }
+
+      autoClosePreview.total = plan.length;
+      autoClosePreview.clearTTD = clearCount;
+      autoClosePreview.closeAlur = alurCount;
+      autoClosePreview.perDp = Array.from(dpMap.values());
+    }
+  }
+
+  return {
+    total: incoming.length,
+    inserted,
+    updated,
+    koreksiOtomatis,
+    skipped,
+    autoClose: autoClosePreview,
+  };
 }
 
 export async function listImportBatches(actorEmail: string): Promise<ImportBatchRow[]> {
