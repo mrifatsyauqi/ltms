@@ -1,6 +1,6 @@
 import { auth } from '@/auth';
 import { PageHeader } from '@/components/layout/page-header';
-import { CabangClient } from '@/components/master/cabang-client';
+import { CabangDropPointTabs } from '@/components/master/cabang-drop-point-tabs';
 import { hasFullAccess } from '@/lib/roles';
 import { getMyMenuAccess } from '@/lib/data/permissions';
 
@@ -33,5 +33,9 @@ export default async function Page() {
     );
   }
 
-  return <CabangClient />;
+  // Kelola Drop Point dari halaman Cabang juga (restrukturisasi nav: Super
+  // Admin cuma punya 1 item "Cabang", Drop Point dikelola dari tab di sini).
+  // Dihitung dari access aktor SENDIRI (bukan diasumsikan true) - lihat
+  // catatan di CabangDropPointTabs.
+  return <CabangDropPointTabs canManageDropPoint={access.master_drop_point === true} />;
 }
