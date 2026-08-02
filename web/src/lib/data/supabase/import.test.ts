@@ -38,8 +38,8 @@ function freshStore(): Map<string, Row[]> {
       sprinter_delivery: 'Budi',
       cod: 'NONCOD',
       delivery_attempt: 1,
-      feedback: '',
-      log_feedback: '',
+      feedback: 'Reschedule besok pagi', // feedback hari sebelumnya
+      log_feedback: '25/07/26 : Reschedule besok pagi',
       perlu_review: false,
       version: 1,
     },
@@ -52,7 +52,7 @@ function freshStore(): Map<string, Row[]> {
 
 const ADMIN_CABANG = 'admincabang@ltms.test';
 
-describe('Revisi dedup import: anomali Clear TTD (eksekusi nyata, fungsi produksi asli)', () => {
+describe('Revisi dedup import: anomali Clear TTD & reset feedback harian', () => {
   let importLib: typeof import('./import.ts');
   let store: Map<string, Row[]>;
 
@@ -102,7 +102,7 @@ describe('Revisi dedup import: anomali Clear TTD (eksekusi nyata, fungsi produks
     assert.equal(log.sumber, 'Koreksi Otomatis (tidak konsisten dengan tarikan)');
   });
 
-  it('regresi: waybill NON-Clear-TTD tetap lewat jalur update biasa (tak terpengaruh perubahan di atas)', async () => {
+  it('waybill NON-Clear-TTD di-update: feedback harian direset kosong, log_feedback riwayat tetap utuh', async () => {
     const rows: MappedRow[] = [
       {
         noWaybill: 'WB-NORMAL',
@@ -120,7 +120,8 @@ describe('Revisi dedup import: anomali Clear TTD (eksekusi nyata, fungsi produks
     const dbRow = store.get('longtail')!.find((r) => r.no_waybill === 'WB-NORMAL')!;
     assert.equal(dbRow.status_terakhir, 'RESCHEDULE');
     assert.equal(dbRow.delivery_attempt, 2);
-    assert.equal(dbRow.feedback, '', 'Feedback baris non-Clear-TTD tak disentuh sama sekali oleh import (hanya lewat submitFeedback)');
+    assert.equal(dbRow.feedback, '', 'Feedback direset kosong agar Admin DP bisa isi follow-up hari ini');
+    assert.equal(dbRow.log_feedback, '25/07/26 : Reschedule besok pagi', 'Riwayat Log Feedback lama tetap utuh');
 
     const log = store.get('activity_log')!.find((r) => r.waybill === 'WB-NORMAL')!;
     assert.equal(log.sumber, 'Auto-update Import');
@@ -135,5 +136,38 @@ describe('Revisi dedup import: anomali Clear TTD (eksekusi nyata, fungsi produks
     const dbRow = store.get('longtail')!.find((r) => r.no_waybill === 'WB-BARU')!;
     assert.equal(dbRow.status_terakhir, 'ON DELIVERY');
     assert.equal(dbRow.perlu_review, false);
+  });
+
+  describe('previewImport (read-only calculation)', () => {
+    it('menghitung estimasi import dan potensi Auto-Close tanpa memodifikasi database', async () => {
+      // Di DP BATANG01 ada 2 waybill aktif di DB: WB-SALAH-TTD (Clear TTD) dan WB-NORMAL (non-Clear TTD).
+      // Jika kita kirim tarikan berisi HANYA WB-BARU untuk BATANG01:
+      // Maka WB-SALAH-TTD dan WB-NORMAL akan diproyeksikan ter-Auto-Close (1 Clear TTD, 1 Close Alur).
+      const rows: MappedRow[] = [
+        { noWaybill: 'WB-BARU', statusTerakhir: 'ON DELIVERY', dpSampai: 'BATANG01' },
+      ];
+
+      const initialLtCount = store.get('longtail')!.length;
+      const initialArchiveCount = store.get('longtail_archive')!.length;
+      const initialLogCount = store.get('activity_log')!.length;
+
+      const preview = await importLib.previewImport(ADMIN_CABANG, 'tarikan-kecil.xlsx', rows);
+
+      assert.equal(preview.total, 1);
+      assert.equal(preview.inserted, 1);
+      assert.equal(preview.updated, 0);
+      assert.equal(preview.koreksiOtomatis, 0);
+      assert.equal(preview.autoClose.total, 2, '2 waybill lama di BATANG01 tidak ada di tarikan -> terhitung Auto-Close');
+      assert.equal(preview.autoClose.clearTTD, 1);
+      assert.equal(preview.autoClose.closeAlur, 1);
+      assert.equal(preview.autoClose.perDp.length, 1);
+      assert.equal(preview.autoClose.perDp[0].dp, 'BATANG01');
+      assert.equal(preview.autoClose.perDp[0].count, 2);
+
+      // Verifikasi Read-Only: store DB tidak boleh berubah sama sekali
+      assert.equal(store.get('longtail')!.length, initialLtCount, 'longtail tidak boleh termutasi');
+      assert.equal(store.get('longtail_archive')!.length, initialArchiveCount, 'archive tidak boleh termutasi');
+      assert.equal(store.get('activity_log')!.length, initialLogCount, 'activity_log tidak boleh termutasi');
+    });
   });
 });

@@ -195,6 +195,20 @@ export type ImportResult = {
   closedClearTTD?: number;
   closedAlur?: number;
 };
+export type AutoClosePreview = {
+  total: number;
+  clearTTD: number;
+  closeAlur: number;
+  perDp: { dp: string; count: number; clearTTD: number; closeAlur: number }[];
+};
+export type ImportPreviewResult = {
+  total: number;
+  inserted: number;
+  updated: number;
+  koreksiOtomatis: number;
+  skipped: number;
+  autoClose: AutoClosePreview;
+};
 export type ImportBatchRow = {
   'Batch ID': string;
   Tanggal: string;

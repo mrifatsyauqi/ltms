@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { AlertTriangle, CheckCircle2, FileSpreadsheet, Trash2, UploadCloud, X, XCircle } from 'lucide-react';
+import { AlertTriangle, Archive, CheckCircle2, FileSpreadsheet, Loader2, Trash2, UploadCloud, X, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SectionCard } from '@/components/layout/section-card';
 import {
@@ -21,14 +21,14 @@ import { parseFile } from '@/lib/import/parse';
 import { autoDetectMapping, isMappingComplete } from '@/lib/import/mapping';
 import { applyMapping, mergeAndDedup } from '@/lib/import/dedup';
 import type { HeaderMapping, MappedRow, ParsedFile } from '@/lib/import/types';
-import type { ImportResult } from '@/lib/data/import';
+import type { ImportPreviewResult, ImportResult } from '@/lib/data/import';
 import { ImportHistory } from './import-history';
 import { ImportStepper, type WizardStep } from './import-stepper';
 import { ImportSummarySidebar, HISTORY_ANCHOR_ID } from './import-summary-sidebar';
 import { ImportFloatingProgress } from './import-floating-progress';
 
 /** Di bawah ambang ini, import memicu banyak Auto-Close -> minta konfirmasi (Bagian 7.4). */
-const SMALL_FILE_THRESHOLD = 100;
+const SMALL_FILE_THRESHOLD = 20;
 
 // Pemetaan kolom SEPENUHNYA otomatis (autoDetectMapping) — sudah terbukti
 // stabil & akurat saat testing, jadi TIDAK ADA langkah/UI mapping manual.
@@ -84,8 +84,14 @@ export function ImportClient() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [parseProgress, setParseProgress] = useState<{ done: number; total: number } | null>(null);
-  // Konfirmasi batch KECIL (<100 baris GABUNGAN, bukan per-file lagi).
-  const [smallConfirm, setSmallConfirm] = useState<{ count: number; resolve: (ok: boolean) => void } | null>(null);
+  // Konfirmasi batch KECIL (<20 baris GABUNGAN, dengan kalkulasi preview Auto-Close).
+  const [smallConfirm, setSmallConfirm] = useState<{
+    count: number;
+    preview: ImportPreviewResult | null;
+    loading: boolean;
+    error: string | null;
+    resolve: (ok: boolean) => void;
+  } | null>(null);
   const [batchImporting, setBatchImporting] = useState(false);
   const [batchResult, setBatchResult] = useState<{ fileNames: string[]; result: ImportResult } | null>(null);
   const [batchError, setBatchError] = useState<string | null>(null);
@@ -100,7 +106,37 @@ export function ImportClient() {
   const step = useMemo(() => (rawStep > maxReached ? maxReached : rawStep), [rawStep, maxReached]);
 
   const askProceedSmall = useCallback(
-    (count: number) => new Promise<boolean>((resolve) => setSmallConfirm({ count, resolve })),
+    (count: number, fileNames: string[], rows: MappedRow[]) =>
+      new Promise<boolean>((resolve) => {
+        setSmallConfirm({
+          count,
+          preview: null,
+          loading: true,
+          error: null,
+          resolve,
+        });
+
+        fetch('/api/import/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName: fileNames.join(', '), rows }),
+        })
+          .then((res) => res.json())
+          .then((body) => {
+            if (body.ok) {
+              setSmallConfirm((prev) => (prev ? { ...prev, loading: false, preview: body.data } : null));
+            } else {
+              setSmallConfirm((prev) =>
+                prev ? { ...prev, loading: false, error: body.message || body.error || 'Gagal memuat preview' } : null,
+              );
+            }
+          })
+          .catch((err) => {
+            setSmallConfirm((prev) =>
+              prev ? { ...prev, loading: false, error: err instanceof Error ? err.message : 'Gagal memuat preview' } : null,
+            );
+          });
+      }),
     [],
   );
 
@@ -166,7 +202,8 @@ export function ImportClient() {
     if (combined.rows.length === 0) return;
 
     if (combined.rows.length < SMALL_FILE_THRESHOLD) {
-      const ok = await askProceedSmall(combined.rows.length);
+      const fileNames = ready.map((e) => e.fileName);
+      const ok = await askProceedSmall(combined.rows.length, fileNames, combined.rows);
       if (!ok) {
         toast.info('Import dibatalkan');
         return;
@@ -344,18 +381,93 @@ export function ImportClient() {
           }
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Batch kecil — konfirmasi import</DialogTitle>
-            <DialogDescription>
-              Gabungan file yang akan diimport hanya berisi{' '}
-              <span className="font-medium">{smallConfirm?.count ?? 0}</span> waybill unik (&lt; {SMALL_FILE_THRESHOLD}).
-              Paket DP dalam batch ini yang <span className="font-medium">tidak</span> tercantum akan otomatis di-
-              <span className="font-medium">Close</span> (Clear TTD / CLOSE ALUR) dan diarsipkan. Pastikan seluruh file
-              tarikan hari ini sudah diunggah bersamaan sebelum melanjutkan.
-            </DialogDescription>
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-500">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle>Konfirmasi Import File Kecil</DialogTitle>
+                <DialogDescription className="mt-0.5">
+                  File tarikan berisi <span className="font-semibold text-foreground">{smallConfirm?.count ?? 0}</span> waybill unik (&lt; {SMALL_FILE_THRESHOLD} baris).
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
-          <DialogFooter>
+
+          <div className="space-y-3 py-1">
+            {smallConfirm?.loading && (
+              <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <p>Menghitung potensi paket yang akan ter-Auto-Close…</p>
+              </div>
+            )}
+
+            {smallConfirm?.error && (
+              <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-500">
+                <p className="font-medium">Gagal memuat preview Auto-Close:</p>
+                <p className="text-xs text-muted-foreground">{smallConfirm.error}</p>
+              </div>
+            )}
+
+            {smallConfirm?.preview && (
+              <div className="space-y-3">
+                <div className="rounded-lg border bg-muted/40 p-3 space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Total Auto-Close & Arsip:</span>
+                    <span className="font-bold text-amber-600 dark:text-amber-400">
+                      {smallConfirm.preview.autoClose.total} paket
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/50 text-xs">
+                    <div className="rounded bg-background/80 p-2">
+                      <p className="text-muted-foreground">Clear TTD (Arsip)</p>
+                      <p className="font-semibold text-foreground">{smallConfirm.preview.autoClose.clearTTD} paket</p>
+                    </div>
+                    <div className="rounded bg-background/80 p-2">
+                      <p className="text-muted-foreground">Close Alur (Arsip)</p>
+                      <p className="font-semibold text-foreground">{smallConfirm.preview.autoClose.closeAlur} paket</p>
+                    </div>
+                  </div>
+                </div>
+
+                {smallConfirm.preview.autoClose.perDp.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">Rincian per Drop Point:</p>
+                    <div className="max-h-36 overflow-y-auto rounded-md border text-xs">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/30 hover:bg-transparent">
+                            <TableHead className="py-1.5 text-xs">Drop Point</TableHead>
+                            <TableHead className="py-1.5 text-right text-xs">Clear TTD</TableHead>
+                            <TableHead className="py-1.5 text-right text-xs">Close Alur</TableHead>
+                            <TableHead className="py-1.5 text-right text-xs">Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {smallConfirm.preview.autoClose.perDp.map((dp) => (
+                            <TableRow key={dp.dp}>
+                              <TableCell className="py-1.5 font-medium">{dp.dp}</TableCell>
+                              <TableCell className="py-1.5 text-right text-muted-foreground">{dp.clearTTD}</TableCell>
+                              <TableCell className="py-1.5 text-right text-muted-foreground">{dp.closeAlur}</TableCell>
+                              <TableCell className="py-1.5 text-right font-semibold text-amber-600 dark:text-amber-400">{dp.count}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-xs text-muted-foreground">
+                  Paket aktif di Drop Point di atas yang <span className="font-medium text-foreground">tidak ada</span> di file tarikan ini akan otomatis dipindahkan ke arsip. Pastikan seluruh file tarikan JMS Anda sudah lengkap.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
               onClick={() => {
@@ -366,6 +478,7 @@ export function ImportClient() {
               Batal
             </Button>
             <Button
+              disabled={smallConfirm?.loading}
               onClick={() => {
                 smallConfirm?.resolve(true);
                 setSmallConfirm(null);
