@@ -50,10 +50,33 @@ export type NavGroup = {
  *   dgn Admin DP (cakupan >1 DP ditegakkan server-side, bukan lewat menu).
  * "Data Long Tail" & "Feedback Long Tail" memakai halaman yang sama (/feedback)
  * dengan view berbeda lewat query param.
- * "Drop Point" nested sbg children di bawah "Cabang" (struktur organisasi
- * Kota -> Drop Point) - lihat rendering submenu expand/collapse di Sidebar.
+ *
+ * "Cabang" vs "Drop Point" (restrukturisasi): BUKAN lagi statis per-role,
+ * tapi ikut akses NYATA ke menu_key 'master_cabang' (`canCabang` di bawah -
+ * `access === null` [Super Admin, bypass permanen] dihitung SEBAGAI akses
+ * penuh, konsisten dgn filterNavByAccess). Praktiknya HANYA Super Admin yang
+ * default punya `master_cabang` (Admin Cabang/Manager Kota/Asisten Manager
+ * Kota default false sejak revisi kebijakan - lihat
+ * master_cabang_drop_point_default_false_migration.sql), TAPI logic ini
+ * murni ikut nilai akses aktual, BUKAN hardcode nama role - kalau Super
+ * Admin suatu saat menyalakan master_cabang utk 1 akun spesifik lewat "Per
+ * Akun", akun itu otomatis dapat struktur "Cabang" (+ Drop Point nested)
+ * yang sama persis, tanpa perlu ubah kode ini lagi:
+ * - `canCabang` true (Super Admin, atau akun manapun yg diberi akses
+ *   master_cabang): SATU item "Cabang", "Drop Point" NESTED sbg children-nya
+ *   (struktur organisasi Kota -> Drop Point) - lihat rendering submenu
+ *   expand/collapse di Sidebar.
+ * - `canCabang` false (praktiknya: Admin Cabang/Manager Kota/Asisten
+ *   Manager Kota): TIDAK ADA item "Cabang" sama sekali (mereka memang tak
+ *   punya menu itu) - "Drop Point" jadi item LEVEL ATAS tersendiri, sejajar
+ *   dgn Master Feedback/User Management, TETAP mengarah ke halaman & data
+ *   PERSIS SAMA (`/master/drop-point`, tabel `master_drop_point`) - tak ada
+ *   duplikasi data, otomatis sinkron krn satu sumber. Kedua bentuk sama-sama
+ *   pakai `menuKey: 'master_drop_point'` - filterNavByAccess yang lalu
+ *   memutuskan tampil/tidaknya berdasar akses aktual ke key itu, terlepas
+ *   dari bentuk (nested/top-level).
  */
-export function navForRole(role: string | undefined): NavGroup[] {
+export function navForRole(role: string | undefined, access: Record<MenuKey, boolean> | null): NavGroup[] {
   if (hasFullAccess(role)) {
     // menuKey di cabang ini dipasang BARENGAN gate page + requirePermission()
     // endpoint-nya (dashboard, feedback_longtail_view, riwayat_feedback,
@@ -63,6 +86,12 @@ export function navForRole(role: string | undefined): NavGroup[] {
     // CHECKPOINT 5). SEMUA 15 menu_key SEKARANG punya menuKey - tak ada lagi
     // yang "sengaja belum digating" (rollout 9 menu_key yang dimulai dari
     // audit PRD v2.0 selesai).
+    const canCabang = access === null || access.master_cabang === true;
+    const dropPointItem: NavItem = { label: 'Drop Point', href: '/master/drop-point', icon: Database, menuKey: 'master_drop_point' };
+    const masterDataItems: NavItem[] = canCabang
+      ? [{ label: 'Cabang', href: '/master/cabang', icon: Building2, menuKey: 'master_cabang', children: [dropPointItem] }]
+      : [dropPointItem];
+
     return [
       {
         items: [
@@ -76,13 +105,7 @@ export function navForRole(role: string | undefined): NavGroup[] {
       {
         label: 'Master Data',
         items: [
-          {
-            label: 'Cabang',
-            href: '/master/cabang',
-            icon: Building2,
-            menuKey: 'master_cabang',
-            children: [{ label: 'Drop Point', href: '/master/drop-point', icon: Database, menuKey: 'master_drop_point' }],
-          },
+          ...masterDataItems,
           { label: 'Master Feedback', href: '/master/feedback', icon: ClipboardList, menuKey: 'master_feedback' },
           { label: 'User Management', href: '/master/users', icon: UserCog, menuKey: 'user_management' },
           { label: 'Role & Akses', href: '/master/role-akses', icon: ShieldCheck, menuKey: 'role_akses' },

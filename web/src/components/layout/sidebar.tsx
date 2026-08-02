@@ -34,7 +34,7 @@ export function Sidebar({ role, nama, dropPoint, menuAccess = null }: SidebarPro
   const [manualExpand, setManualExpand] = useState<Map<string, boolean>>(new Map());
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const groups = filterNavByAccess(navForRole(role), menuAccess);
+  const groups = filterNavByAccess(navForRole(role, menuAccess), menuAccess);
   const currentView = searchParams.get('view');
 
   function isActive(href: string) {

@@ -129,15 +129,15 @@ describe('Langkah 3 - Perluasan Role: full access & SPV Drop Point (eksekusi nya
     }
   });
 
-  it('5. navForRole: Manager Kota & Asisten Manager Kota dapat menu SAMA PERSIS dgn Admin Cabang', () => {
-    const cabangMenu = nav.navForRole('Admin Cabang');
-    assert.deepEqual(nav.navForRole('Manager Kota'), cabangMenu);
-    assert.deepEqual(nav.navForRole('Asisten Manager Kota'), cabangMenu);
-    assert.deepEqual(nav.navForRole('Super Admin'), cabangMenu);
+  it('5. navForRole: Manager Kota & Asisten Manager Kota dapat menu SAMA PERSIS dgn Admin Cabang (access sama - null = akses penuh spt Super Admin)', () => {
+    const cabangMenu = nav.navForRole('Admin Cabang', null);
+    assert.deepEqual(nav.navForRole('Manager Kota', null), cabangMenu);
+    assert.deepEqual(nav.navForRole('Asisten Manager Kota', null), cabangMenu);
+    assert.deepEqual(nav.navForRole('Super Admin', null), cabangMenu);
   });
 
   it('6. navForRole: SPV Drop Point dapat menu SAMA PERSIS dgn Admin DP', () => {
-    assert.deepEqual(nav.navForRole('SPV Drop Point'), nav.navForRole('Admin DP'));
+    assert.deepEqual(nav.navForRole('SPV Drop Point', null), nav.navForRole('Admin DP', null));
   });
 
   it('7. getSupervisedDPs: SPV Drop Point disupervisi TEPAT BATANG01 & BANDAR01, BUKAN SUBAH01', async () => {
