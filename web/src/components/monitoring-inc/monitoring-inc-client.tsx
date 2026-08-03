@@ -17,11 +17,12 @@ import { GenerateSection, ProgressStepItem } from './generate-section';
 import { RecentHistoryCard, HistoryItem } from './recent-history-card';
 import { ResultsView } from './results-view';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 async function api<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -554,31 +555,28 @@ export function MonitoringIncClient({ userDropPoint, userRole, isFullAccess }: M
                   <Lock className="size-3 text-slate-400 ml-1" />
                 </div>
               ) : (
-                <DropdownMenu>
-                  <DropdownMenuTrigger className="flex items-center justify-between w-full gap-2 text-sm font-bold text-slate-900 hover:text-[#E30613] transition-colors focus:outline-none">
-                    <span className="flex items-center gap-1.5 truncate">
+                <Select value={activeTargetCity} onValueChange={(val) => val && handleCityChange(val)}>
+                  <SelectTrigger className="h-7 border-none p-0 shadow-none font-bold text-sm text-slate-900 hover:text-[#E30613] transition-colors focus:ring-0 gap-1.5 min-w-[130px] justify-between">
+                    <div className="flex items-center gap-1.5 truncate">
                       <MapPin className="size-4 text-[#E30613] shrink-0 fill-red-50" />
-                      {activeTargetCity}
-                    </span>
-                    <ChevronDown className="size-3.5 text-slate-400 shrink-0" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="rounded-xl border border-slate-200 p-1 min-w-[160px]">
+                      <SelectValue placeholder="Pilih Kota" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border border-slate-200 min-w-[160px]">
                     {availableCities.map((city) => (
-                      <DropdownMenuItem
+                      <SelectItem
                         key={city}
-                        onClick={() => handleCityChange(city)}
-                        className={`text-xs font-semibold cursor-pointer rounded-lg px-2.5 py-1.5 ${
-                          city === activeTargetCity
-                            ? 'bg-red-50 text-[#E30613]'
-                            : 'text-slate-700 hover:bg-slate-50'
-                        }`}
+                        value={city}
+                        className="text-xs font-semibold cursor-pointer rounded-lg px-2.5 py-1.5"
                       >
-                        <MapPin className="size-3.5 mr-2 text-[#E30613]" />
-                        {city}
-                      </DropdownMenuItem>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="size-3.5 text-[#E30613]" />
+                          <span>{city}</span>
+                        </div>
+                      </SelectItem>
                     ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  </SelectContent>
+                </Select>
               )}
             </div>
           </div>
