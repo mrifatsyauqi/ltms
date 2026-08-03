@@ -1,111 +1,114 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { FileSpreadsheet, RefreshCw, Trash2, ArrowLeftRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { FileSpreadsheet, RefreshCw, Trash2, CheckCircle2 } from 'lucide-react';
+import { UploadedFileInfo } from './types';
 
 interface UploadedFileCardProps {
-  fileName: string;
-  fileSizeFormatted: string;
-  totalResi: number;
-  uploadDateFormatted: string;
-  targetCity: string;
-  onChangeFile: () => void;
-  onRemoveFile: () => void;
-  disabled?: boolean;
+  fileInfo: UploadedFileInfo | null;
+  onReplaceFile: () => void;
+  onDeleteFile: () => void;
+  targetKota: string;
 }
 
 export function UploadedFileCard({
-  fileName,
-  fileSizeFormatted,
-  totalResi,
-  uploadDateFormatted,
-  targetCity,
-  onChangeFile,
-  onRemoveFile,
-  disabled = false,
+  fileInfo,
+  onReplaceFile,
+  onDeleteFile,
+  targetKota,
 }: UploadedFileCardProps) {
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="flex items-center justify-center size-6 rounded-full bg-[#E30613] text-white text-xs font-bold shadow-sm">
-          2
-        </span>
-        <h2 className="text-base font-bold text-slate-900 tracking-tight">File Berhasil Diupload</h2>
+    <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-[230px]">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <span className="flex items-center justify-center size-5 rounded-full bg-red-600 text-white text-xs font-bold">
+            2
+          </span>
+          <h3 className="text-sm font-bold text-slate-900 tracking-tight">
+            File Berhasil Diupload
+          </h3>
+        </div>
+
+        {fileInfo && (
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+            <CheckCircle2 className="size-3 text-emerald-600" />
+            Terverifikasi
+          </span>
+        )}
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: -10, scale: 0.98 }}
-        whileHover={disabled ? undefined : { y: -2, boxShadow: '0 12px 28px rgba(0,0,0,0.07)' }}
-        transition={{ duration: 0.25, ease: 'easeOut' }}
-        className="bg-white border border-[#E5E7EB] rounded-[18px] p-5 shadow-[0_8px_24px_rgba(0,0,0,0.04)] flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-5 transition-shadow"
-      >
-        {/* Left: Excel Icon & File Info */}
-        <div className="flex items-center gap-3.5 min-w-[240px]">
-          <div className="size-12 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shadow-sm shrink-0">
-            <FileSpreadsheet className="size-6 stroke-[2.2]" />
+      {fileInfo ? (
+        <div className="flex flex-col justify-between flex-1 mt-2.5 animate-in fade-in-50 zoom-in-95 duration-200">
+          {/* Top Row: Excel Icon + File info + Action buttons */}
+          <div className="flex items-center justify-between gap-3 bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="size-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <FileSpreadsheet className="size-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-900 truncate max-w-[220px]" title={fileInfo.name}>
+                  {fileInfo.name}
+                </p>
+                <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                  {fileInfo.sizeFormatted}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={onReplaceFile}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium shadow-xs transition-colors"
+              >
+                <RefreshCw className="size-3 text-slate-500" />
+                Ganti File
+              </button>
+
+              <button
+                type="button"
+                onClick={onDeleteFile}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50/50 hover:bg-rose-100/70 text-rose-700 text-xs font-medium shadow-xs transition-colors"
+              >
+                <Trash2 className="size-3 text-rose-600" />
+                Hapus
+              </button>
+            </div>
           </div>
-          <div className="space-y-0.5 overflow-hidden">
-            <p className="text-[14px] font-bold text-slate-900 font-mono tracking-tight truncate max-w-[280px]" title={fileName}>
-              {fileName}
-            </p>
-            <p className="text-xs text-slate-500 font-medium">{fileSizeFormatted}</p>
+
+          {/* Bottom Row: Key Information Columns */}
+          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 text-left">
+            <div>
+              <p className="text-[10px] uppercase font-semibold text-slate-400">Jumlah Resi</p>
+              <p className="text-xs font-bold text-slate-900 mt-0.5">
+                {fileInfo.totalResi.toLocaleString('id-ID')} Resi
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase font-semibold text-slate-400">Upload</p>
+              <p className="text-xs font-medium text-slate-700 mt-0.5">
+                {fileInfo.uploadTimestamp}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase font-semibold text-slate-400">Target Kota</p>
+              <span className="inline-block mt-0.5 px-2 py-0.5 rounded bg-slate-900 text-white text-[11px] font-bold tracking-wide">
+                {targetKota || fileInfo.targetKota}
+              </span>
+            </div>
           </div>
         </div>
-
-        {/* Center: Metadata Columns */}
-        <div className="grid grid-cols-3 gap-4 sm:gap-8 border-y lg:border-y-0 lg:border-x border-slate-100 py-3 lg:py-0 lg:px-8">
-          <div>
-            <span className="text-[11px] font-medium text-slate-400 block uppercase tracking-wider">Jumlah Data</span>
-            <span className="text-sm font-bold text-slate-900 font-mono mt-0.5 block">
-              {totalResi.toLocaleString('id-ID')} Resi
-            </span>
-          </div>
-
-          <div>
-            <span className="text-[11px] font-medium text-slate-400 block uppercase tracking-wider">Tanggal Upload</span>
-            <span className="text-xs font-semibold text-slate-700 mt-0.5 block whitespace-nowrap">
-              {uploadDateFormatted}
-            </span>
-          </div>
-
-          <div>
-            <span className="text-[11px] font-medium text-slate-400 block uppercase tracking-wider">Target Kota</span>
-            <span className="inline-block text-xs font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md mt-0.5">
-              {targetCity}
-            </span>
-          </div>
+      ) : (
+        /* Empty / Waiting State */
+        <div className="flex-1 flex flex-col items-center justify-center text-center p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50/30 my-1">
+          <p className="text-xs font-medium text-slate-400">
+            Belum ada file Excel yang dipilih
+          </p>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            Silakan pilih atau seret file pada langkah 1 di sebelah kiri
+          </p>
         </div>
-
-        {/* Right: Action Buttons */}
-        <div className="flex items-center gap-2.5 self-end lg:self-center shrink-0">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={disabled}
-            onClick={onChangeFile}
-            className="h-9 px-3.5 rounded-xl text-xs font-semibold border-slate-200 hover:bg-slate-50 text-slate-700 gap-1.5 shadow-none hover:shadow-sm"
-          >
-            <ArrowLeftRight className="size-3.5 text-slate-500" />
-            Ganti File
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={disabled}
-            onClick={onRemoveFile}
-            className="h-9 px-3.5 rounded-xl text-xs font-semibold border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 gap-1.5 shadow-none hover:shadow-sm"
-          >
-            <Trash2 className="size-3.5 text-rose-500" />
-            Hapus
-          </Button>
-        </div>
-      </motion.div>
+      )}
     </div>
   );
 }

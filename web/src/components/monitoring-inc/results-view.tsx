@@ -1,417 +1,329 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
-import * as xlsx from 'xlsx';
-import { toPng } from 'html-to-image';
-import { toast } from 'sonner';
+import { useRef, useState } from 'react';
 import {
   ArrowLeft,
+  Image as ImageIcon,
+  Download,
+  FileText,
   CheckCircle2,
   Clock,
-  ClockAlert,
-  Download,
-  Filter,
-  Image as ImageIcon,
-  Package,
-  Search,
-  Table2,
+  AlertCircle,
+  Timer,
+  PieChart,
+  MapPin,
+  Lock,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { IncRow, MonitoringIncTable } from './monitoring-inc-table';
+import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
+import { toPng } from 'html-to-image';
+import { IncRow, IncStats, AVAILABLE_CITIES } from './types';
+import { MonitoringIncTable } from './monitoring-inc-table';
+import { ReportImageCanvas } from './report-image-canvas';
 
 interface ResultsViewProps {
-  allRows: IncRow[];
-  activeTargetCity: string;
-  fileName: string;
-  onBack: () => void;
+  data: IncRow[];
+  stats: IncStats;
+  targetKota: string;
+  generateTime: string;
+  onReset: () => void;
+  onTargetKotaChange: (city: string) => void;
+  isCityLocked?: boolean;
 }
 
-export function ResultsView({ allRows, activeTargetCity, fileName, onBack }: ResultsViewProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'CLEAR' | 'BELUM' | 'LATE'>('ALL');
-  const [selectedKecamatan, setSelectedKecamatan] = useState<string>('ALL');
-  const [copying, setCopying] = useState<null | 'img' | 'table'>(null);
+export function ResultsView({
+  data,
+  stats,
+  targetKota,
+  generateTime,
+  onReset,
+  onTargetKotaChange,
+  isCityLocked,
+}: ResultsViewProps) {
+  const [isCopyingImage, setIsCopyingImage] = useState(false);
+  const hiddenCanvasRef = useRef<HTMLDivElement>(null);
 
-  const tableRef = useRef<HTMLTableElement>(null);
-
-  // Daftar Kecamatan unik untuk dropdown filter
-  const uniqueKecamatan = useMemo(() => {
-    const set = new Set<string>();
-    allRows.forEach((r) => {
-      if (r.tempatTujuan) set.add(r.tempatTujuan);
-    });
-    return Array.from(set).sort();
-  }, [allRows]);
-
-  // Filtered Rows
-  const filteredData = useMemo(() => {
-    return allRows.filter((row) => {
-      // Filter Kecamatan
-      if (selectedKecamatan !== 'ALL' && row.tempatTujuan !== selectedKecamatan) {
-        return false;
-      }
-
-      // Filter Status
-      if (statusFilter === 'CLEAR' && !row.isClearTtd) return false;
-      if (statusFilter === 'BELUM' && row.isClearTtd) return false;
-      if (statusFilter === 'LATE' && !row.isLate) return false;
-
-      // Filter Pencarian Teks
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchAwb = row.awb.toLowerCase().includes(q);
-        const matchNama = row.namaPenerima.toLowerCase().includes(q);
-        const matchAlamat = row.alamatPenerima.toLowerCase().includes(q);
-        const matchKec = row.tempatTujuan.toLowerCase().includes(q);
-        if (!matchAwb && !matchNama && !matchAlamat && !matchKec) return false;
-      }
-
-      return true;
-    });
-  }, [allRows, selectedKecamatan, statusFilter, searchQuery]);
-
-  // Statistik Ringkasan
-  const stats = useMemo(() => {
-    const total = allRows.length;
-    const clear = allRows.filter((r) => r.isClearTtd).length;
-    const belum = total - clear;
-    const late = allRows.filter((r) => r.isLate).length;
-    const percent = total > 0 ? Math.round((clear / total) * 100) : 0;
-    const totalCod = allRows.reduce((sum, r) => sum + r.cod, 0);
-
-    return { total, clear, belum, late, percent, totalCod };
-  }, [allRows]);
-
-  /**
-   * Salin GAMBAR (image/png) ke clipboard
-   */
+  // Copy Gambar Laporan ke Clipboard
   const handleCopyImage = async () => {
-    const el = tableRef.current;
-    if (!el) return;
-    try {
-      setCopying('img');
-      const imagePromise = (async () => {
-        await new Promise((r) => setTimeout(r, 30));
-        const fullWidth = el.scrollWidth;
-        const dataUrl = await toPng(el, {
-          quality: 1,
-          pixelRatio: 2,
-          backgroundColor: '#ffffff',
-          width: fullWidth,
-          height: el.scrollHeight,
-          style: { width: `${fullWidth}px`, overflow: 'visible' },
-        });
-        return (await fetch(dataUrl)).blob();
-      })();
+    if (!hiddenCanvasRef.current || isCopyingImage) return;
 
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': imagePromise })]);
-      toast.success('Gambar tabel Monitoring INC disalin ke clipboard! Siap dipaste ke WA/Feishu.');
+    try {
+      setIsCopyingImage(true);
+      const node = hiddenCanvasRef.current;
+
+      const dataUrl = await toPng(node, {
+        quality: 1,
+        pixelRatio: 2,
+        backgroundColor: '#FFFFFF',
+      });
+
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': blob,
+        }),
+      ]);
+
+      toast.success('Gambar laporan berhasil disalin ke clipboard!', {
+        description: 'Siap di-paste ke WhatsApp, Telegram, atau Feishu.',
+        position: 'bottom-right',
+      });
     } catch (err) {
-      console.error('Gagal menyalin gambar:', err);
-      toast.error('Gagal menyalin gambar. Pastikan browser mendukung Clipboard Image API.');
+      console.error('Gagal menyalin gambar laporan:', err);
+      toast.error('Gagal menyalin gambar. Pastikan izin clipboard aktif.');
     } finally {
-      setCopying(null);
+      setIsCopyingImage(false);
     }
   };
 
-  /**
-   * Salin TABEL (HTML & TSV) untuk Excel/Sheets
-   */
-  const handleCopyTable = async () => {
-    const el = tableRef.current;
-    if (!el) return;
-    try {
-      setCopying('table');
-      const htmlBlob = new Blob([el.outerHTML], { type: 'text/html' });
-      const textBlob = new Blob([el.innerText], { type: 'text/plain' });
-      await navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })]);
-      toast.success('Tabel berhasil disalin! Siap ditempel di Excel atau Spreadsheet.');
-    } catch (err) {
-      console.error('Gagal menyalin tabel:', err);
-      toast.error('Gagal menyalin tabel.');
-    } finally {
-      setCopying(null);
-    }
-  };
-
-  /**
-   * Export ke file Excel (.xlsx)
-   */
+  // Export Excel (.xlsx)
   const handleExportExcel = () => {
-    if (allRows.length === 0) {
-      toast.warning('Tidak ada data untuk diekspor.');
-      return;
-    }
-
     try {
-      const exportData = filteredData.map((r) => ({
-        'AWB': r.awb,
-        'Tempat Tujuan': r.tempatTujuan,
-        'Nama Penerima': r.namaPenerima,
-        'Alamat Penerima': r.alamatPenerima,
-        'COD': r.cod,
-        'Waktu TTD': r.waktuTtd || '',
-        'MAKSIMAL TTD': r.maksimalTtd,
-        'Waktu Upload ke Sistem': r.waktuUploadSistem,
+      const exportRows = data.map((row) => ({
+        'AWB': row.awb,
+        'Tempat Tujuan': row.tempatTujuan,
+        'Nama Penerima': row.namaPenerima,
+        'Alamat Penerima': row.alamatPenerima,
+        'COD': row.cod,
+        'Waktu TTD': row.waktuTtd || '-',
+        'Maksimal TTD': row.maksimalTtd || '-',
+        'Waktu Upload ke Sistem': row.waktuUploadSistem || '-',
+        'Status':
+          row.status === 'CLEAR'
+            ? 'Clear TTD'
+            : row.status === 'BELUM'
+            ? 'Belum TTD'
+            : 'Telat SLA',
       }));
 
-      const totalAwb = filteredData.length;
-      const clearTtd = filteredData.filter((r) => r.isClearTtd).length;
-      const percent = totalAwb > 0 ? `${Math.round((clearTtd / totalAwb) * 100)}%` : '0%';
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(exportRows);
 
-      const ws = xlsx.utils.json_to_sheet(exportData);
-
-      // Tambahkan 3 baris ringkasan di bawah
-      xlsx.utils.sheet_add_aoa(
+      // Tambahkan ringkasan di bawah
+      const summaryStartRow = exportRows.length + 3;
+      XLSX.utils.sheet_add_aoa(
         ws,
         [
-          [`JUMLAH AWB OUTGOING INC (${activeTargetCity})`, '', '', '', '', '', totalAwb, ''],
-          ['CLEAR TTD', '', '', '', '', '', clearTtd, ''],
-          ['PRESENTASE', '', '', '', '', '', percent, ''],
+          ['RINGKASAN MONITORING INC'],
+          ['Total AWB Outgoing INC', stats.total],
+          ['Clear TTD', stats.clear],
+          ['Belum TTD', stats.belum],
+          ['Telat SLA', stats.late],
+          ['Presentase TTD', `${stats.percent}%`],
+          ['Rata-rata SLA (Jam)', stats.avgSlaHours],
         ],
-        { origin: -1 },
+        { origin: `A${summaryStartRow}` }
       );
 
-      const wb = xlsx.utils.book_new();
-      xlsx.utils.book_append_sheet(wb, ws, `INC ${activeTargetCity}`);
+      XLSX.utils.book_append_sheet(wb, ws, `INC_${targetKota}`);
+      XLSX.writeFile(wb, `MONITORING_INC_${targetKota}_${Date.now()}.xlsx`);
 
-      const dateStr = new Date().toISOString().slice(0, 10);
-      xlsx.writeFile(wb, `Monitoring_INC_${activeTargetCity.replace(/\s+/g, '_')}_${dateStr}.xlsx`);
-      toast.success('File Excel berhasil diunduh.');
+      toast.success('File Excel berhasil diunduh!');
     } catch (err) {
-      console.error('Gagal mengekspor Excel:', err);
-      toast.error('Gagal mengekspor Excel.');
+      console.error('Gagal export excel:', err);
+      toast.error('Gagal mengekspor data Excel.');
     }
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      {/* Header Bar: Actions & Summary */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-[18px] border border-[#E5E7EB] shadow-[0_8px_24px_rgba(0,0,0,0.04)]">
-        <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onBack}
-              className="h-8 px-2.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 gap-1.5"
-            >
-              <ArrowLeft className="size-3.5" />
-              Kembali ke Upload
-            </Button>
-            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold text-xs">
-              Kota {activeTargetCity}
-            </Badge>
-            <span className="text-xs text-slate-400 font-mono truncate max-w-[240px]" title={fileName}>
-              {fileName}
-            </span>
+    <div className="space-y-4 animate-in fade-in-50 duration-300">
+      {/* Hidden Offscreen Canvas for Generating Crisp Image */}
+      <div className="fixed -left-[9999px] top-0 pointer-events-none opacity-0">
+        <ReportImageCanvas
+          ref={hiddenCanvasRef}
+          data={data}
+          stats={stats}
+          targetKota={targetKota}
+          generateTime={generateTime}
+        />
+      </div>
+
+      {/* 1. Header Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-2 border-b border-slate-200/80">
+        <div className="flex items-start gap-3">
+          <button
+            type="button"
+            onClick={onReset}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 shadow-2xs transition-colors shrink-0 mt-1"
+          >
+            <ArrowLeft className="size-3.5" />
+            Upload Ulang
+          </button>
+
+          <div>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
+              Monitoring INC
+            </h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Monitoring pengiriman Inter City (INC) dengan batas SLA maksimal TTD 24 jam.
+            </p>
+            <p className="text-[11px] text-slate-400 font-medium mt-1 flex items-center gap-1">
+              <span>🗓 Terakhir digenerate:</span>
+              <span className="font-semibold text-slate-600">{generateTime}</span>
+            </p>
           </div>
-          <p className="text-xs text-slate-500 pl-1">
-            Total <strong>{allRows.length} AWB</strong> berhasil digenerate untuk target kota {activeTargetCity}.
-          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="default"
-            size="sm"
+        {/* Action Controls Top Right */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Target Kota Dropdown */}
+          <div className="relative">
+            <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-2xs text-xs font-bold text-slate-800">
+              <MapPin className="size-3.5 text-red-600" />
+              {isCityLocked ? (
+                <div className="flex items-center gap-1">
+                  <span>{targetKota}</span>
+                  <Lock className="size-3 text-slate-400" />
+                </div>
+              ) : (
+                <select
+                  value={targetKota}
+                  onChange={(e) => onTargetKotaChange(e.target.value)}
+                  className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
+                >
+                  {AVAILABLE_CITIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+
+          {/* Copy Gambar Laporan */}
+          <button
+            type="button"
+            disabled={isCopyingImage}
             onClick={handleCopyImage}
-            disabled={copying !== null}
-            className="h-9 rounded-xl gap-1.5 shadow-sm bg-[#E30613] hover:bg-[#C60010] text-white font-semibold text-xs transition-all hover:scale-105"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs active:scale-95 transition-all"
           >
-            <ImageIcon className="size-3.5" />
-            {copying === 'img' ? 'Menyalin Gambar...' : 'Salin Gambar'}
-          </Button>
+            <ImageIcon className="size-3.5 text-blue-600" />
+            {isCopyingImage ? 'Menyiapkan Gambar...' : 'Copy Gambar Laporan'}
+          </button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCopyTable}
-            disabled={copying !== null}
-            className="h-9 rounded-xl gap-1.5 text-xs font-semibold border-slate-200 hover:bg-slate-50 text-slate-700"
-          >
-            <Table2 className="size-3.5 text-emerald-600" />
-            {copying === 'table' ? 'Menyalin...' : 'Salin Tabel'}
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
+          {/* Export Excel */}
+          <button
+            type="button"
             onClick={handleExportExcel}
-            className="h-9 rounded-xl gap-1.5 text-xs font-semibold border-slate-200 hover:bg-slate-50 text-slate-700"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs active:scale-95 transition-all"
           >
-            <Download className="size-3.5 text-blue-600" />
-            Unduh Excel
-          </Button>
+            <Download className="size-3.5 text-emerald-600" />
+            Export Excel
+          </button>
         </div>
       </div>
 
-      {/* Metric Cards Grid */}
+      {/* 2. 5 KPI Metric Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <Card className="bg-white border border-[#E5E7EB] rounded-[16px] shadow-none">
-          <CardContent className="p-4 space-y-1">
-            <div className="flex items-center justify-between text-xs font-medium text-slate-400">
-              <span>Total AWB INC</span>
-              <Package className="size-3.5 text-slate-400" />
-            </div>
-            <div className="text-2xl font-bold font-mono text-slate-900">{stats.total}</div>
-            <p className="text-[11px] text-slate-500 font-medium">Tujuan {activeTargetCity}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-emerald-50/50 border border-emerald-100 rounded-[16px] shadow-none">
-          <CardContent className="p-4 space-y-1">
-            <div className="flex items-center justify-between text-xs font-semibold text-emerald-700">
-              <span>Clear TTD</span>
-              <CheckCircle2 className="size-3.5 text-emerald-600" />
-            </div>
-            <div className="text-2xl font-bold font-mono text-emerald-800">{stats.clear}</div>
-            <p className="text-[11px] text-emerald-600 font-semibold">{stats.percent}% terselesaikan</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-amber-50/50 border border-amber-100 rounded-[16px] shadow-none">
-          <CardContent className="p-4 space-y-1">
-            <div className="flex items-center justify-between text-xs font-semibold text-amber-700">
-              <span>Belum TTD</span>
-              <Clock className="size-3.5 text-amber-600" />
-            </div>
-            <div className="text-2xl font-bold font-mono text-amber-800">{stats.belum}</div>
-            <p className="text-[11px] text-amber-600 font-semibold">{stats.total > 0 ? 100 - stats.percent : 0}% belum selesai</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-rose-50/50 border border-rose-100 rounded-[16px] shadow-none">
-          <CardContent className="p-4 space-y-1">
-            <div className="flex items-center justify-between text-xs font-semibold text-rose-700">
-              <span>Telat SLA (24 Jam)</span>
-              <ClockAlert className="size-3.5 text-rose-600" />
-            </div>
-            <div className="text-2xl font-bold font-mono text-rose-800">{stats.late}</div>
-            <p className="text-[11px] text-rose-600 font-semibold">Melebihi Waktu Maksimal</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border border-[#E5E7EB] rounded-[16px] shadow-none col-span-2 sm:col-span-1">
-          <CardContent className="p-4 space-y-1">
-            <div className="flex items-center justify-between text-xs font-medium text-slate-400">
-              <span>Total Nilai COD</span>
-              <span className="text-[10px] font-bold uppercase">IDR</span>
-            </div>
-            <div className="text-lg font-bold font-mono text-slate-800 truncate">
-              Rp {stats.totalCod.toLocaleString('id-ID')}
-            </div>
-            <p className="text-[11px] text-slate-500 font-medium">Total tagihan COD</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filter & Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between bg-white p-3.5 rounded-[16px] border border-[#E5E7EB]">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={() => setStatusFilter('ALL')}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
-                statusFilter === 'ALL'
-                  ? 'bg-white shadow-sm text-slate-900'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              Semua ({allRows.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('CLEAR')}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
-                statusFilter === 'CLEAR'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-slate-500 hover:text-emerald-700'
-              }`}
-            >
-              Clear TTD ({stats.clear})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('BELUM')}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
-                statusFilter === 'BELUM'
-                  ? 'bg-amber-500 text-white shadow-sm'
-                  : 'text-slate-500 hover:text-amber-700'
-              }`}
-            >
-              Belum TTD ({stats.belum})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('LATE')}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
-                statusFilter === 'LATE'
-                  ? 'bg-[#E30613] text-white shadow-sm'
-                  : 'text-slate-500 hover:text-rose-700'
-              }`}
-            >
-              Telat SLA ({stats.late})
-            </button>
+        {/* Card 1: Total AWB INC */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm flex items-center gap-3">
+          <div className="size-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+            <FileText className="size-5" />
           </div>
-
-          {uniqueKecamatan.length > 1 && (
-            <div className="flex items-center gap-1.5 text-xs ml-1">
-              <Filter className="size-3.5 text-slate-400" />
-              <select
-                value={selectedKecamatan}
-                onChange={(e) => setSelectedKecamatan(e.target.value)}
-                className="border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-red-500"
-              >
-                <option value="ALL">Semua Kecamatan ({uniqueKecamatan.length})</option>
-                {uniqueKecamatan.map((kec) => (
-                  <option key={kec} value={kec}>
-                    {kec}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-tight">Total AWB INC</p>
+            <p className="text-xl font-bold text-slate-900 leading-tight">{stats.total}</p>
+            <p className="text-[11px] text-slate-500">Total Pengiriman</p>
+          </div>
         </div>
 
-        <div className="relative min-w-[220px]">
-          <Search className="size-3.5 absolute left-3 top-2.5 text-slate-400" />
-          <Input
-            type="text"
-            placeholder="Cari AWB / Penerima / Alamat..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8 h-8 text-xs bg-slate-50/60 rounded-lg border-slate-200 focus-visible:ring-red-500"
-          />
+        {/* Card 2: Clear TTD */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm flex items-center gap-3">
+          <div className="size-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+            <CheckCircle2 className="size-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-tight">Clear TTD (≤24 Jam)</p>
+            <p className="text-xl font-bold text-slate-900 leading-tight">{stats.clear}</p>
+            <p className="text-[11px] font-semibold text-emerald-600">{stats.percent}% Tepat Waktu</p>
+          </div>
+        </div>
+
+        {/* Card 3: Belum TTD */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm flex items-center gap-3">
+          <div className="size-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
+            <Clock className="size-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-tight">Belum TTD (&gt;24 Jam)</p>
+            <p className="text-xl font-bold text-slate-900 leading-tight">{stats.belum}</p>
+            <p className="text-[11px] font-semibold text-amber-600">
+              {stats.total > 0 ? Math.round((stats.belum / stats.total) * 100) : 0}% Belum Selesai
+            </p>
+          </div>
+        </div>
+
+        {/* Card 4: Telat SLA */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm flex items-center gap-3">
+          <div className="size-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
+            <AlertCircle className="size-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-tight">Telat SLA (24 Jam)</p>
+            <p className="text-xl font-bold text-slate-900 leading-tight">{stats.late}</p>
+            <p className="text-[11px] font-semibold text-rose-600">
+              {stats.total > 0 ? Math.round((stats.late / stats.total) * 100) : 0}% Melebihi SLA
+            </p>
+          </div>
+        </div>
+
+        {/* Card 5: Rata-rata SLA */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm flex items-center gap-3 col-span-2 sm:col-span-1">
+          <div className="size-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 border border-purple-100">
+            <Timer className="size-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-tight">Rata-rata SLA</p>
+            <p className="text-xl font-bold text-purple-900 leading-tight">{stats.avgSlaHours}</p>
+            <p className="text-[11px] font-semibold text-purple-600">Jam</p>
+          </div>
         </div>
       </div>
 
-      {/* Table Card */}
-      <Card className="overflow-hidden border border-[#E5E7EB] rounded-[18px] shadow-[0_8px_24px_rgba(0,0,0,0.04)] bg-white">
-        <CardHeader className="py-3 px-5 bg-slate-50/60 border-b border-slate-100 flex flex-row items-center justify-between">
-          <div className="space-y-0.5">
-            <CardTitle className="text-sm font-bold text-slate-800">
-              Tabel Laporan Monitoring INC {activeTargetCity}
-            </CardTitle>
-            <CardDescription className="text-xs text-slate-500">
-              Menampilkan {filteredData.length} baris data terfilter.
-            </CardDescription>
+      {/* 3. Modern Data Table */}
+      <MonitoringIncTable data={data} />
+
+      {/* 4. Bottom Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex items-center gap-3.5">
+          <div className="size-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
+            <FileText className="size-5" />
           </div>
-        </CardHeader>
-        <CardContent className="p-5 overflow-x-auto">
-          <MonitoringIncTable
-            ref={tableRef}
-            data={filteredData}
-            filterKecamatan={selectedKecamatan !== 'ALL' ? selectedKecamatan : undefined}
-            kota={activeTargetCity}
-          />
-        </CardContent>
-      </Card>
+          <div>
+            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+              TOTAL AWB OUTGOING INC
+            </p>
+            <p className="text-2xl font-black text-slate-900 leading-tight">{stats.total}</p>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex items-center gap-3.5">
+          <div className="size-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+            <CheckCircle2 className="size-5" />
+          </div>
+          <div>
+            <p className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider">
+              CLEAR TTD
+            </p>
+            <p className="text-2xl font-black text-slate-900 leading-tight">{stats.clear}</p>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex items-center gap-3.5">
+          <div className="size-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 border border-purple-100">
+            <PieChart className="size-5" />
+          </div>
+          <div>
+            <p className="text-[10px] uppercase font-bold text-purple-700 tracking-wider">
+              PRESENTASE
+            </p>
+            <p className="text-2xl font-black text-purple-900 leading-tight">{stats.percent}%</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,76 +1,64 @@
 /**
- * Utilitas normalisasi dan pencocokan nama Kota/Kabupaten untuk fitur Monitoring INC.
- * Mencegah kesalahan matching substring (misal: "BATANG HARI" tidak boleh terhitung sebagai "BATANG").
+ * Utilitas normalisasi dan pencocokan nama kota untuk tarikan data JMS & Drop Point.
  */
 
-/**
- * Menghapus prefix administratif umum (KOTA, KABUPATEN, KAB, KODYA, dll)
- * dan suffix provinsi atau keterangan dalam kurung.
- */
-export function normalizeCityName(raw: string): string {
+export function normalizeCityName(raw: string | null | undefined): string {
   if (!raw) return '';
   return raw
     .toUpperCase()
-    // Hapus keterangan dalam kurung, misal "(KAB)", "(KOTA)", "(JAWA TENGAH)"
-    .replace(/\([^)]*\)/g, ' ')
-    // Hapus tanda baca umum pemisah kata/keterangan dengan spasi
-    .replace(/[\/#!$%^&*;:{}=\_`~]/g, ' ')
-    // Hapus suffix provinsi/keterangan setelah koma atau tanda hubung, misal "BATANG, JAWA TENGAH" atau "BATANG - JATENG"
-    .replace(/[,–-].*$/g, '')
-    .trim()
-    // Hapus awalan administratif umum di Indonesia
-    .replace(/^(KOTA\s+ADM(INISTRATIF)?|KOTA|KABUPATEN|KAB\.?|KODYA\.?|KOTAMADYA)\s+/i, '')
-    // Collapse multiple spaces
+    .replace(/\b(KOTA|KABUPATEN|KAB\.?|DISTRICT)\b/gi, ' ')
+    .replace(/[^\w\s-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
 /**
- * Memeriksa apakah nama kota dari input baris JMS cocok dengan target kota.
- * Menggunakan perbandingan exact token yang dinormalisasi, BUKAN includes().
+ * Memeriksa apakah nama kota dari tarikan JMS cocok dengan target kota yang dipilih.
+ * Menggunakan pencocokan token untuk mencegah false-positive (misal "BATANG" tidak boleh mencocokkan "BATANG HARI").
  */
-export function isCityMatch(rawInputCity: string, targetCity: string): boolean {
-  if (!rawInputCity || !targetCity) return false;
+export function isCityMatch(rawCity: string | null | undefined, targetCity: string): boolean {
+  if (!rawCity || !targetCity) return false;
 
-  const rawClean = rawInputCity.trim().toUpperCase();
-  const targetClean = targetCity.trim().toUpperCase();
+  const cleanRaw = normalizeCityName(rawCity);
+  const cleanTarget = normalizeCityName(targetCity);
 
-  // 1. Direct exact match
-  if (rawClean === targetClean) return true;
+  if (!cleanRaw || !cleanTarget) return false;
+  if (cleanRaw === cleanTarget) return true;
 
-  // 2. Normalized exact match (mis. "KOTA BATANG" -> "BATANG" === "BATANG")
-  const normInput = normalizeCityName(rawInputCity);
-  const normTarget = normalizeCityName(targetCity);
+  // Exact word boundary matching: targetCity harus muncul sebagai kata utuh
+  // dan jika target adalah single word seperti "BATANG", string tidak boleh memiliki nama wilayah berbeda (seperti "BATANG HARI")
+  const targetWords = cleanTarget.split(/\s+/).filter(Boolean);
+  const rawWords = cleanRaw.split(/\s+/).filter(Boolean);
 
-  if (normInput && normTarget && normInput === normTarget) {
-    return true;
-  }
+  if (targetWords.length === 1) {
+    const singleTarget = targetWords[0];
+    // Jika raw cuma 1 kata dan sama
+    if (rawWords.length === 1 && rawWords[0] === singleTarget) return true;
 
-  return false;
-}
-
-/**
- * Menyimpulkan nama Kota/Cabang berdasarkan Drop Point pengguna dan daftar master data Drop Point.
- */
-export function resolveCityFromDropPoint(
-  dropPointCode?: string | null,
-  dropPointsList?: Array<{ 'Kode DP': string; 'Nama Kota'?: string; 'Kode Kota'?: string; 'Wilayah/Cabang'?: string }> | null,
-  defaultCity = 'BATANG',
-): string {
-  if (!dropPointCode) return defaultCity;
-
-  if (dropPointsList && Array.isArray(dropPointsList)) {
-    const found = dropPointsList.find((dp) => dp['Kode DP'].toUpperCase() === dropPointCode.toUpperCase());
-    if (found) {
-      const k = normalizeCityName(found['Nama Kota'] || found['Kode Kota'] || found['Wilayah/Cabang'] || '');
-      if (k) return k;
+    // Jika raw punya kata 'BATANG', pastikan kata berikutnya bukan qualifier kota lain seperti 'HARI', 'KUIS', 'TARANG'
+    const index = rawWords.indexOf(singleTarget);
+    if (index !== -1) {
+      // Periksa apakah ini kota khusus dengan nama majemuk
+      const nextWord = rawWords[index + 1];
+      const excludedNextWords = ['HARI', 'KUIS', 'TARANG', 'ANAI', 'KAPAS'];
+      if (nextWord && excludedNextWords.includes(nextWord)) {
+        return false;
+      }
+      return true;
     }
   }
 
-  // Heuristik jika kode DP memuat kata BATANG (mis. BATANG01, BATANG_UTARA)
-  if (dropPointCode.toUpperCase().includes('BATANG')) {
-    return 'BATANG';
-  }
+  // Jika target kata majemuk (misal "BATANG HARI"), bandingkan apakah raw memuat urutan kata tersebut
+  const targetPhrase = targetWords.join(' ');
+  return cleanRaw.includes(targetPhrase);
+}
 
-  return defaultCity;
+/**
+ * Mendapatkan nama kota acuan dari kode Drop Point (misal: "DP BATANG01" -> "BATANG").
+ */
+export function resolveCityFromDropPoint(dropPoint: string | null | undefined): string | null {
+  if (!dropPoint) return null;
+  const clean = dropPoint.toUpperCase().replace(/\bDP\b/gi, '').replace(/\d+$/, '').trim();
+  const normalized = normalizeCityName(clean);
+  return normalized || null;
 }

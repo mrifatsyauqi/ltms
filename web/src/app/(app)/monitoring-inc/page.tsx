@@ -36,19 +36,11 @@ export default async function MonitoringIncPage() {
     }
   }
 
-  const userDropPoint = session?.user?.dropPoint ?? null;
-
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <PageHeader
-        title="Monitoring INC"
-        description="Monitoring pengiriman Inter City (INC) outgoing dengan kalkulasi batas SLA Maksimal TTD 24 Jam dari waktu input."
-      />
-
+    <div className="flex-1 p-4 md:p-6">
       <MonitoringIncClient
-        userDropPoint={userDropPoint}
         userRole={role}
-        isFullAccess={isFullAccess}
+        userDropPoint={session?.user.dropPoint}
       />
     </div>
   );

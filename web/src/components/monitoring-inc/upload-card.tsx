@@ -1,178 +1,136 @@
 'use client';
 
-import { useState, useRef, DragEvent, ChangeEvent } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import confetti from 'canvas-confetti';
-import { UploadCloud, FileSpreadsheet, CheckCircle2, AlertCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useRef, useState } from 'react';
+import { CloudUpload, Upload } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface UploadCardProps {
   onFileSelected: (file: File) => void;
-  activeTargetCity: string;
   disabled?: boolean;
 }
 
-export function UploadCard({ onFileSelected, activeTargetCity, disabled = false }: UploadCardProps) {
-  const [dragOver, setDragOver] = useState(false);
-  const [isSuccessAnim, setIsSuccessAnim] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+export function UploadCard({ onFileSelected, disabled }: UploadCardProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [particles, setParticles] = useState<{ id: number; x: number; y: number; color: string }[]>([]);
 
-  const validateAndProcessFile = (file: File) => {
-    setErrorMessage(null);
+  const triggerConfetti = () => {
+    const colors = ['#ef4444', '#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899'];
+    const newParticles = Array.from({ length: 14 }).map((_, i) => ({
+      id: Date.now() + i,
+      x: (Math.random() - 0.5) * 160,
+      y: (Math.random() - 0.5) * 120 - 40,
+      color: colors[Math.floor(Math.random() * colors.length)],
+    }));
+    setParticles(newParticles);
+    setTimeout(() => setParticles([]), 1000);
+  };
 
-    // 1. Validasi ekstensi
+  const handleProcessFile = (file: File) => {
+    if (!file) return;
+
+    // Validasi ekstensi
     const validExtensions = ['.xlsx', '.xls', '.csv'];
-    const fileNameLower = file.name.toLowerCase();
-    const hasValidExt = validExtensions.some((ext) => fileNameLower.endsWith(ext));
-
-    if (!hasValidExt) {
-      setErrorMessage('Format file tidak didukung. Harap upload file Excel (.xlsx atau .xls).');
+    const isExtValid = validExtensions.some((ext) => file.name.toLowerCase().endsWith(ext));
+    if (!isExtValid) {
+      toast.error('Format file tidak didukung. Harap upload file .xlsx atau .xls.');
       return;
     }
 
-    // 2. Validasi ukuran (< 10 MB)
-    const maxSizeBytes = 10 * 1024 * 1024;
-    if (file.size > maxSizeBytes) {
-      setErrorMessage(`Ukuran file (${(file.size / (1024 * 1024)).toFixed(2)} MB) melebihi batas maksimal 10 MB.`);
+    // Validasi ukuran < 10MB
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast.error('Ukuran file melebihi batas maksimal 10 MB.');
       return;
     }
 
-    // Trigger success animation & light confetti
-    setIsSuccessAnim(true);
-    triggerLightConfetti();
-
-    setTimeout(() => {
-      onFileSelected(file);
-      setIsSuccessAnim(false);
-    }, 450);
-  };
-
-  const triggerLightConfetti = () => {
-    try {
-      confetti({
-        particleCount: 12,
-        spread: 45,
-        origin: { y: 0.6 },
-        colors: ['#E30613', '#16A34A', '#3B82F6', '#F59E0B'],
-        disableForReducedMotion: true,
-      });
-    } catch {
-      // ignore
-    }
-  };
-
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragOver(false);
-    if (disabled) return;
-
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      validateAndProcessFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      validateAndProcessFile(e.target.files[0]);
-      e.target.value = '';
-    }
+    triggerConfetti();
+    onFileSelected(file);
   };
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="flex items-center justify-center size-6 rounded-full bg-[#E30613] text-white text-xs font-bold shadow-sm">
+    <div className="relative bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-[230px]">
+      {/* Header */}
+      <div className="flex items-center gap-2.5">
+        <span className="flex items-center justify-center size-5 rounded-full bg-red-600 text-white text-xs font-bold">
           1
         </span>
-        <h2 className="text-base font-bold text-slate-900 tracking-tight">Upload Tarikan Data JMS</h2>
+        <h3 className="text-sm font-bold text-slate-900 tracking-tight">Upload Excel</h3>
       </div>
 
-      <motion.div
-        animate={{
-          scale: isSuccessAnim ? 0.98 : dragOver ? 1.005 : 1,
-          borderColor: isSuccessAnim ? '#16A34A' : dragOver ? '#E30613' : '#E5E7EB',
-          backgroundColor: isSuccessAnim ? '#F0FDF4' : dragOver ? '#FEF2F2' : '#FFFFFF',
-        }}
-        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+      {/* Drop Area */}
+      <div
+        className={`relative overflow-hidden flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-3 text-center transition-all cursor-pointer select-none my-1 flex-1 ${
+          isDragOver
+            ? 'border-red-500 bg-red-50/50 scale-[0.99]'
+            : 'border-slate-200 bg-slate-50/40 hover:border-red-300 hover:bg-slate-50/80'
+        } ${disabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
         onDragOver={(e) => {
           e.preventDefault();
-          if (!disabled) setDragOver(true);
+          setIsDragOver(true);
         }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={handleDrop}
-        onClick={() => !disabled && inputRef.current?.click()}
-        className={`relative flex flex-col items-center justify-center rounded-[18px] border-2 border-dashed p-10 md:p-12 text-center transition-shadow shadow-[0_8px_24px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_28px_rgba(0,0,0,0.06)] cursor-pointer group select-none ${
-          disabled ? 'opacity-60 cursor-not-allowed' : ''
-        }`}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragOver(false);
+          if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            handleProcessFile(e.dataTransfer.files[0]);
+          }
+        }}
+        onClick={() => fileInputRef.current?.click()}
       >
-        <AnimatePresence mode="wait">
-          {isSuccessAnim ? (
-            <motion.div
-              key="success-icon"
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 20 }}
-              className="size-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4 ring-8 ring-emerald-50"
-            >
-              <CheckCircle2 className="size-9" />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="upload-icon"
-              initial={{ scale: 0.9 }}
-              animate={{ scale: dragOver ? 1.1 : 1 }}
-              className="size-16 rounded-full bg-red-50 text-[#E30613] flex items-center justify-center mb-4 ring-8 ring-red-50/50 group-hover:bg-red-100 transition-colors"
-            >
-              <UploadCloud className="size-8 stroke-[2.2]" />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Floating Confetti Particle Bursts */}
+        {particles.map((p) => (
+          <span
+            key={p.id}
+            className="absolute size-2 rounded-full pointer-events-none animate-ping"
+            style={{
+              backgroundColor: p.color,
+              transform: `translate(${p.x}px, ${p.y}px)`,
+              opacity: 0.8,
+            }}
+          />
+        ))}
 
-        <div className="space-y-1.5 max-w-md">
-          <p className="text-base font-semibold text-slate-800">Drag & drop file Excel di sini</p>
-          <p className="text-xs text-slate-500">atau klik untuk memilih file dari komputer</p>
+        <div className="size-9 rounded-full bg-rose-100/70 text-red-500 flex items-center justify-center mb-1.5 shadow-sm">
+          <CloudUpload className="size-5" />
         </div>
 
-        <Button
-          type="button"
-          disabled={disabled}
-          className="mt-4 bg-[#E30613] hover:bg-[#C60010] text-white font-semibold text-sm px-6 h-10 rounded-xl shadow-sm transition-all group-hover:scale-105 active:scale-95"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!disabled) inputRef.current?.click();
-          }}
-        >
-          Pilih File Excel
-        </Button>
-
-        <p className="text-[12px] text-slate-400 mt-4">
-          Format: <strong className="text-slate-600 font-medium">.xlsx, .xls</strong> &bull; Maksimal{' '}
-          <strong className="text-slate-600 font-medium">10 MB</strong> &bull; Tujuan{' '}
-          <strong className="text-slate-700 font-semibold">{activeTargetCity}</strong>
+        <p className="text-xs font-semibold text-slate-800 leading-snug">
+          Drag & drop file Excel di sini
+        </p>
+        <p className="text-[11px] text-slate-500 mt-0.5">
+          atau klik tombol di bawah untuk memilih file
         </p>
 
+        <button
+          type="button"
+          className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-sm active:scale-95 transition-transform"
+        >
+          <Upload className="size-3.5" />
+          Pilih File Excel
+        </button>
+
         <input
-          ref={inputRef}
+          ref={fileInputRef}
           type="file"
           accept=".xlsx,.xls,.csv"
           className="hidden"
-          disabled={disabled}
-          onChange={handleFileChange}
+          onChange={(e) => {
+            if (e.target.files && e.target.files[0]) {
+              handleProcessFile(e.target.files[0]);
+            }
+            e.target.value = '';
+          }}
         />
-      </motion.div>
+      </div>
 
-      {errorMessage && (
-        <motion.div
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center gap-2 p-3 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl text-xs"
-        >
-          <AlertCircle className="size-4 shrink-0" />
-          <span>{errorMessage}</span>
-        </motion.div>
-      )}
+      {/* Footer Info */}
+      <div className="text-center">
+        <p className="text-[11px] text-slate-400 font-medium">
+          Format: XLSX, XLS • Maksimal 10 MB
+        </p>
+      </div>
     </div>
   );
 }

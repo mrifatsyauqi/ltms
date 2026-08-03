@@ -5,74 +5,43 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2026-08-03
 
 ### Added
-- **Redesign Halaman Monitoring INC (`/monitoring-inc`) — Alur Kerja Upload-First Modern**:
-  - **Desain Minimalis & Terfokus (Stripe / Vercel Aesthetic)**:
-    - Merestrukturisasi halaman menjadi 4 seksi alur kerja bersih dengan whitespace optimal dan bebas distraksi visual.
-    - Background `#F8FAFC`, kartu `#FFFFFF`, radius `16-18px`, dan shadow lembut `0 8px 24px rgba(0,0,0,.04)`.
-  - **Seksi 1: Header & Selector Target Kota**:
-    - Judul 28px font-bold dan subjudul deskripsi SLA 24 jam.
-    - Selector Target Kota interaktif (`📍 BATANG ▼`) di kanan atas dengan dropdown modern (otomatis terkunci dengan ikon gembok untuk role Admin DP).
-  - **Seksi 2: Upload Tarikan Data JMS (`upload-card.tsx`)**:
-    - Area upload lebar penuh dengan border putus-putus (`2px dashed #E5E7EB`).
-    - Animasi spring dan transisi warna halus saat drag-over dan file terpilih.
-    - Mikro-animasi centang sukses dan efek konfeti ringan (10–12 partikel lembut) saat file Excel dimasukkan.
-    - Validasi format (`.xlsx`, `.xls`) dan batas ukuran (< 10 MB) dengan pesan peringatan inline.
-  - **Seksi 3: File Berhasil Diupload (`uploaded-file-card.tsx`)**:
-    - Animasi kemunculan *Fade Up + Scale* (`0.98 -> 1`, `duration 250ms`).
-    - Layout horizontal memuat ikon Excel hijau, nama file, ukuran file, jumlah resi terdeteksi, tanggal upload, serta tombol **Ganti File** dan **Hapus**.
-  - **Seksi 4: Generate Monitoring & Step Progress Animation (`generate-section.tsx`)**:
-    - Tombol utama merah full-rounded (`height 48px`, font-semibold 15px) dengan animasi scale-tap (`1 -> 0.97 -> 1`).
-    - Animasi indikator progres berurutan (500–700ms per tahap):
+- **Modern Compact Enterprise Redesign — Monitoring INC (`/monitoring-inc`)**:
+  - **Zero-Scroll Viewport Optimization (1920×1080 & 1366×768)**:
+    - Seluruh alur kerja operator (4 tahap: *Target Kota* → *Upload Excel* → *Review File* → *Generate Monitoring*) dirancang secara ringkas dan presisi agar pas dalam satu layar desktop tanpa memerlukan scroll vertikal.
+    - Mengadopsi standar visual modern enterprise (terinspirasi dari Stripe, Vercel, dan Linear): background `#F8FAFC`, kartu putih bersih (`#FFFFFF`), sudut melengkung `16px` (`rounded-2xl`), border halus `#E5E7EB`, dan soft shadow.
+  - **Header & Target Kota Terpadu**:
+    - Judul 28px/32px Extra-Bold, subjudul ringkas satu baris tanpa paragraf instruksi panjang yang memakan ruang.
+    - Selector Target Kota interaktif (`📍 BATANG ▼`) di sudut kanan atas dengan opsi multi-kota dan penguncian otomatis (ikon gembok) untuk peran Admin DP / SPV Drop Point.
+  - **Alur 2-Kolom: Step 1 Upload Card & Step 2 Uploaded File Card**:
+    - `upload-card.tsx`: Ketinggian dropzone dipadatkan ~40%, dilengkapi ikon awan pastel, border putus-putus transisi halus saat drag & drop, tombol primer merah `[↑ Pilih File Excel]`, serta efek partikel konfeti mengambang saat file dipilih.
+    - `uploaded-file-card.tsx`: Menampilkan kartu ringkasan horizontal dengan badge dokumen Excel hijau, nama file, ukuran, jumlah total resi terdeteksi, tanggal upload, serta tombol aksi cepat **Ganti File** dan **Hapus**.
+  - **Step 3: Generate Monitoring & Animated Processing Chips (`generate-section.tsx`)**:
+    - Tombol utama merah tebal `[⚡ Generate Monitoring]` dengan efek klik aktif (*active scale tap*).
+    - Menampilkan bar chip status pemrosesan berurutan (500–700ms per tahap) saat diklik:
       1. `✔ Membaca File`
       2. `✔ Memfilter Kota`
       3. `✔ Mapping Kecamatan`
-      4. `✔ Menghitung SLA`
+      4. `⟳ Menghitung SLA` (animasi spinner aktif)
       5. `✔ Menyimpan Monitoring`
-    - Tombol berubah menjadi hijau sukses `✔ Lihat Hasil Monitoring` disertai notifikasi toast di pojok kanan bawah.
-  - **Seksi 5: Riwayat File Terakhir (`recent-history-card.tsx`)**:
-    - Tabel riwayat upload file terakhir yang tersimpan secara lokal (*persistent LocalStorage*) dengan status *Berhasil* dan tombol aksi unduh.
-  - **Seksi 6: Tampilan Laporan & Ekspor Interaktif (`results-view.tsx`)**:
-    - Metrik ringkas (Total AWB INC, Clear TTD, Belum TTD, Telat SLA 24 Jam, dan Total Nilai COD).
-    - Fitur **Salin Gambar** (langsung paste ke WA/Feishu), **Salin Tabel** (HTML & TSV untuk Excel/Spreadsheet), dan **Unduh Excel** (`.xlsx`).
-    - Filter status pills, filter kecamatan, serta kolom pencarian instan (AWB, Nama Penerima, Alamat).
-    - Tombol navigasi kembali ke alur upload kapan saja.
+    - Berubah otomatis menjadi tombol hijau sukses dan menampilkan toast notifikasi sebelum transisi halus ke halaman laporan.
+  - **Riwayat File Terakhir Compact Table (`recent-history-card.tsx`)**:
+    - Tabel ringkas satu baris (tinggi < 120px) yang menyimpan file terakhir di penyimpanan lokal browser (*persistent LocalStorage*) dengan tombol download.
+  - **Tampilan Laporan & Tabel Modern (`results-view.tsx` & `monitoring-inc-table.tsx`)**:
+    - 5 Kartu Metrik KPI: **Total AWB INC** (Biru), **Clear TTD (≤24 Jam)** (Hijau), **Belum TTD (>24 Jam)** (Kuning), **Telat SLA (24 Jam)** (Merah), dan **Rata-rata SLA (Jam)** (Ungu).
+    - Struktur kolom tabel 100% identik dengan template Excel resmi: `AWB`, `Tempat Tujuan`, `Nama Penerima`, `Alamat Penerima`, `COD`, `Waktu TTD`, `Maksimal TTD`, `Waktu Upload ke Sistem`, dan `Status`.
+    - Dilengkapi *sticky header* (`#F8FAFC`), baris selang-seling (*zebra rows*), efek sorot baris (*hover effect*), badge status berwarna, serta kontrol paginasi lengkap (`10 / 25 / 50 / 100 / Semua`).
+    - 3 Kartu Ringkasan Bawah: **Total AWB Outgoing INC**, **Clear TTD**, dan **Presentase (%)**.
+  - **Fitur Copy Gambar Laporan Beresolusi Tinggi (`report-image-canvas.tsx`)**:
+    - Menghasilkan gambar PNG beresolusi tinggi (2x Retina Pixel Ratio) berisi logo kubus LTMS, judul, target kota, waktu generate, 5 kartu KPI, tabel lengkap, dan kartu ringkasan untuk langsung disalin ke Clipboard (siap di-paste ke WhatsApp/Telegram/Feishu).
+    - Fitur **Export Excel** (`.xlsx`) lengkap dengan ringkasan otomatis di bagian bawah sheet.
 
-- **Pondasi Multi-Kota & Normalisasi Pencocokan Kota (`city-matcher.ts`)**:
-  - Mengembangkan fungsi `normalizeCityName`, `isCityMatch`, dan `resolveCityFromDropPoint`.
-  - Mencegah *false positive* pencocokan kota (misal: data dari `KOTA BATANG HARI` tidak lagi keliru terdeteksi sebagai `BATANG` karena menggunakan *token-boundary match*).
-  - Mengaitkan akun Drop Point secara otomatis ke kota induknya (misal `DP BATANG01` langsung terpetakan ke kota `BATANG`).
-  - Menyediakan unit test lengkap di `web/src/lib/city-matcher.test.ts`.
-
-- **Rebranding Aplikasi ke LongTail Monitoring System (LTMS)**:
-  - Mengubah penamaan dari *Longtail Dashboard management system* menjadi **LongTail Monitoring System (LTMS)**.
-  - Memperbarui title tag, manifest, dan meta deskripsi browser.
-
-### Fixed
-- Memperbaiki error build TypeScript terkait import fungsi `resolveCityFromDropPoint` pada `monitoring-inc-client.tsx`.
-- Memperbaiki ketidakcocokan tipe parameter `handleCityChange` untuk mendukung tipe `string | null` dari komponen `Select`.
-- Mengganti dependensi `dropdown-menu` yang belum terdaftar dengan komponen `Select` standar.
+- **Modul Matching Kota & Resolver Drop Point (`city-matcher.ts` & `city-matcher.test.ts`)**:
+  - Utilitas `normalizeCityName`, `isCityMatch`, dan `resolveCityFromDropPoint` dengan pengujian unit lengkap (100% pass) untuk mencegah *false-positive* pada nama kota majemuk (seperti `BATANG HARI` vs `BATANG`).
 
 ---
 
 ## [Unreleased] - 2026-07-28
 
 ### Added
-- **Fitur Baru: Monitoring Delivery**
-  - Menambahkan menu "Monitoring Delivery" di sidebar khusus untuk peran Admin Cabang dan Admin DP.
-  - Memungkinkan admin untuk mengunggah (*upload*) file laporan JMS format Excel (`.xlsx`, `.xls`, `.csv`).
-  - Menguraikan data JMS secara otomatis: menyaring baris khusus Sprinter (diawali dengan "Mtr") dan mengkalkulasi matriks seperti Jumlah Waybill Delivery, Tanda Terima, Belum Diterima, Paket Bermasalah, dan Presentase TTD.
-  - Tabel disajikan dengan format persis menyerupai *template* laporan Excel asli.
-  - Fitur input manual "Total Sampai" sebelum pembuatan tabel (generasi 2 langkah) beserta pengurutan otomatis persentase TTD dari tertinggi ke terendah.
-  - Header tebal baru pada tabel (`MONITORING DELIVERY [NAMA DP]`) yang secara otomatis mendeteksi nama DP akun yang digunakan.
-  - Menambahkan indikator sel berwarna khusus untuk nilai Persentase TTD:
-    - **Hijau**: $\ge$ 95%
-    - **Kuning Muda**: 90% - 94.9%
-    - **Merah**: $\le$ 90%
-- **Fitur Copy as Image (Clipboard API)**
-  - Menambahkan pustaka `html-to-image` untuk mengubah tabel HTML menjadi gambar *base64*.
-  - Mengimplementasikan `ClipboardItem` tingkat lanjut yang menghasilkan 3 tipe *payload* sekaligus (Gambar PNG, Teks, dan Tabel HTML).
-  - Menyematkan fungsi cerdas yang secara otomatis menggunakan format Gambar saat di-*paste* ke aplikasi Chat (seperti WhatsApp) dan format Tabel saat di-*paste* kembali ke Spreadsheet/Excel.
-
-### Fixed
-- Memperbaiki peringatan *Interaction to Next Paint (INP)* pada tombol "Copy as Image" dengan menggunakan pendekatan janji asinkron (*asynchronous Promise*) pada ClipboardItem, sehingga tombol tidak membekukan (*freeze*) layar saat proses gambar berjalan.
-- Mengatasi masalah otorisasi keamanan browser Clipboard API terkait hilangnya *user-gesture context* dengan menghapus jeda `setTimeout` yang berlebihan.
+- **Fitur Monitoring Delivery**:
+  - Menu monitoring delivery JMS dengan parsing sprinter, kalkulasi TTD, persentase performa, dan ekspor gambar/tabel ke clipboard.
