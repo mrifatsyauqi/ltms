@@ -2,59 +2,97 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] - 2026-08-03
+---
+
+## [Unreleased] - 2026-08-03 (Revisi 2: Fix Parsing Waktu Excel Serial Date)
 
 ### Fixed
 - **Perbaikan Parsing Format Tanggal & Waktu Excel Serial Date (`/monitoring-inc`)**:
-  - **Penyebab Masalah**: File tarikan JMS menyimpan tanggal dan waktu dalam bentuk bilangan desimal *Excel Serial Date Number* (contoh: `46237.36094907407` dan `46236.76099537037`). Hal ini menyebabkan parser standar JavaScript menghasilkan `Invalid Date`, kolom Maksimal TTD menjadi `-`, dan seluruh resi salah terkategorisasi sebagai `Belum TTD`.
-  - **Solusi**: Mengembangkan modul `web/src/lib/excel-date.ts` (`parseExcelDate` dan `formatDisplayDateTime`) yang mampu mendeteksi dan mengonversi:
-    1. *Excel Serial Float Numbers* (berbasis epoch 1899-12-30 dengan presisi jam, menit, dan detik).
-    2. Format teks ISO (`YYYY-MM-DD HH:mm:ss`) dan format DMY (`DD/MM/YYYY HH:mm:ss`).
-    3. Teks khusus seperti `Belum TTD`, `-`, `N/A`, atau string kosong secara cerdas dikembalikan sebagai `null`.
-  - **Dampak Perbaikan**:
-    - Kolom **Waktu Upload ke Sistem** tampil rapi sebagai `YYYY-MM-DD HH:mm:ss` (contoh: `2026-08-02 18:15:38`).
-    - Kolom **Maksimal TTD** berhasil dikalkulasi secara presisi (`Waktu Input + 24 Jam`, contoh: `18:15:38`).
-    - Kolom **Waktu TTD** tampil rapi sebagai `YYYY-MM-DD HH:mm:ss` (atau teks `Belum TTD` jika belum ada tanda terima).
-    - Status **Clear TTD** vs **Telat SLA** vs **Belum TTD** terkalkulasi 100% akurat sesuai waktu tanda terima.
+  - **Penyebab Masalah**: File tarikan JMS Excel menyimpan data waktu dan tanggal dalam format bilangan desimal (*Excel Serial Date Number*), seperti `46237.36094907407` (Waktu TTD) dan `46236.76099537037` (Waktu Upload). Saat diparse langsung menggunakan `new Date(string)`, JavaScript menghasilkan `Invalid Date`. Akibatnya:
+    1. Kolom **Maksimal TTD** gagal dihitung dan menampilkan tanda strip (`-`).
+    2. Kolom **Waktu TTD** dan **Waktu Upload ke Sistem** menampilkan angka mentah desimal yang rusak.
+    3. Seluruh baris (32 resi) salah terkategorisasi menjadi status `Belum TTD` (0% Clear TTD).
+  - **File Baru Ditambahkan**:
+    - `web/src/lib/excel-date.ts`: Modul parser cerdas untuk konversi format tanggal:
+      - Mengonversi *Excel Serial Float Number* (epoch `1899-12-30`) secara presisi ke tahun, bulan, tanggal, jam, menit, dan detik.
+      - Mendukung format tanggal teks ISO (`YYYY-MM-DD HH:mm:ss`) dan format DMY (`DD/MM/YYYY HH:mm:ss`).
+      - Menangani nilai khusus teks seperti `Belum TTD`, `-`, `N/A`, atau string kosong menjadi `null`.
+    - `web/src/lib/excel-date.test.ts`: Unit test lengkap mencakup pengujian nomor desimal serial, string ISO, DMY, dan teks kosong.
+  - **File Diperbarui**:
+    - `web/src/components/monitoring-inc/monitoring-inc-client.tsx`: Mengintegrasikan `parseExcelDate` dan `formatDisplayDateTime` saat membaca baris Excel JMS.
+  - **Hasil & Verifikasi**:
+    - Nilai `46236.76099537037` terkonversi tepat menjadi `2026-08-02 18:15:38`.
+    - Batas **Maksimal TTD** otomatis terhitung tepat `18:15:38` (24 Jam dari waktu upload).
+    - Nilai `46237.36094907407` terkonversi tepat menjadi `2026-08-03 08:39:34`.
+    - Status SLA otomatis terdeteksi akurat sebagai **Clear TTD** (`08:39:34` < `18:15:38`).
+    - Seluruh pengujian (222/222 unit tests) lulus 100% dan TypeScript check lulus 0 error.
+
+---
+
+## [Unreleased] - 2026-08-03 (Revisi 1: Redesign Modern Compact Enterprise Zero-Scroll)
 
 ### Added
 - **Modern Compact Enterprise Redesign — Monitoring INC (`/monitoring-inc`)**:
   - **Zero-Scroll Viewport Optimization (1920×1080 & 1366×768)**:
-    - Seluruh alur kerja operator (4 tahap: *Target Kota* → *Upload Excel* → *Review File* → *Generate Monitoring*) dirancang secara ringkas dan presisi agar pas dalam satu layar desktop tanpa memerlukan scroll vertikal.
-    - Mengadopsi standar visual modern enterprise (terinspirasi dari Stripe, Vercel, dan Linear): background `#F8FAFC`, kartu putih bersih (`#FFFFFF`), sudut melengkung `16px` (`rounded-2xl`), border halus `#E5E7EB`, dan soft shadow.
-  - **Header & Target Kota Terpadu**:
-    - Judul 28px/32px Extra-Bold, subjudul ringkas satu baris tanpa paragraf instruksi panjang yang memakan ruang.
-    - Selector Target Kota interaktif (`📍 BATANG ▼`) di sudut kanan atas dengan opsi multi-kota dan penguncian otomatis (ikon gembok) untuk peran Admin DP / SPV Drop Point.
-  - **Alur 2-Kolom: Step 1 Upload Card & Step 2 Uploaded File Card**:
-    - `upload-card.tsx`: Ketinggian dropzone dipadatkan ~40%, dilengkapi ikon awan pastel, border putus-putus transisi halus saat drag & drop, tombol primer merah `[↑ Pilih File Excel]`, serta efek partikel konfeti mengambang saat file dipilih.
-    - `uploaded-file-card.tsx`: Menampilkan kartu ringkasan horizontal dengan badge dokumen Excel hijau, nama file, ukuran, jumlah total resi terdeteksi, tanggal upload, serta tombol aksi cepat **Ganti File** dan **Hapus**.
-  - **Step 3: Generate Monitoring & Animated Processing Chips (`generate-section.tsx`)**:
-    - Tombol utama merah tebal `[⚡ Generate Monitoring]` dengan efek klik aktif (*active scale tap*).
-    - Menampilkan bar chip status pemrosesan berurutan (500–700ms per tahap) saat diklik:
+    - Merestrukturisasi alur kerja operator 4 tahap (*Target Kota* → *Upload Excel* → *Review File* → *Generate Monitoring*) agar pas dalam satu layar desktop tanpa memerlukan scroll vertikal.
+    - Estetika modern terinspirasi oleh Stripe, Vercel, Linear, dan Notion: background `#F8FAFC`, kartu putih bersih (`#FFFFFF`), border halus `#E5E7EB`, sudut melengkung `16px` (`rounded-2xl`), dan *soft ambient shadows*.
+  - **Struktur Komponen Modular Baru**:
+    - `web/src/components/monitoring-inc/types.ts`: Definisi interface TypeScript lengkap (`IncRow`, `IncStats`, `UploadedFileInfo`, `RecentUploadHistoryItem`, dsb.).
+    - `web/src/components/monitoring-inc/upload-card.tsx`: Komponen Step 1 Upload Excel padat (~40% lebih ringkas), dengan border putus-putus transisi lembut, tombol merah `[↑ Pilih File Excel]`, serta animasi partikel konfeti mengambang saat file dipilih.
+    - `web/src/components/monitoring-inc/uploaded-file-card.tsx`: Komponen Step 2 Ringkasan File horizontal dengan badge Excel hijau, nama file, ukuran, total resi terdeteksi, tanggal upload, serta tombol aksi cepat **Ganti File** dan **Hapus**.
+    - `web/src/components/monitoring-inc/generate-section.tsx`: Komponen Step 3 Tombol merah besar `[⚡ Generate Monitoring]` dengan efek klik aktif (*active scale tap*) dan bar indikator proses berurutan 5 tahap:
       1. `✔ Membaca File`
       2. `✔ Memfilter Kota`
       3. `✔ Mapping Kecamatan`
-      4. `⟳ Menghitung SLA` (animasi spinner aktif)
+      4. `⟳ Menghitung SLA` *(spinner aktif)*
       5. `✔ Menyimpan Monitoring`
-    - Berubah otomatis menjadi tombol hijau sukses dan menampilkan toast notifikasi sebelum transisi halus ke halaman laporan.
-  - **Riwayat File Terakhir Compact Table (`recent-history-card.tsx`)**:
-    - Tabel ringkas satu baris (tinggi < 120px) yang menyimpan file terakhir di penyimpanan lokal browser (*persistent LocalStorage*) dengan tombol download.
-  - **Tampilan Laporan & Tabel Modern (`results-view.tsx` & `monitoring-inc-table.tsx`)**:
-    - 5 Kartu Metrik KPI: **Total AWB INC** (Biru), **Clear TTD (≤24 Jam)** (Hijau), **Belum TTD (>24 Jam)** (Kuning), **Telat SLA (24 Jam)** (Merah), dan **Rata-rata SLA (Jam)** (Ungu).
-    - Struktur kolom tabel 100% identik dengan template Excel resmi: `AWB`, `Tempat Tujuan`, `Nama Penerima`, `Alamat Penerima`, `COD`, `Waktu TTD`, `Maksimal TTD`, `Waktu Upload ke Sistem`, dan `Status`.
-    - Dilengkapi *sticky header* (`#F8FAFC`), baris selang-seling (*zebra rows*), efek sorot baris (*hover effect*), badge status berwarna, serta kontrol paginasi lengkap (`10 / 25 / 50 / 100 / Semua`).
-    - 3 Kartu Ringkasan Bawah: **Total AWB Outgoing INC**, **Clear TTD**, dan **Presentase (%)**.
-  - **Fitur Copy Gambar Laporan Beresolusi Tinggi (`report-image-canvas.tsx`)**:
-    - Menghasilkan gambar PNG beresolusi tinggi (2x Retina Pixel Ratio) berisi logo kubus LTMS, judul, target kota, waktu generate, 5 kartu KPI, tabel lengkap, dan kartu ringkasan untuk langsung disalin ke Clipboard (siap di-paste ke WhatsApp/Telegram/Feishu).
-    - Fitur **Export Excel** (`.xlsx`) lengkap dengan ringkasan otomatis di bagian bawah sheet.
+    - `web/src/components/monitoring-inc/recent-history-card.tsx`: Komponen Step 5 Tabel riwayat file terakhir compact (<120px) yang tersimpan di `localStorage` (*persistent*).
+    - `web/src/components/monitoring-inc/results-view.tsx`: Tampilan hasil laporan memuat 5 Kartu KPI (*Total AWB INC*, *Clear TTD ≤24 Jam*, *Belum TTD >24 Jam*, *Telat SLA*, *Rata-rata SLA Jam*), filter pencarian instan, filter kecamatan, filter status pills, serta tombol navigasi kembali ke alur upload.
+    - `web/src/components/monitoring-inc/monitoring-inc-table.tsx`: Tabel data modern dengan *sticky header* (`#F8FAFC`), *zebra striping*, efek sorot *hover*, status badges berbobot visual, dan kontrol paginasi lengkap (`10 / 25 / 50 / 100 / Semua`).
+    - `web/src/components/monitoring-inc/report-image-canvas.tsx`: Canvas render tersembunyi beresolusi tinggi (2x Retina Pixel Ratio) untuk fitur **Salin Gambar Laporan** (siap di-paste ke WhatsApp/Telegram) dan **Export Excel** (`.xlsx`).
+    - `web/src/components/monitoring-inc/monitoring-inc-client.tsx`: Koordinator utama state alur kerja upload, parsing data JMS, kalkulasi SLA 24 jam, dan pergantian mode tampilan.
 
-- **Modul Matching Kota & Resolver Drop Point (`city-matcher.ts` & `city-matcher.test.ts`)**:
-  - Utilitas `normalizeCityName`, `isCityMatch`, dan `resolveCityFromDropPoint` dengan pengujian unit lengkap (100% pass) untuk mencegah *false-positive* pada nama kota majemuk (seperti `BATANG HARI` vs `BATANG`).
+- **Modul Pencocokan Nama Kota Cerdas (`web/src/lib/city-matcher.ts`)**:
+  - Fungsi `normalizeCityName`, `isCityMatch`, dan `resolveCityFromDropPoint`.
+  - Menggunakan *word-boundary matching* untuk mencegah *false positive* (contoh: `KOTA BATANG HARI` tidak keliru terdeteksi sebagai `BATANG`).
+  - Mengaitkan akun Drop Point secara otomatis ke kota induknya (contoh: `DP BATANG01` langsung terpetakan ke kota `BATANG`).
+  - Dilengkapi unit test lengkap di `web/src/lib/city-matcher.test.ts`.
 
 ---
 
-## [Unreleased] - 2026-07-28
+## [Unreleased] - 2026-08-03 (Rilis Awal: Fitur Monitoring Inter City / INC)
 
 ### Added
-- **Fitur Monitoring Delivery**:
-  - Menu monitoring delivery JMS dengan parsing sprinter, kalkulasi TTD, persentase performa, dan ekspor gambar/tabel ke clipboard.
+- **Fitur Baru: Monitoring Inter City (INC) Outgoing (`/monitoring-inc`)**:
+  - Menambahkan menu **Monitoring INC** pada navigasi sidebar LTMS.
+  - Membaca dan memetakan kolom dari tarikan data JMS:
+    - `AWB`: Kolom `No. Waybill` / `AWB` / `Nomor Resi`.
+    - `Tempat Tujuan`: Kolom `Kecamatan Penerima` (difilter hanya untuk kota tujuan yang dipilih, default: **BATANG**).
+    - `Nama Penerima`: Kolom `Nama Penerima`.
+    - `Alamat Penerima`: Kolom `Alamat Penerima`.
+    - `COD`: Kolom `Biaya COD` / `COD`.
+    - `Waktu TTD`: Kolom `Waktu Upload TTD` / `Waktu TTD`.
+    - `Maksimal TTD`: Kalkulasi otomatis maksimal 24 jam dari waktu input.
+    - `Waktu Upload ke Sistem`: Kolom `Waktu Input`.
+  - **SLA & Status Tracker**:
+    - **Clear TTD**: Paket yang berhasil TTD dalam kurun waktu $\le$ 24 jam dari waktu input.
+    - **Telat SLA**: Paket yang waktu TTD-nya melebihi batas 24 jam.
+    - **Belum TTD**: Paket yang belum memiliki tanda terima.
+  - **Sistem Hak Akses & Role Matrix**:
+    - Menambahkan `menu_key: 'monitoring_inc'` ke dalam sistem matriks permissions LTMS.
+    - Mengupdate `web/src/lib/nav.ts`, `web/src/lib/data/supabase/permissions.ts`, dan migrasi SQL `supabase/monitoring_inc_migration.sql`.
+    - Menu dapat diakses oleh Admin Cabang, Manager Kota, Asisten Manager Kota, Super Admin, Admin DP, dan SPV Drop Point.
+
+---
+
+## [Unreleased] - 2026-07-28 (Fitur Monitoring Delivery & Rebranding LTMS)
+
+### Added
+- **Fitur Baru: Monitoring Delivery**:
+  - Menu monitoring delivery JMS dengan parsing data Sprinter (Mtr), kalkulasi Waybill Delivery, Tanda Terima, Belum Diterima, Paket Bermasalah, dan Presentase TTD.
+  - Tabel disajikan menyerupai template laporan Excel asli dengan pengurutan otomatis persentase TTD dari tertinggi ke terendah.
+  - Indikator sel berwarna khusus untuk nilai Persentase TTD (Hijau $\ge$ 95%, Kuning Muda 90% - 94.9%, Merah $\le$ 90%).
+- **Fitur Salin Gambar Beresolusi Tinggi (Clipboard API)**:
+  - Dukungan multi-MIME payload `ClipboardItem` (Gambar PNG, Teks, dan Tabel HTML) sehingga kompatibel saat di-paste ke aplikasi chat (WhatsApp) maupun spreadsheet (Excel/Google Sheets).
+- **Rebranding Sistem**:
+  - Penamaan resmi sistem diperbarui menjadi **LongTail Monitoring System (LTMS)**.
