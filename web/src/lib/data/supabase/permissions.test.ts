@@ -15,6 +15,7 @@ const FULL_ACCESS_MENU_KEYS = [
   'dashboard', 'feedback_longtail_view', 'feedback_longtail_edit',
   'data_longtail', 'import_longtail',
   'monitoring_delivery_dp', 'monitoring_delivery_cabang',
+  'monitoring_inc',
   'master_cabang', 'master_drop_point', 'master_feedback', 'user_management',
   'riwayat_import', 'riwayat_feedback',
   'pengaturan', 'role_akses',
@@ -47,22 +48,19 @@ function freshStore(): Map<string, Row[]> {
     { id: 'jab-spv-dp', nama: 'SPV Drop Point', tingkat: 5, deskripsi: null },
     { id: 'jab-admin-dp', nama: 'Admin DP', tingkat: 6, deskripsi: null },
   ]);
-  // Seed persis spt migrasi produksi: semua true utk SPV Drop Point/Admin DP
-  // (5 menu_key) DAN Admin Cabang/Manager Kota/Asisten Manager Kota (15
-  // menu_key, sejak bypass hasPermission() utk grup ini dihapus - role_
-  // akses_hierarchy_migration.sql). Kalau seed ini TIDAK all-true, itulah
-  // skenario "lockout" yang harus dicegah (lihat test 2/12 di bawah).
   store.set('role_permissions', [
     { role: 'SPV Drop Point', menu_key: 'dashboard', enabled: true },
     { role: 'SPV Drop Point', menu_key: 'feedback_longtail_view', enabled: true },
     { role: 'SPV Drop Point', menu_key: 'feedback_longtail_edit', enabled: true },
     { role: 'SPV Drop Point', menu_key: 'riwayat_feedback', enabled: true },
     { role: 'SPV Drop Point', menu_key: 'monitoring_delivery_dp', enabled: true },
+    { role: 'SPV Drop Point', menu_key: 'monitoring_inc', enabled: true },
     { role: 'Admin DP', menu_key: 'dashboard', enabled: true },
     { role: 'Admin DP', menu_key: 'feedback_longtail_view', enabled: true },
     { role: 'Admin DP', menu_key: 'feedback_longtail_edit', enabled: true },
     { role: 'Admin DP', menu_key: 'riwayat_feedback', enabled: true },
     { role: 'Admin DP', menu_key: 'monitoring_delivery_dp', enabled: true },
+    { role: 'Admin DP', menu_key: 'monitoring_inc', enabled: true },
     ...(['Admin Cabang', 'Manager Kota', 'Asisten Manager Kota'] as const).flatMap((role) =>
       FULL_ACCESS_MENU_KEYS.map((menu_key) => ({ role, menu_key, enabled: true })),
     ),

@@ -22,6 +22,7 @@ export const MENU_KEYS = [
   'import_longtail',
   'monitoring_delivery_dp',
   'monitoring_delivery_cabang',
+  'monitoring_inc',
   'master_cabang',
   'master_drop_point',
   'master_feedback',
