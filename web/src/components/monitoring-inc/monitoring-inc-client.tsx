@@ -292,6 +292,7 @@ export function MonitoringIncClient({
         stats={stats}
         targetKota={targetKota}
         generateTime={generateTimestamp}
+        userDropPoint={userDropPoint}
         onReset={() => setViewMode('workflow')}
         onTargetKotaChange={(k) => setTargetKota(k)}
         isCityLocked={isCityLocked}
@@ -303,22 +304,22 @@ export function MonitoringIncClient({
   return (
     <div className="space-y-3.5 max-w-7xl mx-auto animate-in fade-in-50 duration-300">
       {/* 1. Header Ringkas + Selector Target Kota */}
-      <div className="flex items-center justify-between gap-3 pb-1 border-b border-slate-200/80">
+      <div className="flex items-center justify-between gap-3 pb-2 border-b border-slate-200/80">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
+          <h1 className="text-lg md:text-xl font-semibold tracking-tight text-slate-900">
             Monitoring INC
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Monitoring pengiriman Inter City dengan SLA maksimal 24 jam.
+            Monitoring pengiriman Inter City (INC) dengan batas SLA maksimal 24 jam.
           </p>
         </div>
 
         {/* Target Kota Dropdown */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500 hidden sm:inline">
+          <span className="text-xs font-medium text-slate-500 hidden sm:inline">
             Target Kota
           </span>
-          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-2xs text-xs font-bold text-slate-800">
+          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-md px-2.5 py-1.5 shadow-2xs text-xs font-medium text-slate-800">
             <MapPin className="size-3.5 text-red-600" />
             {isCityLocked ? (
               <div className="flex items-center gap-1">
@@ -329,7 +330,7 @@ export function MonitoringIncClient({
               <select
                 value={targetKota}
                 onChange={(e) => setTargetKota(e.target.value)}
-                className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
+                className="bg-transparent font-semibold text-slate-900 focus:outline-none cursor-pointer"
               >
                 {AVAILABLE_CITIES.map((c) => (
                   <option key={c} value={c}>

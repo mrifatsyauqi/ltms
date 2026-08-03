@@ -17,36 +17,36 @@ export function UploadedFileCard({
   targetKota,
 }: UploadedFileCardProps) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-[230px]">
+    <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-xs flex flex-col justify-between h-[230px]">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <span className="flex items-center justify-center size-5 rounded-full bg-red-600 text-white text-xs font-bold">
+        <div className="flex items-center gap-2">
+          <span className="flex items-center justify-center size-5 rounded-full bg-slate-900 text-white text-[11px] font-bold">
             2
           </span>
-          <h3 className="text-sm font-bold text-slate-900 tracking-tight">
-            File Berhasil Diupload
+          <h3 className="text-sm font-semibold text-slate-900 tracking-tight">
+            File Terverifikasi
           </h3>
         </div>
 
         {fileInfo && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
             <CheckCircle2 className="size-3 text-emerald-600" />
-            Terverifikasi
+            Siap Diproses
           </span>
         )}
       </div>
 
       {fileInfo ? (
-        <div className="flex flex-col justify-between flex-1 mt-2.5 animate-in fade-in-50 zoom-in-95 duration-200">
+        <div className="flex flex-col justify-between flex-1 mt-2 animate-in fade-in-50 duration-200">
           {/* Top Row: Excel Icon + File info + Action buttons */}
-          <div className="flex items-center justify-between gap-3 bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="size-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                <FileSpreadsheet className="size-5" />
+          <div className="flex items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="size-9 rounded-md bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <FileSpreadsheet className="size-4.5" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold text-slate-900 truncate max-w-[220px]" title={fileInfo.name}>
+                <p className="text-xs font-semibold text-slate-900 truncate max-w-[200px]" title={fileInfo.name}>
                   {fileInfo.name}
                 </p>
                 <p className="text-[11px] text-slate-500 font-mono mt-0.5">
@@ -59,16 +59,16 @@ export function UploadedFileCard({
               <button
                 type="button"
                 onClick={onReplaceFile}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium shadow-xs transition-colors"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium shadow-2xs transition-colors"
               >
                 <RefreshCw className="size-3 text-slate-500" />
-                Ganti File
+                Ganti
               </button>
 
               <button
                 type="button"
                 onClick={onDeleteFile}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50/50 hover:bg-rose-100/70 text-rose-700 text-xs font-medium shadow-xs transition-colors"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-rose-200 bg-rose-50/50 hover:bg-rose-100 text-rose-700 text-xs font-medium shadow-2xs transition-colors"
               >
                 <Trash2 className="size-3 text-rose-600" />
                 Hapus
@@ -85,7 +85,7 @@ export function UploadedFileCard({
               </p>
             </div>
             <div>
-              <p className="text-[10px] uppercase font-semibold text-slate-400">Upload</p>
+              <p className="text-[10px] uppercase font-semibold text-slate-400">Waktu Upload</p>
               <p className="text-xs font-medium text-slate-700 mt-0.5">
                 {fileInfo.uploadTimestamp}
               </p>
@@ -100,7 +100,7 @@ export function UploadedFileCard({
         </div>
       ) : (
         /* Empty / Waiting State */
-        <div className="flex-1 flex flex-col items-center justify-center text-center p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50/30 my-1">
+        <div className="flex-1 flex flex-col items-center justify-center text-center p-4 border border-dashed border-slate-200 rounded-lg bg-slate-50/30 my-1">
           <p className="text-xs font-medium text-slate-400">
             Belum ada file Excel yang dipilih
           </p>

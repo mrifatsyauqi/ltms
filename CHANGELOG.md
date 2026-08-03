@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased] - 2026-08-03 (Revisi 3: UI & Ergonomic UX Overhaul Monitoring INC)
+
+### Changed
+- **Penyelarasan Tipografi & Struktur Header Halaman (`/monitoring-inc`)**:
+  - Menyelaraskan ukuran judul utama dari yang sebelumnya terlalu besar dan tebal (`text-2xl md:text-3xl font-extrabold`) menjadi proporsional dan harmonis dengan `PageHeader` halaman lain (`text-lg md:text-xl font-semibold tracking-tight text-slate-900`).
+  - Menghapus penempatan canggung tombol *Upload Ulang* di samping kiri judul, dan memindahkannya ke dalam **Toolbar Aksi Kanan** terpadu (`[← Upload File Baru]`, `[📍 Target Kota]`, `[📋 Salin Gambar]`, `[⬇ Ekspor Excel]`).
+
+- **Animasi Loading & Skeleton Upload File Profesional (`upload-card.tsx`)**:
+  - Menghapus efek partikel konfeti ping.
+  - Menggantikannya dengan **Skeleton Shimmer Loading** dan efek **Animated Glowing Border Ring** mengelilingi dropzone dan tombol upload saat file dipilih atau diparsing.
+
+- **Restrukturisasi 4 Kartu KPI Metrik & Pembersihan Kartu Bawah (`results-view.tsx` & `report-image-canvas.tsx`)**:
+  - Mengubah ringkasan metrik atas menjadi **4 Card**:
+    1. **Total AWB INC** (Biru / Neutral Slate)
+    2. **Clear TTD (≤24 Jam)** (Emerald Hijau)
+    3. **Belum TTD / Telat** (Amber / Rose)
+    4. **Presentase TTD** (Indigo / Ungu — menggantikan Rata-rata SLA Jam sebelumnya)
+  - **Menghapus 3 kartu ringkasan redundan di bawah tabel data**.
+
+- **Header Gambar Ekspor Formal & Tanpa Logo LTMS (`report-image-canvas.tsx`)**:
+  - Menghapus logo kotak merah LTMS dan teks branding.
+  - Menggantikannya dengan header laporan formal: Judul **MONITORING INC**, Unit/Cabang **DP [NAMA DP / TARGET KOTA]**, dan tanggal/jam generate di sisi kanan.
+
+- **Pengurangan Sudut Kelengkungan (*Border Radius*) & Bahasa Desain Anti-Fatigue**:
+  - Mengurangi radius sudut dari `rounded-2xl` menjadi `rounded-xl` (12px) untuk card container, `rounded-lg` (8px) untuk dropzone/table, dan `rounded-md` (6px) untuk tombol / input / status badge.
+  - Menerapkan palet warna tenang *soft neutral slate* (`#F8FAFC`) untuk mengurangi kelelahan mata operator saat bekerja seharian.
+
+---
+
 ## [Unreleased] - 2026-08-03 (Revisi 2: Fix Parsing Waktu Excel Serial Date)
 
 ### Fixed

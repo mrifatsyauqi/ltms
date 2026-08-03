@@ -14,11 +14,11 @@ export function RecentHistoryCard({
 }: RecentHistoryCardProps) {
   if (!historyItem) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm">
-        <h4 className="text-xs font-bold text-slate-900 tracking-tight mb-2">
+      <div className="bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-xs">
+        <h4 className="text-xs font-semibold text-slate-900 tracking-tight mb-2">
           Riwayat File Terakhir
         </h4>
-        <div className="py-2.5 text-center text-xs text-slate-400 border border-dashed border-slate-100 rounded-xl">
+        <div className="py-2.5 text-center text-xs text-slate-400 border border-dashed border-slate-100 rounded-lg">
           Belum ada riwayat generate monitoring sebelumnya.
         </div>
       </div>
@@ -26,8 +26,8 @@ export function RecentHistoryCard({
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm space-y-2 max-h-[140px]">
-      <h4 className="text-xs font-bold text-slate-900 tracking-tight">
+    <div className="bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-xs space-y-2 max-h-[140px]">
+      <h4 className="text-xs font-semibold text-slate-900 tracking-tight">
         Riwayat File Terakhir
       </h4>
 
@@ -65,7 +65,7 @@ export function RecentHistoryCard({
                 {historyItem.uploadTimestamp}
               </td>
               <td className="py-2 pr-2">
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                   {historyItem.status}
                 </span>
               </td>
@@ -74,10 +74,10 @@ export function RecentHistoryCard({
                   <button
                     type="button"
                     onClick={() => onDownloadHistory?.(historyItem)}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-blue-600 font-medium text-[11px] shadow-xs"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-blue-600 font-medium text-[11px] shadow-2xs"
                   >
                     <Download className="size-3" />
-                    Download
+                    Lihat
                   </button>
                   <button
                     type="button"

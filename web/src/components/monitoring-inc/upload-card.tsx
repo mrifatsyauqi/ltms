@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { CloudUpload, Upload } from 'lucide-react';
+import { CloudUpload, Upload, Loader2, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface UploadCardProps {
@@ -12,21 +12,10 @@ interface UploadCardProps {
 export function UploadCard({ onFileSelected, disabled }: UploadCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [particles, setParticles] = useState<{ id: number; x: number; y: number; color: string }[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingFileName, setLoadingFileName] = useState('');
 
-  const triggerConfetti = () => {
-    const colors = ['#ef4444', '#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899'];
-    const newParticles = Array.from({ length: 14 }).map((_, i) => ({
-      id: Date.now() + i,
-      x: (Math.random() - 0.5) * 160,
-      y: (Math.random() - 0.5) * 120 - 40,
-      color: colors[Math.floor(Math.random() * colors.length)],
-    }));
-    setParticles(newParticles);
-    setTimeout(() => setParticles([]), 1000);
-  };
-
-  const handleProcessFile = (file: File) => {
+  const handleProcessFile = async (file: File) => {
     if (!file) return;
 
     // Validasi ekstensi
@@ -44,92 +33,111 @@ export function UploadCard({ onFileSelected, disabled }: UploadCardProps) {
       return;
     }
 
-    triggerConfetti();
-    onFileSelected(file);
+    setIsLoading(true);
+    setLoadingFileName(file.name);
+
+    // Animasi skeleton loading profesional (350ms)
+    setTimeout(() => {
+      onFileSelected(file);
+      setIsLoading(false);
+      setLoadingFileName('');
+    }, 350);
   };
 
   return (
-    <div className="relative bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-[230px]">
+    <div className="relative bg-white rounded-xl border border-slate-200/80 p-4 shadow-xs hover:border-slate-300 transition-colors flex flex-col justify-between h-[230px]">
       {/* Header */}
-      <div className="flex items-center gap-2.5">
-        <span className="flex items-center justify-center size-5 rounded-full bg-red-600 text-white text-xs font-bold">
-          1
-        </span>
-        <h3 className="text-sm font-bold text-slate-900 tracking-tight">Upload Excel</h3>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="flex items-center justify-center size-5 rounded-full bg-slate-900 text-white text-[11px] font-bold">
+            1
+          </span>
+          <h3 className="text-sm font-semibold text-slate-900 tracking-tight">Upload File Excel</h3>
+        </div>
+        <span className="text-[11px] font-medium text-slate-400">JMS Outgoing INC</span>
       </div>
 
       {/* Drop Area */}
-      <div
-        className={`relative overflow-hidden flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-3 text-center transition-all cursor-pointer select-none my-1 flex-1 ${
-          isDragOver
-            ? 'border-red-500 bg-red-50/50 scale-[0.99]'
-            : 'border-slate-200 bg-slate-50/40 hover:border-red-300 hover:bg-slate-50/80'
-        } ${disabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragOver(true);
-        }}
-        onDragLeave={() => setIsDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsDragOver(false);
-          if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            handleProcessFile(e.dataTransfer.files[0]);
-          }
-        }}
-        onClick={() => fileInputRef.current?.click()}
-      >
-        {/* Floating Confetti Particle Bursts */}
-        {particles.map((p) => (
-          <span
-            key={p.id}
-            className="absolute size-2 rounded-full pointer-events-none animate-ping"
-            style={{
-              backgroundColor: p.color,
-              transform: `translate(${p.x}px, ${p.y}px)`,
-              opacity: 0.8,
+      {isLoading ? (
+        /* Professional Skeleton Loading State */
+        <div className="relative overflow-hidden flex flex-col items-center justify-center rounded-lg border-2 border-red-500/40 bg-red-50/20 px-4 py-3 text-center my-1 flex-1 animate-pulse">
+          <div className="relative flex items-center justify-center size-10 rounded-lg bg-red-100/80 text-red-600 mb-2">
+            <Loader2 className="size-5 animate-spin" />
+          </div>
+          <p className="text-xs font-semibold text-slate-800 truncate max-w-[240px]">
+            {loadingFileName}
+          </p>
+          <div className="w-48 h-1.5 bg-slate-200 rounded-full mt-2 overflow-hidden">
+            <div className="h-full bg-red-600 rounded-full animate-[shimmer_1s_infinite] w-full bg-gradient-to-r from-red-500 via-rose-400 to-red-600" />
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1.5 font-medium">
+            Memverifikasi dan memproses struktur Excel...
+          </p>
+        </div>
+      ) : (
+        /* Ready / Dropzone State with Glowing Border on Hover/Drag */
+        <div
+          className={`relative group overflow-hidden flex flex-col items-center justify-center rounded-lg border-2 border-dashed px-4 py-3 text-center transition-all cursor-pointer select-none my-1 flex-1 ${
+            isDragOver
+              ? 'border-red-500 bg-red-50/50 ring-2 ring-red-500/20'
+              : 'border-slate-200 bg-slate-50/50 hover:border-slate-300 hover:bg-slate-50/80'
+          } ${disabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragOver(true);
+          }}
+          onDragLeave={() => setIsDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragOver(false);
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+              handleProcessFile(e.dataTransfer.files[0]);
+            }
+          }}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <div className="size-9 rounded-lg bg-white border border-slate-200 text-slate-600 group-hover:text-red-600 group-hover:border-red-200 group-hover:bg-red-50/60 flex items-center justify-center mb-1.5 shadow-2xs transition-colors">
+            <CloudUpload className="size-4.5" />
+          </div>
+
+          <p className="text-xs font-semibold text-slate-800 leading-snug">
+            Tarik & lepas file Excel di sini
+          </p>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            atau klik untuk menjelajah file komputer
+          </p>
+
+          <div className="relative mt-2">
+            {/* Subtle Gradient Glow Ring around Button */}
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-red-600 to-rose-600 rounded-md blur-xs opacity-0 group-hover:opacity-40 transition duration-300" />
+            <button
+              type="button"
+              className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs transition-colors"
+            >
+              <Upload className="size-3.5" />
+              Pilih File
+            </button>
+          </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files && e.target.files[0]) {
+                handleProcessFile(e.target.files[0]);
+              }
+              e.target.value = '';
             }}
           />
-        ))}
-
-        <div className="size-9 rounded-full bg-rose-100/70 text-red-500 flex items-center justify-center mb-1.5 shadow-sm">
-          <CloudUpload className="size-5" />
         </div>
-
-        <p className="text-xs font-semibold text-slate-800 leading-snug">
-          Drag & drop file Excel di sini
-        </p>
-        <p className="text-[11px] text-slate-500 mt-0.5">
-          atau klik tombol di bawah untuk memilih file
-        </p>
-
-        <button
-          type="button"
-          className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-sm active:scale-95 transition-transform"
-        >
-          <Upload className="size-3.5" />
-          Pilih File Excel
-        </button>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files && e.target.files[0]) {
-              handleProcessFile(e.target.files[0]);
-            }
-            e.target.value = '';
-          }}
-        />
-      </div>
+      )}
 
       {/* Footer Info */}
-      <div className="text-center">
-        <p className="text-[11px] text-slate-400 font-medium">
-          Format: XLSX, XLS • Maksimal 10 MB
-        </p>
+      <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium">
+        <span>Format: XLSX, XLS</span>
+        <span>Maksimal 10 MB</span>
       </div>
     </div>
   );

@@ -2,21 +2,26 @@
 
 import React, { forwardRef } from 'react';
 import { IncRow, IncStats } from './types';
-import { FileText, CheckCircle2, Clock, AlertCircle, Timer, PieChart } from 'lucide-react';
+import { FileText, CheckCircle2, Clock, Percent } from 'lucide-react';
 
 interface ReportImageCanvasProps {
   data: IncRow[];
   stats: IncStats;
   targetKota: string;
   generateTime: string;
+  userDropPoint?: string;
 }
 
 export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasProps>(
-  ({ data, stats, targetKota, generateTime }, ref) => {
+  ({ data, stats, targetKota, generateTime, userDropPoint }, ref) => {
     const formatCurrency = (val: number) => {
       if (!val || val === 0) return '0';
       return new Intl.NumberFormat('id-ID').format(val);
     };
+
+    const dpDisplayName = userDropPoint && userDropPoint !== 'SEMUA DP'
+      ? userDropPoint
+      : `DP ${targetKota}`;
 
     return (
       <div
@@ -24,105 +29,82 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
         style={{ width: '1200px', backgroundColor: '#FFFFFF' }}
         className="p-8 text-slate-900 font-sans"
       >
-        {/* 1. Header Branding */}
-        <div className="flex items-center justify-between border-b-2 border-slate-100 pb-5 mb-6">
-          <div className="flex items-center gap-3">
-            {/* LTMS Cube Logo */}
-            <div className="size-11 rounded-xl bg-red-600 flex items-center justify-center text-white shadow-md">
-              <span className="font-black text-xl tracking-wider">LT</span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-black tracking-tight text-slate-950">LTMS</span>
-                <span className="text-xs px-2 py-0.5 rounded-md bg-red-50 text-red-700 font-bold border border-red-200">
-                  MONITORING INC
-                </span>
-              </div>
-              <p className="text-xs font-semibold text-slate-400 tracking-wide uppercase">
-                Logistics Monitoring System
-              </p>
-            </div>
+        {/* 1. Header Formal & Professional (Tanpa Logo LTMS) */}
+        <div className="flex items-center justify-between border-b-2 border-slate-200 pb-4 mb-5">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 uppercase">
+              Monitoring INC
+            </h1>
+            <p className="text-xs font-semibold text-slate-600 tracking-wide mt-0.5">
+              UNIT / CABANG: <span className="text-slate-900 font-bold">{dpDisplayName}</span> • KOTA <span className="text-slate-900 font-bold">{targetKota}</span>
+            </p>
           </div>
 
           <div className="text-right">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-slate-100 text-slate-800 text-xs font-bold mb-1">
-              <span>📍 KOTA {targetKota}</span>
-            </div>
-            <p className="text-xs text-slate-500 font-medium">
-              Generated: {generateTime}
+            <p className="text-xs font-bold text-slate-700">
+              🗓 Waktu Generate:
+            </p>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              {generateTime}
             </p>
           </div>
         </div>
 
-        {/* 2. 5 KPI Summary Cards */}
-        <div className="grid grid-cols-5 gap-3 mb-6">
+        {/* 2. 4 KPI Summary Cards Grid */}
+        <div className="grid grid-cols-4 gap-3 mb-5">
           {/* Card 1: Total AWB */}
-          <div className="bg-slate-50/80 rounded-xl p-3.5 border border-slate-200 flex items-center gap-3">
-            <div className="size-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
-              <FileText className="size-5" />
+          <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 flex items-center gap-3">
+            <div className="size-9 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+              <FileText className="size-4.5" />
             </div>
             <div>
-              <p className="text-[11px] font-semibold text-slate-500">Total AWB INC</p>
-              <p className="text-xl font-bold text-slate-900">{stats.total}</p>
-              <p className="text-[10px] text-slate-400">Total Pengiriman</p>
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-tight">Total AWB INC</p>
+              <p className="text-xl font-bold text-slate-900 leading-tight">{stats.total}</p>
+              <p className="text-[10px] text-slate-500">Total Pengiriman</p>
             </div>
           </div>
 
           {/* Card 2: Clear TTD */}
-          <div className="bg-emerald-50/50 rounded-xl p-3.5 border border-emerald-200/80 flex items-center gap-3">
-            <div className="size-10 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="size-5" />
+          <div className="bg-emerald-50/60 rounded-lg p-3 border border-emerald-200 flex items-center gap-3">
+            <div className="size-9 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="size-4.5" />
             </div>
             <div>
-              <p className="text-[11px] font-semibold text-emerald-800">Clear TTD (≤24 Jam)</p>
-              <p className="text-xl font-bold text-emerald-900">{stats.clear}</p>
-              <p className="text-[10px] text-emerald-700 font-bold">{stats.percent}% Tepat Waktu</p>
+              <p className="text-[11px] font-semibold text-emerald-800 uppercase tracking-tight">Clear TTD (≤24 Jam)</p>
+              <p className="text-xl font-bold text-emerald-900 leading-tight">{stats.clear}</p>
+              <p className="text-[10px] text-emerald-700 font-semibold">{stats.percent}% Tepat Waktu</p>
             </div>
           </div>
 
-          {/* Card 3: Belum TTD */}
-          <div className="bg-amber-50/50 rounded-xl p-3.5 border border-amber-200/80 flex items-center gap-3">
-            <div className="size-10 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-              <Clock className="size-5" />
+          {/* Card 3: Belum TTD / Telat */}
+          <div className="bg-amber-50/60 rounded-lg p-3 border border-amber-200 flex items-center gap-3">
+            <div className="size-9 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+              <Clock className="size-4.5" />
             </div>
             <div>
-              <p className="text-[11px] font-semibold text-amber-800">Belum TTD (&gt;24 Jam)</p>
-              <p className="text-xl font-bold text-amber-900">{stats.belum}</p>
-              <p className="text-[10px] text-amber-700 font-medium">
-                {stats.total > 0 ? Math.round((stats.belum / stats.total) * 100) : 0}% Belum Selesai
+              <p className="text-[11px] font-semibold text-amber-800 uppercase tracking-tight">Belum TTD / Telat</p>
+              <p className="text-xl font-bold text-amber-900 leading-tight">{stats.belum + stats.late}</p>
+              <p className="text-[10px] text-amber-700 font-semibold">
+                {stats.total > 0 ? Math.round(((stats.belum + stats.late) / stats.total) * 100) : 0}% Belum Selesai
               </p>
             </div>
           </div>
 
-          {/* Card 4: Telat SLA */}
-          <div className="bg-rose-50/50 rounded-xl p-3.5 border border-rose-200/80 flex items-center gap-3">
-            <div className="size-10 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
-              <AlertCircle className="size-5" />
+          {/* Card 4: Presentase (Menggantikan Rata-rata SLA) */}
+          <div className="bg-indigo-50/60 rounded-lg p-3 border border-indigo-200 flex items-center gap-3">
+            <div className="size-9 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+              <Percent className="size-4.5" />
             </div>
             <div>
-              <p className="text-[11px] font-semibold text-rose-800">Telat SLA (24 Jam)</p>
-              <p className="text-xl font-bold text-rose-900">{stats.late}</p>
-              <p className="text-[10px] text-rose-700 font-medium">
-                {stats.total > 0 ? Math.round((stats.late / stats.total) * 100) : 0}% Melebihi SLA
-              </p>
-            </div>
-          </div>
-
-          {/* Card 5: Rata-rata SLA */}
-          <div className="bg-purple-50/50 rounded-xl p-3.5 border border-purple-200/80 flex items-center gap-3">
-            <div className="size-10 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
-              <Timer className="size-5" />
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold text-purple-800">Rata-rata SLA</p>
-              <p className="text-xl font-bold text-purple-900">{stats.avgSlaHours || 0}</p>
-              <p className="text-[10px] text-purple-700 font-medium">Jam Pengiriman</p>
+              <p className="text-[11px] font-semibold text-indigo-800 uppercase tracking-tight">Presentase</p>
+              <p className="text-xl font-bold text-indigo-900 leading-tight">{stats.percent}%</p>
+              <p className="text-[10px] text-indigo-700 font-semibold">Pencapaian SLA</p>
             </div>
           </div>
         </div>
 
-        {/* 3. Table with Exact Columns */}
-        <div className="rounded-xl border border-slate-200 overflow-hidden mb-6">
+        {/* 3. Table with Crisp Borders */}
+        <div className="rounded-lg border border-slate-200 overflow-hidden">
           <table className="w-full text-left text-[11px] border-collapse">
             <thead className="bg-slate-100 border-b border-slate-200">
               <tr className="text-slate-700 uppercase font-bold text-[10px] tracking-wider">
@@ -150,17 +132,17 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
                   <td className="py-2 px-3 font-mono text-slate-600">{row.waktuUploadSistem || '-'}</td>
                   <td className="py-2 px-3 text-center">
                     {row.status === 'CLEAR' && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
                         Clear TTD
                       </span>
                     )}
                     {row.status === 'BELUM' && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">
                         Belum TTD
                       </span>
                     )}
                     {row.status === 'LATE' && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-800 border border-rose-300">
                         Telat SLA
                       </span>
                     )}
@@ -169,45 +151,6 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
               ))}
             </tbody>
           </table>
-        </div>
-
-        {/* 4. Bottom Summary Cards */}
-        <div className="grid grid-cols-3 gap-4 pt-2 border-t border-slate-200">
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center gap-3">
-            <div className="size-9 rounded-lg bg-red-100 text-red-600 flex items-center justify-center">
-              <FileText className="size-5" />
-            </div>
-            <div>
-              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                TOTAL AWB OUTGOING INC
-              </p>
-              <p className="text-xl font-black text-slate-900">{stats.total}</p>
-            </div>
-          </div>
-
-          <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-200 flex items-center gap-3">
-            <div className="size-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
-              <CheckCircle2 className="size-5" />
-            </div>
-            <div>
-              <p className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider">
-                CLEAR TTD
-              </p>
-              <p className="text-xl font-black text-emerald-900">{stats.clear}</p>
-            </div>
-          </div>
-
-          <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-200 flex items-center gap-3">
-            <div className="size-9 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center">
-              <PieChart className="size-5" />
-            </div>
-            <div>
-              <p className="text-[10px] uppercase font-bold text-purple-700 tracking-wider">
-                PRESENTASE
-              </p>
-              <p className="text-xl font-black text-purple-900">{stats.percent}%</p>
-            </div>
-          </div>
         </div>
       </div>
     );
