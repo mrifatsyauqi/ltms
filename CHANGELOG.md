@@ -5,42 +5,54 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] - 2026-08-03
 
 ### Added
-- **Fitur Baru: Monitoring Inter City (INC) (`/monitoring-inc`)**
-  - **Menu & Navigasi**:
-    - Menambahkan menu baru dengan judul teks `"Monitoring INC"` dan icon `Truck` di navigasi sidebar (`web/src/lib/nav.ts`).
-    - Diberikan izin akses secara default untuk role Full Access (Super Admin, Admin Cabang, Manager Kota, Asisten Manager Kota) dan role Drop Point (SPV Drop Point, Admin DP).
-    - Mendaftarkan key `monitoring_inc` ke dalam `MENU_KEYS` di `web/src/lib/data/supabase/permissions.ts`.
-    - Menambahkan kartu konfigurasi izin `Monitoring INC` pada halaman manajemen Role & Akses (`web/src/components/master/role-akses-client.tsx`).
-    - Menyediakan skrip migrasi database Supabase di `supabase/monitoring_inc_migration.sql`.
-  - **Logika Ekstraksi & Filter JMS (Excel)**:
-    - **Filter Wilayah Wajib**: Hanya memproses dan menampilkan data dengan **`Kota Penerima` = "BATANG"** (case-insensitive & whitespace-safe). Data selain Kota Batang diabaikan secara otomatis dari tarikan JMS.
-    - **Pemetaan Kolom (Column Mapping)**:
-      - `No. Waybill` $\leftarrow$ Kolom `AWB` / `No. Waybill` dari JMS.
-      - `Tempat Tujuan` $\leftarrow$ Kolom `Kecamatan Penerima` (khusus dari data Kota Batang).
-      - `Nama Penerima` $\leftarrow$ Kolom `Nama Penerima`.
-      - `Alamat Penerima` $\leftarrow$ Kolom `Alamat Penerima`.
-      - `COD` $\leftarrow$ Kolom `Biaya COD` / `COD` (diformat otomatis ke mata uang Rupiah atau Non-COD).
-      - `Waktu Upload ke Sistem` $\leftarrow$ Kolom `Waktu Input`.
-      - `Maksimal TTD (SLA)` $\leftarrow$ Dihitung secara otomatis: **`Waktu Input` + 24 Jam**.
-      - `Waktu TTD` $\leftarrow$ Kolom `Waktu Upload TTD` / `Waktu TTD`.
-    - **Kalkulasi & Indikator Status SLA**:
-      - Paket yang telah memiliki `Waktu TTD` $\le$ `Maksimal TTD` dikategorikan **Tepat Waktu (On Time)**.
-      - Paket yang memiliki `Waktu TTD` $>$ `Maksimal TTD` (atau waktu saat ini telah melampaui `Maksimal TTD` saat belum TTD) dikategorikan **Terlambat / Lewat SLA**.
-      - Baris data yang terlambat / lewat batas SLA ditandai dengan **highlight warna merah** (`bg-red-500 text-white font-bold`) sesuai acuan visual template Excel 1.
-  - **Tampilan Tabel Visual & Fitur Ekspor (Excel 1 Fidelity)**:
-    - Komponen tabel `MonitoringIncTable` (`web/src/components/monitoring-inc/monitoring-inc-table.tsx`) dengan desain header dua warna (Navy dan Abu-abu), border sel presisi, dan footer total ringkasan.
-    - Komponen interaktif `MonitoringIncClient` (`web/src/components/monitoring-inc/monitoring-inc-client.tsx`) dengan kartu KPI (Total Paket Batang, On Time, Terlambat, Belum TTD, Total Nilai COD).
-    - Filter pencarian cepat real-time (No. Waybill, Nama Penerima, Kecamatan).
-    - Filter status SLA (Semua, Tepat Waktu, Terlambat, Belum TTD).
-    - **Salin Gambar (Copy Image)**: Mengonversi tabel menjadi PNG beresolusi tinggi menggunakan `html-to-image` dan menyalin ke clipboard untuk kemudahan share ke WhatsApp/Telegram.
-    - **Salin Tabel (Copy Table)**: Menyalin data dalam format TSV/HTML untuk di-paste langsung ke Google Sheets / Excel.
-    - **Export Excel**: Mengunduh data yang telah difilter ke dalam file format `.xlsx`.
-  - **Testing & Quality Assurance**:
-    - Menambahkan unit test di `web/src/lib/nav.test.ts` dan `web/src/lib/data/supabase/permissions.test.ts`.
-    - Seluruh test suite (216 tests) lolos dengan status 100% PASS dan validasi type TypeScript (`tsc --noEmit`) 0 error.
+- **Redesign Halaman Monitoring INC (`/monitoring-inc`) — Alur Kerja Upload-First Modern**:
+  - **Desain Minimalis & Terfokus (Stripe / Vercel Aesthetic)**:
+    - Merestrukturisasi halaman menjadi 4 seksi alur kerja bersih dengan whitespace optimal dan bebas distraksi visual.
+    - Background `#F8FAFC`, kartu `#FFFFFF`, radius `16-18px`, dan shadow lembut `0 8px 24px rgba(0,0,0,.04)`.
+  - **Seksi 1: Header & Selector Target Kota**:
+    - Judul 28px font-bold dan subjudul deskripsi SLA 24 jam.
+    - Selector Target Kota interaktif (`📍 BATANG ▼`) di kanan atas dengan dropdown modern (otomatis terkunci dengan ikon gembok untuk role Admin DP).
+  - **Seksi 2: Upload Tarikan Data JMS (`upload-card.tsx`)**:
+    - Area upload lebar penuh dengan border putus-putus (`2px dashed #E5E7EB`).
+    - Animasi spring dan transisi warna halus saat drag-over dan file terpilih.
+    - Mikro-animasi centang sukses dan efek konfeti ringan (10–12 partikel lembut) saat file Excel dimasukkan.
+    - Validasi format (`.xlsx`, `.xls`) dan batas ukuran (< 10 MB) dengan pesan peringatan inline.
+  - **Seksi 3: File Berhasil Diupload (`uploaded-file-card.tsx`)**:
+    - Animasi kemunculan *Fade Up + Scale* (`0.98 -> 1`, `duration 250ms`).
+    - Layout horizontal memuat ikon Excel hijau, nama file, ukuran file, jumlah resi terdeteksi, tanggal upload, serta tombol **Ganti File** dan **Hapus**.
+  - **Seksi 4: Generate Monitoring & Step Progress Animation (`generate-section.tsx`)**:
+    - Tombol utama merah full-rounded (`height 48px`, font-semibold 15px) dengan animasi scale-tap (`1 -> 0.97 -> 1`).
+    - Animasi indikator progres berurutan (500–700ms per tahap):
+      1. `✔ Membaca File`
+      2. `✔ Memfilter Kota`
+      3. `✔ Mapping Kecamatan`
+      4. `✔ Menghitung SLA`
+      5. `✔ Menyimpan Monitoring`
+    - Tombol berubah menjadi hijau sukses `✔ Lihat Hasil Monitoring` disertai notifikasi toast di pojok kanan bawah.
+  - **Seksi 5: Riwayat File Terakhir (`recent-history-card.tsx`)**:
+    - Tabel riwayat upload file terakhir yang tersimpan secara lokal (*persistent LocalStorage*) dengan status *Berhasil* dan tombol aksi unduh.
+  - **Seksi 6: Tampilan Laporan & Ekspor Interaktif (`results-view.tsx`)**:
+    - Metrik ringkas (Total AWB INC, Clear TTD, Belum TTD, Telat SLA 24 Jam, dan Total Nilai COD).
+    - Fitur **Salin Gambar** (langsung paste ke WA/Feishu), **Salin Tabel** (HTML & TSV untuk Excel/Spreadsheet), dan **Unduh Excel** (`.xlsx`).
+    - Filter status pills, filter kecamatan, serta kolom pencarian instan (AWB, Nama Penerima, Alamat).
+    - Tombol navigasi kembali ke alur upload kapan saja.
 
-### Workflow & Deployment Rules
-- **Aturan Alur Kerja**: Semua perubahan fitur baru wajib di-push ke repository/branch **`ltms-mvp`** terlebih dahulu untuk direview dan diuji secara manual oleh tim, sebelum dikonfirmasi untuk merge ke branch `main`.
+- **Pondasi Multi-Kota & Normalisasi Pencocokan Kota (`city-matcher.ts`)**:
+  - Mengembangkan fungsi `normalizeCityName`, `isCityMatch`, dan `resolveCityFromDropPoint`.
+  - Mencegah *false positive* pencocokan kota (misal: data dari `KOTA BATANG HARI` tidak lagi keliru terdeteksi sebagai `BATANG` karena menggunakan *token-boundary match*).
+  - Mengaitkan akun Drop Point secara otomatis ke kota induknya (misal `DP BATANG01` langsung terpetakan ke kota `BATANG`).
+  - Menyediakan unit test lengkap di `web/src/lib/city-matcher.test.ts`.
+
+- **Rebranding Aplikasi ke LongTail Monitoring System (LTMS)**:
+  - Mengubah penamaan dari *Longtail Dashboard management system* menjadi **LongTail Monitoring System (LTMS)**.
+  - Memperbarui title tag, manifest, dan meta deskripsi browser.
+
+### Fixed
+- Memperbaiki error build TypeScript terkait import fungsi `resolveCityFromDropPoint` pada `monitoring-inc-client.tsx`.
+- Memperbaiki ketidakcocokan tipe parameter `handleCityChange` untuk mendukung tipe `string | null` dari komponen `Select`.
+- Mengganti dependensi `dropdown-menu` yang belum terdaftar dengan komponen `Select` standar.
+
+---
 
 ## [Unreleased] - 2026-07-28
 
