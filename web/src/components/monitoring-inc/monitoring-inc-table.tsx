@@ -18,10 +18,11 @@ export type IncRow = {
 interface MonitoringIncTableProps {
   data: IncRow[];
   filterKecamatan?: string;
+  kota?: string;
 }
 
 export const MonitoringIncTable = forwardRef<HTMLTableElement, MonitoringIncTableProps>(
-  ({ data, filterKecamatan }, ref) => {
+  ({ data, filterKecamatan, kota }, ref) => {
     const totalAwb = data.length;
     const clearTtd = data.filter((r) => r.isClearTtd).length;
     const presentase = totalAwb > 0 ? Math.round((clearTtd / totalAwb) * 100) : 0;
@@ -111,7 +112,7 @@ export const MonitoringIncTable = forwardRef<HTMLTableElement, MonitoringIncTabl
             {/* Row: JUMLAH AWB OUTGOING INC */}
             <tr>
               <td colSpan={4} className={footerLabel}>
-                JUMLAH AWB OUTGOING INC
+                JUMLAH AWB OUTGOING INC {kota ? `(${kota.toUpperCase()})` : ''}
               </td>
               <td className={cn(footerLabel, 'border-l-0')}></td>
               <td className={cn(footerLabel, 'border-l-0')}></td>

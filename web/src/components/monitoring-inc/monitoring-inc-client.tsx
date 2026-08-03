@@ -1,12 +1,12 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as xlsx from 'xlsx';
+import { useQuery } from '@tanstack/react-query';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
 import {
-  AlertCircle,
-  ArrowUpDown,
+  Building2,
   CheckCircle2,
   Clock,
   ClockAlert,
@@ -14,18 +14,30 @@ import {
   FileSpreadsheet,
   Filter,
   Image as ImageIcon,
+  MapPin,
   Package,
   RefreshCw,
   Search,
   Table2,
-  Truck,
   Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SLOW_STALE_TIME } from '@/lib/query-config';
+import { isCityMatch, normalizeCityName } from '@/lib/city-matcher';
+import type { CabangRow } from '@/lib/data/cabang';
+import type { DropPointRow } from '@/lib/data/drop-points';
 import { IncRow, MonitoringIncTable } from './monitoring-inc-table';
+
+async function api<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  const body = await res.json();
+  if (!body.ok) throw new Error(body.message || body.error);
+  return body.data as T;
+}
 
 function parseDateValue(raw: unknown): Date | null {
   if (!raw) return null;
@@ -89,10 +101,283 @@ function formatTimeOnly(d: Date | null): string {
   return `${hh}:${mm}:${ss}`;
 }
 
-export function MonitoringIncClient() {
+interface ProcessResult {
+  parsedRows: IncRow[];
+  totalRaw: number;
+  nonTargetCount: number;
+}
+
+function processRawJmsRows(rawRows: unknown[][], targetCity: string): ProcessResult {
+  if (!rawRows || rawRows.length === 0) {
+    return { parsedRows: [], totalRaw: 0, nonTargetCount: 0 };
+  }
+
+  // Cari baris header yang memuat kolom-kolom utama
+  let headerRowIndex = -1;
+  let colAwb = -1;
+  let colKotaPenerima = -1;
+  let colKecamatanPenerima = -1;
+  let colNamaPenerima = -1;
+  let colAlamatPenerima = -1;
+  let colCod = -1;
+  let colWaktuInput = -1;
+  let colWaktuUploadTtd = -1;
+
+  for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
+    const row = rawRows[r] as unknown[];
+    if (!row || !Array.isArray(row)) continue;
+
+    let foundAwb = -1;
+    let foundKota = -1;
+    let foundKec = -1;
+    let foundNama = -1;
+    let foundAlamat = -1;
+    let foundCod = -1;
+    let foundInput = -1;
+    let foundTtd = -1;
+
+    row.forEach((cellVal, colIdx) => {
+      if (typeof cellVal !== 'string') return;
+      const h = cellVal.trim().toLowerCase();
+
+      // AWB
+      if (
+        h.includes('waybill') ||
+        h === 'awb' ||
+        h.includes('no. waybill') ||
+        h.includes('no waybill') ||
+        h.includes('no. awb') ||
+        h.includes('nomor resi') ||
+        h === 'resi'
+      ) {
+        if (foundAwb === -1) foundAwb = colIdx;
+      }
+
+      // Kota Penerima
+      if (
+        h.includes('kota penerima') ||
+        h.includes('kabupaten penerima') ||
+        h.includes('kab. penerima') ||
+        h === 'kota tujuan' ||
+        h === 'kota'
+      ) {
+        if (foundKota === -1) foundKota = colIdx;
+      }
+
+      // Kecamatan Penerima
+      if (
+        h.includes('kecamatan penerima') ||
+        h.includes('kec penerima') ||
+        h.includes('kecamatan') ||
+        h.includes('tempat tujuan') ||
+        h.includes('area penerima') ||
+        h.includes('area tujuan')
+      ) {
+        if (foundKec === -1) foundKec = colIdx;
+      }
+
+      // Nama Penerima
+      if (h.includes('nama penerima') || h === 'penerima' || h.includes('consignee')) {
+        if (foundNama === -1) foundNama = colIdx;
+      }
+
+      // Alamat Penerima
+      if (h.includes('alamat penerima') || h.includes('alamat') || h.includes('address')) {
+        if (foundAlamat === -1) foundAlamat = colIdx;
+      }
+
+      // COD
+      if (h.includes('biaya cod') || h.includes('nominal cod') || h.includes('nilai cod') || h === 'cod') {
+        if (foundCod === -1) foundCod = colIdx;
+      }
+
+      // Waktu Input
+      if (
+        h.includes('waktu input') ||
+        h.includes('waktu upload') ||
+        h.includes('waktu buat') ||
+        h.includes('waktu order') ||
+        h.includes('tanggal input')
+      ) {
+        if (foundInput === -1) foundInput = colIdx;
+      }
+
+      // Waktu Upload TTD
+      if (
+        h.includes('waktu upload ttd') ||
+        h.includes('waktu ttd') ||
+        h.includes('waktu tanda terima') ||
+        h.includes('waktu pod') ||
+        h.includes('tanggal ttd') ||
+        h.includes('pod time')
+      ) {
+        if (foundTtd === -1) foundTtd = colIdx;
+      }
+    });
+
+    if (foundAwb !== -1 || (foundKota !== -1 && foundInput !== -1)) {
+      headerRowIndex = r;
+      colAwb = foundAwb;
+      colKotaPenerima = foundKota;
+      colKecamatanPenerima = foundKec;
+      colNamaPenerima = foundNama;
+      colAlamatPenerima = foundAlamat;
+      colCod = foundCod;
+      colWaktuInput = foundInput;
+      colWaktuUploadTtd = foundTtd;
+      break;
+    }
+  }
+
+  // Fallback default index jika header standar JMS baris 0
+  if (headerRowIndex === -1) {
+    headerRowIndex = 0;
+    colAwb = 0;
+    colWaktuInput = 1;
+    colCod = 8;
+    colNamaPenerima = 11;
+    colKotaPenerima = 13;
+    colAlamatPenerima = 14;
+    colWaktuUploadTtd = 15;
+  }
+
+  const dataRows = rawRows.slice(headerRowIndex + 1);
+  let totalRaw = 0;
+  let nonTargetCount = 0;
+  const parsedRows: IncRow[] = [];
+
+  for (const r of dataRows) {
+    if (!r || !Array.isArray(r) || r.length === 0) continue;
+
+    const rawAwb = colAwb >= 0 && r[colAwb] != null ? String(r[colAwb]).trim() : '';
+    if (!rawAwb || rawAwb.toLowerCase().startsWith('total') || rawAwb.toLowerCase().startsWith('jumlah')) {
+      continue;
+    }
+
+    totalRaw++;
+
+    // Cek Kota Penerima: Gunakan pencocokan kota exact/normalized (bukan substring includes)
+    const rawKota = colKotaPenerima >= 0 && r[colKotaPenerima] != null ? String(r[colKotaPenerima]).trim() : '';
+    const matchCity = isCityMatch(rawKota, targetCity);
+
+    if (!matchCity) {
+      nonTargetCount++;
+      continue;
+    }
+
+    // Tempat Tujuan = Kecamatan Penerima
+    let rawKec = colKecamatanPenerima >= 0 && r[colKecamatanPenerima] != null ? String(r[colKecamatanPenerima]).trim() : '';
+    if (!rawKec) {
+      rawKec = normalizeCityName(rawKota) || targetCity.toUpperCase();
+    }
+
+    const rawNama = colNamaPenerima >= 0 && r[colNamaPenerima] != null ? String(r[colNamaPenerima]).trim() : '';
+    const rawAlamat = colAlamatPenerima >= 0 && r[colAlamatPenerima] != null ? String(r[colAlamatPenerima]).trim() : '';
+    const rawCod = colCod >= 0 && r[colCod] != null ? Number(r[colCod]) || 0 : 0;
+
+    // Waktu Input
+    const inputDate = colWaktuInput >= 0 ? parseDateValue(r[colWaktuInput]) : null;
+    const waktuUploadSistem = formatDateFull(inputDate);
+
+    // Maksimal TTD = Waktu Input + 24 Jam
+    let maksimalTtdDate: Date | null = null;
+    if (inputDate) {
+      maksimalTtdDate = new Date(inputDate.getTime() + 24 * 60 * 60 * 1000);
+    }
+    const maksimalTtd = formatTimeOnly(maksimalTtdDate);
+    const maksimalTtdFull = formatDateFull(maksimalTtdDate);
+
+    // Waktu TTD
+    const ttdDate = colWaktuUploadTtd >= 0 ? parseDateValue(r[colWaktuUploadTtd]) : null;
+    const waktuTtd = formatDateFull(ttdDate);
+    const isClearTtd = Boolean(ttdDate && waktuTtd);
+
+    // Cek Keterlambatan TTD (isLate): Terlambat jika sudah TTD tapi waktu TTD > batas maksimal 24 jam
+    let isLate = false;
+    if (ttdDate && maksimalTtdDate) {
+      isLate = ttdDate.getTime() > maksimalTtdDate.getTime();
+    }
+
+    parsedRows.push({
+      awb: rawAwb,
+      tempatTujuan: rawKec,
+      namaPenerima: rawNama,
+      alamatPenerima: rawAlamat,
+      cod: rawCod,
+      waktuTtd,
+      maksimalTtd,
+      maksimalTtdFull,
+      waktuUploadSistem,
+      isClearTtd,
+      isLate,
+    });
+  }
+
+  return { parsedRows, totalRaw, nonTargetCount };
+}
+
+interface MonitoringIncClientProps {
+  userDropPoint?: string | null;
+  userRole?: string;
+  isFullAccess?: boolean;
+}
+
+export function MonitoringIncClient({ userDropPoint, userRole, isFullAccess }: MonitoringIncClientProps) {
+  // Query data master Cabang & Drop Point untuk relasi multi-kota
+  const { data: cabangList } = useQuery({
+    queryKey: ['cabang'],
+    queryFn: () => api<CabangRow[]>('/api/cabang'),
+    staleTime: SLOW_STALE_TIME,
+  });
+
+  const { data: dropPointsList } = useQuery({
+    queryKey: ['drop-points'],
+    queryFn: () => api<DropPointRow[]>('/api/drop-points'),
+    staleTime: SLOW_STALE_TIME,
+  });
+
+  // Kumpulkan daftar Kota yang tersedia di sistem
+  const availableCities = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of cabangList ?? []) {
+      const kota = normalizeCityName(c['Nama Kota'] || c['Kode Kota']);
+      if (kota) set.add(kota);
+    }
+    for (const dp of dropPointsList ?? []) {
+      const kota = normalizeCityName(dp['Nama Kota'] || dp['Kode Kota'] || dp['Wilayah/Cabang']);
+      if (kota) set.add(kota);
+    }
+    // Default jika master masih kosong
+    if (set.size === 0) {
+      set.add('BATANG');
+    }
+    return Array.from(set).sort();
+  }, [cabangList, dropPointsList]);
+
+  // Tentukan kota asal akun pengguna
+  const userAssignedCity = useMemo(() => {
+    return resolveCityFromDropPoint(userDropPoint, dropPointsList, availableCities[0] || 'BATANG');
+  }, [userDropPoint, dropPointsList, availableCities]);
+
+  // Target Kota yang aktif dipantau
+  const [selectedCity, setSelectedCity] = useState<string>('BATANG');
+
+  // Sinkronisasi kota awal berdasarkan akun user
+  useEffect(() => {
+    if (userAssignedCity) {
+      setSelectedCity(userAssignedCity);
+    }
+  }, [userAssignedCity]);
+
+  // Admin DP terkunci ke kota DP-nya, sedangkan Super Admin / Admin Cabang / SPV bisa berganti kota
+  const isAdminDp = userRole === 'Admin DP';
+  const activeTargetCity = isAdminDp ? userAssignedCity : selectedCity || 'BATANG';
+
+  // State Data File & Parsing
+  const [rawSheetRows, setRawSheetRows] = useState<unknown[][] | null>(null);
   const [allRows, setAllRows] = useState<IncRow[]>([]);
   const [rawTotalCount, setRawTotalCount] = useState<number>(0);
-  const [nonBatangCount, setNonBatangCount] = useState<number>(0);
+  const [nonTargetCityCount, setNonTargetCityCount] = useState<number>(0);
   const [fileName, setFileName] = useState<string | null>(null);
   const [isGenerated, setIsGenerated] = useState(false);
   const [copying, setCopying] = useState<null | 'img' | 'table'>(null);
@@ -105,6 +390,19 @@ export function MonitoringIncClient() {
   const inputRef = useRef<HTMLInputElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const [dragOver, setDragOver] = useState(false);
+
+  // Re-proses data ketika activeTargetCity berubah (misal admin memilih kota lain)
+  const handleCityChange = (newCity: string) => {
+    setSelectedCity(newCity);
+    if (rawSheetRows && rawSheetRows.length > 0) {
+      const result = processRawJmsRows(rawSheetRows, newCity);
+      setAllRows(result.parsedRows);
+      setRawTotalCount(result.totalRaw);
+      setNonTargetCityCount(result.nonTargetCount);
+      setSelectedKecamatan('ALL');
+      toast.info(`Beralih ke Kota ${newCity}: Ditemukan ${result.parsedRows.length} AWB.`);
+    }
+  };
 
   const handleFileUpload = (fileList: FileList | File[]) => {
     const file = fileList[0];
@@ -121,226 +419,27 @@ export function MonitoringIncClient() {
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
 
-        const rawRows = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
+        const rawRows = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 }) as unknown[][];
         if (!rawRows || rawRows.length === 0) {
           toast.error('File Excel kosong.');
           return;
         }
 
-        // Cari baris header yang memuat kolom-kolom utama
-        let headerRowIndex = -1;
-        let colAwb = -1;
-        let colKotaPenerima = -1;
-        let colKecamatanPenerima = -1;
-        let colNamaPenerima = -1;
-        let colAlamatPenerima = -1;
-        let colCod = -1;
-        let colWaktuInput = -1;
-        let colWaktuUploadTtd = -1;
+        setRawSheetRows(rawRows);
+        const result = processRawJmsRows(rawRows, activeTargetCity);
 
-        for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
-          const row = rawRows[r] as unknown[];
-          if (!row || !Array.isArray(row)) continue;
-
-          let foundAwb = -1;
-          let foundKota = -1;
-          let foundKec = -1;
-          let foundNama = -1;
-          let foundAlamat = -1;
-          let foundCod = -1;
-          let foundInput = -1;
-          let foundTtd = -1;
-
-          row.forEach((cellVal, colIdx) => {
-            if (typeof cellVal !== 'string') return;
-            const h = cellVal.trim().toLowerCase();
-
-            // AWB
-            if (
-              h.includes('waybill') ||
-              h === 'awb' ||
-              h.includes('no. waybill') ||
-              h.includes('no waybill') ||
-              h.includes('no. awb') ||
-              h.includes('nomor resi') ||
-              h === 'resi'
-            ) {
-              if (foundAwb === -1) foundAwb = colIdx;
-            }
-
-            // Kota Penerima
-            if (
-              h.includes('kota penerima') ||
-              h.includes('kabupaten penerima') ||
-              h.includes('kab. penerima') ||
-              h === 'kota tujuan' ||
-              h === 'kota'
-            ) {
-              if (foundKota === -1) foundKota = colIdx;
-            }
-
-            // Kecamatan Penerima
-            if (
-              h.includes('kecamatan penerima') ||
-              h.includes('kec penerima') ||
-              h.includes('kecamatan') ||
-              h.includes('tempat tujuan') ||
-              h.includes('area penerima') ||
-              h.includes('area tujuan')
-            ) {
-              if (foundKec === -1) foundKec = colIdx;
-            }
-
-            // Nama Penerima
-            if (h.includes('nama penerima') || h === 'penerima' || h.includes('consignee')) {
-              if (foundNama === -1) foundNama = colIdx;
-            }
-
-            // Alamat Penerima
-            if (h.includes('alamat penerima') || h.includes('alamat') || h.includes('address')) {
-              if (foundAlamat === -1) foundAlamat = colIdx;
-            }
-
-            // COD
-            if (h.includes('biaya cod') || h.includes('nominal cod') || h.includes('nilai cod') || h === 'cod') {
-              if (foundCod === -1) foundCod = colIdx;
-            }
-
-            // Waktu Input
-            if (
-              h.includes('waktu input') ||
-              h.includes('waktu upload') ||
-              h.includes('waktu buat') ||
-              h.includes('waktu order') ||
-              h.includes('tanggal input')
-            ) {
-              if (foundInput === -1) foundInput = colIdx;
-            }
-
-            // Waktu Upload TTD
-            if (
-              h.includes('waktu upload ttd') ||
-              h.includes('waktu ttd') ||
-              h.includes('waktu tanda terima') ||
-              h.includes('waktu pod') ||
-              h.includes('tanggal ttd') ||
-              h.includes('pod time')
-            ) {
-              if (foundTtd === -1) foundTtd = colIdx;
-            }
-          });
-
-          if (foundAwb !== -1 || (foundKota !== -1 && foundInput !== -1)) {
-            headerRowIndex = r;
-            colAwb = foundAwb;
-            colKotaPenerima = foundKota;
-            colKecamatanPenerima = foundKec;
-            colNamaPenerima = foundNama;
-            colAlamatPenerima = foundAlamat;
-            colCod = foundCod;
-            colWaktuInput = foundInput;
-            colWaktuUploadTtd = foundTtd;
-            break;
-          }
-        }
-
-        // Fallback default index jika header standar JMS baris 0
-        if (headerRowIndex === -1) {
-          headerRowIndex = 0;
-          colAwb = 0;
-          colWaktuInput = 1;
-          colCod = 8;
-          colNamaPenerima = 11;
-          colKotaPenerima = 13;
-          colAlamatPenerima = 14;
-          colWaktuUploadTtd = 15;
-        }
-
-        const dataRows = rawRows.slice(headerRowIndex + 1);
-        let totalRaw = 0;
-        let nonBatang = 0;
-        const parsedRows: IncRow[] = [];
-
-        for (const r of dataRows) {
-          if (!r || !Array.isArray(r) || r.length === 0) continue;
-
-          const rawAwb = colAwb >= 0 && r[colAwb] != null ? String(r[colAwb]).trim() : '';
-          if (!rawAwb || rawAwb.toLowerCase().startsWith('total') || rawAwb.toLowerCase().startsWith('jumlah')) {
-            continue;
-          }
-
-          totalRaw++;
-
-          // Cek Kota Penerima: HANYA KOTA BATANG
-          const rawKota = colKotaPenerima >= 0 && r[colKotaPenerima] != null ? String(r[colKotaPenerima]).trim() : '';
-          const isBatang = rawKota.toLowerCase().includes('batang');
-
-          if (!isBatang) {
-            nonBatang++;
-            continue;
-          }
-
-          // Tempat Tujuan = Kecamatan Penerima
-          let rawKec = colKecamatanPenerima >= 0 && r[colKecamatanPenerima] != null ? String(r[colKecamatanPenerima]).trim() : '';
-          if (!rawKec) {
-            rawKec = rawKota || 'BATANG';
-          }
-
-          const rawNama = colNamaPenerima >= 0 && r[colNamaPenerima] != null ? String(r[colNamaPenerima]).trim() : '';
-          const rawAlamat = colAlamatPenerima >= 0 && r[colAlamatPenerima] != null ? String(r[colAlamatPenerima]).trim() : '';
-          const rawCod = colCod >= 0 && r[colCod] != null ? Number(r[colCod]) || 0 : 0;
-
-          // Waktu Input
-          const inputDate = colWaktuInput >= 0 ? parseDateValue(r[colWaktuInput]) : null;
-          const waktuUploadSistem = formatDateFull(inputDate);
-
-          // Maksimal TTD = Waktu Input + 24 Jam
-          let maksimalTtdDate: Date | null = null;
-          if (inputDate) {
-            maksimalTtdDate = new Date(inputDate.getTime() + 24 * 60 * 60 * 1000);
-          }
-          const maksimalTtd = formatTimeOnly(maksimalTtdDate);
-          const maksimalTtdFull = formatDateFull(maksimalTtdDate);
-
-          // Waktu TTD
-          const ttdDate = colWaktuUploadTtd >= 0 ? parseDateValue(r[colWaktuUploadTtd]) : null;
-          const waktuTtd = formatDateFull(ttdDate);
-          const isClearTtd = Boolean(ttdDate && waktuTtd);
-
-          // Cek Keterlambatan TTD (isLate)
-          // Terlambat jika sudah TTD tapi waktu TTD > batas maksimal 24 jam
-          let isLate = false;
-          if (ttdDate && maksimalTtdDate) {
-            isLate = ttdDate.getTime() > maksimalTtdDate.getTime();
-          }
-
-          parsedRows.push({
-            awb: rawAwb,
-            tempatTujuan: rawKec,
-            namaPenerima: rawNama,
-            alamatPenerima: rawAlamat,
-            cod: rawCod,
-            waktuTtd,
-            maksimalTtd,
-            maksimalTtdFull,
-            waktuUploadSistem,
-            isClearTtd,
-            isLate,
-          });
-        }
-
-        setRawTotalCount(totalRaw);
-        setNonBatangCount(nonBatang);
-        setAllRows(parsedRows);
+        setAllRows(result.parsedRows);
+        setRawTotalCount(result.totalRaw);
+        setNonTargetCityCount(result.nonTargetCount);
         setIsGenerated(true);
 
-        if (parsedRows.length === 0) {
+        if (result.parsedRows.length === 0) {
           toast.warning(
-            `Tidak ditemukan data penerima Kota BATANG dari ${totalRaw} baris file yang diupload.`,
+            `Tidak ditemukan data penerima Kota ${activeTargetCity} dari ${result.totalRaw} baris file yang diupload.`,
           );
         } else {
           toast.success(
-            `Berhasil memproses file! Ditemukan ${parsedRows.length} AWB Kota Batang (${nonBatang} baris kota lain difilter).`,
+            `Berhasil memproses file! Ditemukan ${result.parsedRows.length} AWB Kota ${activeTargetCity} (${result.nonTargetCount} baris kota lain difilter).`,
           );
         }
       } catch (err) {
@@ -484,7 +583,7 @@ export function MonitoringIncClient() {
       xlsx.utils.sheet_add_aoa(
         ws,
         [
-          ['JUMLAH AWB OUTGOING INC', '', '', '', '', '', totalAwb, ''],
+          [`JUMLAH AWB OUTGOING INC (${activeTargetCity})`, '', '', '', '', '', totalAwb, ''],
           ['CLEAR TTD', '', '', '', '', '', clearTtd, ''],
           ['PRESENTASE', '', '', '', '', '', percent, ''],
         ],
@@ -492,10 +591,10 @@ export function MonitoringIncClient() {
       );
 
       const wb = xlsx.utils.book_new();
-      xlsx.utils.book_append_sheet(wb, ws, 'Monitoring INC');
+      xlsx.utils.book_append_sheet(wb, ws, `INC ${activeTargetCity}`);
 
       const dateStr = new Date().toISOString().slice(0, 10);
-      xlsx.writeFile(wb, `Monitoring_INC_BATANG_${dateStr}.xlsx`);
+      xlsx.writeFile(wb, `Monitoring_INC_${activeTargetCity.replace(/\s+/g, '_')}_${dateStr}.xlsx`);
       toast.success('File Excel berhasil diunduh.');
     } catch (err) {
       console.error('Gagal mengekspor Excel:', err);
@@ -505,17 +604,49 @@ export function MonitoringIncClient() {
 
   return (
     <div className="space-y-6">
-      {/* 1. Upload Card */}
+      {/* 1. Upload Card & City Selector */}
       {!isGenerated ? (
         <Card className="border-dashed border-2">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Upload className="size-5 text-primary" />
-              Upload Tarikan Data JMS (Monitoring INC)
-            </CardTitle>
-            <CardDescription>
-              Upload file Excel tarikan JMS. Sistem otomatis memfilter tujuan <strong>Kota BATANG</strong>, memetakan <strong>Kecamatan Penerima</strong> sebagai Tempat Tujuan, dan menghitung SLA <strong>Maksimal TTD 24 Jam</strong>.
-            </CardDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Upload className="size-5 text-primary" />
+                  Upload Tarikan Data JMS (Monitoring INC)
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Upload file Excel tarikan JMS. Sistem otomatis memfilter penerima tujuan kota, memetakan <strong>Kecamatan Penerima</strong> sebagai Tempat Tujuan, dan menghitung SLA <strong>Maksimal TTD 24 Jam</strong>.
+                </CardDescription>
+              </div>
+
+              {/* City Selection / Scope Info */}
+              <div className="flex items-center gap-2 self-start sm:self-auto bg-slate-50 p-2 rounded-lg border">
+                <MapPin className="size-4 text-primary shrink-0" />
+                {isAdminDp ? (
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Kota Target: </span>
+                    <strong className="text-slate-900 font-semibold">{activeTargetCity}</strong>
+                    <span className="text-muted-foreground ml-1">({userDropPoint})</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">Target Kota:</span>
+                    <Select value={selectedCity} onValueChange={handleCityChange}>
+                      <SelectTrigger className="h-8 text-xs font-semibold bg-white min-w-[120px]">
+                        <SelectValue placeholder="Pilih Kota" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableCities.map((city) => (
+                          <SelectItem key={city} value={city} className="text-xs font-medium">
+                            {city}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div
@@ -544,7 +675,7 @@ export function MonitoringIncClient() {
                   Klik untuk memilih file atau seret file ke sini
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Mendukung file format Excel (.xlsx, .xls) dari JMS
+                  Mendukung file format Excel (.xlsx, .xls) dari JMS untuk tujuan <strong>Kota {activeTargetCity}</strong>
                 </p>
               </div>
               <Button type="button" variant="outline" size="sm" className="mt-2">
@@ -568,16 +699,35 @@ export function MonitoringIncClient() {
           {/* Header Bar: File info, Filter Summary, and Actions */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border shadow-sm">
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-medium">
-                  Kota BATANG
+                  Kota {activeTargetCity}
                 </Badge>
-                <span className="text-xs text-muted-foreground font-mono truncate max-w-[280px]">
+
+                {!isAdminDp && availableCities.length > 1 && (
+                  <div className="flex items-center gap-1.5 ml-1">
+                    <span className="text-xs text-muted-foreground">Ganti Kota:</span>
+                    <Select value={selectedCity} onValueChange={handleCityChange}>
+                      <SelectTrigger className="h-7 text-xs font-semibold bg-slate-50 min-w-[110px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableCities.map((city) => (
+                          <SelectItem key={city} value={city} className="text-xs font-medium">
+                            {city}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <span className="text-xs text-muted-foreground font-mono truncate max-w-[240px]">
                   {fileName}
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                Memproses <strong>{allRows.length} AWB</strong> Batang ({nonBatangCount} AWB kota lain difilter otomatis dari total {rawTotalCount} baris).
+                Memproses <strong>{allRows.length} AWB</strong> {activeTargetCity} ({nonTargetCityCount} AWB kota lain difilter otomatis dari total {rawTotalCount} baris).
               </p>
             </div>
 
@@ -620,6 +770,7 @@ export function MonitoringIncClient() {
                 onClick={() => {
                   setIsGenerated(false);
                   setAllRows([]);
+                  setRawSheetRows(null);
                 }}
                 className="gap-1.5 text-muted-foreground hover:text-foreground"
               >
@@ -638,7 +789,7 @@ export function MonitoringIncClient() {
                   <Package className="size-3.5 text-slate-400" />
                 </div>
                 <div className="text-2xl font-bold font-mono text-slate-900">{stats.total}</div>
-                <p className="text-[11px] text-muted-foreground">Tujuan Batang</p>
+                <p className="text-[11px] text-muted-foreground">Tujuan {activeTargetCity}</p>
               </CardContent>
             </Card>
 
@@ -781,7 +932,7 @@ export function MonitoringIncClient() {
             <CardHeader className="py-3 px-4 bg-slate-50/80 border-b flex flex-row items-center justify-between">
               <div className="space-y-0.5">
                 <CardTitle className="text-sm font-semibold text-slate-800">
-                  Tabel Laporan Monitoring INC Batang
+                  Tabel Laporan Monitoring INC {activeTargetCity}
                 </CardTitle>
                 <CardDescription className="text-xs">
                   Menampilkan {filteredData.length} baris data sesuai template laporan resmi.
@@ -793,6 +944,7 @@ export function MonitoringIncClient() {
                 ref={tableRef}
                 data={filteredData}
                 filterKecamatan={selectedKecamatan !== 'ALL' ? selectedKecamatan : undefined}
+                kota={activeTargetCity}
               />
             </CardContent>
           </Card>
