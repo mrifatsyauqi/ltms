@@ -5,6 +5,7 @@ import { MapPin, Lock } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { isCityMatch, resolveCityFromDropPoint } from '@/lib/city-matcher';
+import { parseExcelDate, formatDisplayDateTime } from '@/lib/excel-date';
 import {
   IncRow,
   IncStats,
@@ -67,21 +68,6 @@ export function MonitoringIncClient({
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   };
 
-  // Format tanggal saat ini (DD MMM YYYY HH:mm)
-  const getCurrentFormattedDate = () => {
-    const d = new Date();
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
-    ];
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = months[d.getMonth()];
-    const year = d.getFullYear();
-    const hours = String(d.getHours()).padStart(2, '0');
-    const mins = String(d.getMinutes()).padStart(2, '0');
-    return `${day} ${month} ${year} ${hours}:${mins}`;
-  };
-
   // Handler saat file dipilih di Step 1
   const handleFileSelected = async (file: File) => {
     try {
@@ -99,7 +85,7 @@ export function MonitoringIncClient({
         name: file.name,
         sizeFormatted: formatFileSize(file.size),
         totalResi: rawData.length,
-        uploadTimestamp: getCurrentFormattedDate(),
+        uploadTimestamp: formatDisplayDateTime(),
         targetKota,
         file,
       };
@@ -151,8 +137,8 @@ export function MonitoringIncClient({
         const codRaw = getCol('Biaya COD', 'COD', 'Nilai COD') || 0;
         const cod = typeof codRaw === 'number' ? codRaw : parseFloat(String(codRaw).replace(/[^\d.-]/g, '')) || 0;
 
-        const rawWaktuTtd = String(getCol('Waktu Upload TTD', 'Waktu TTD', 'Tanda Terima', 'TTD') || '').trim();
-        const rawWaktuInput = String(getCol('Waktu Input', 'Waktu Buat', 'Waktu Scan In', 'Waktu Kirim') || '').trim();
+        const rawWaktuTtd = getCol('Waktu Upload TTD', 'Waktu TTD', 'Tanda Terima', 'TTD');
+        const rawWaktuInput = getCol('Waktu Input', 'Waktu Buat', 'Waktu Scan In', 'Waktu Kirim', 'Waktu Upload ke Sistem');
 
         // Filter kota: Hanya proses data yang sesuai Target Kota
         const isMatchedCity =
@@ -163,42 +149,46 @@ export function MonitoringIncClient({
           continue;
         }
 
-        // Kalkulasi SLA
+        // Parsing waktu secara presisi (mendukung Excel serial date number, string ISO/DMY, Date)
+        const parsedInput = parseExcelDate(rawWaktuInput);
+        const parsedTtd = parseExcelDate(rawWaktuTtd);
+
+        const waktuUploadSistemStr = parsedInput
+          ? parsedInput.formatted
+          : typeof rawWaktuInput === 'string' && rawWaktuInput.trim() && rawWaktuInput.trim() !== '-'
+          ? rawWaktuInput.trim()
+          : '-';
+
+        const waktuTtdStr = parsedTtd
+          ? parsedTtd.formatted
+          : typeof rawWaktuTtd === 'string' && rawWaktuTtd.trim() && !/^(belum|null|undefined|-)/i.test(rawWaktuTtd.trim())
+          ? rawWaktuTtd.trim()
+          : 'Belum TTD';
+
+        // Kalkulasi SLA 24 Jam
         let isClear = false;
         let isLate = false;
-        let maksimalTtdStr = '';
+        let maksimalTtdStr = '-';
         let slaHoursVal: number | null = null;
 
-        if (rawWaktuInput) {
-          const inputDate = new Date(rawWaktuInput);
-          if (!isNaN(inputDate.getTime())) {
-            // Maksimal TTD = Input + 24 Jam
-            const deadline = new Date(inputDate.getTime() + 24 * 60 * 60 * 1000);
-            const hh = String(deadline.getHours()).padStart(2, '0');
-            const mm = String(deadline.getMinutes()).padStart(2, '0');
-            const ss = String(deadline.getSeconds()).padStart(2, '0');
-            maksimalTtdStr = `${hh}:${mm}:${ss}`;
+        if (parsedInput) {
+          // Maksimal TTD = Input + 24 Jam
+          const deadline = new Date(parsedInput.date.getTime() + 24 * 60 * 60 * 1000);
+          const hh = String(deadline.getHours()).padStart(2, '0');
+          const mm = String(deadline.getMinutes()).padStart(2, '0');
+          const ss = String(deadline.getSeconds()).padStart(2, '0');
+          maksimalTtdStr = `${hh}:${mm}:${ss}`;
 
-            if (rawWaktuTtd) {
-              const ttdDate = new Date(rawWaktuTtd);
-              if (!isNaN(ttdDate.getTime())) {
-                const diffHours = (ttdDate.getTime() - inputDate.getTime()) / (1000 * 60 * 60);
-                slaHoursVal = parseFloat(diffHours.toFixed(2));
-                totalSlaHoursSum += diffHours;
-                validSlaCount++;
+          if (parsedTtd) {
+            const diffHours = (parsedTtd.date.getTime() - parsedInput.date.getTime()) / (1000 * 60 * 60);
+            slaHoursVal = parseFloat(diffHours.toFixed(2));
+            totalSlaHoursSum += diffHours;
+            validSlaCount++;
 
-                if (ttdDate.getTime() <= deadline.getTime()) {
-                  isClear = true;
-                } else {
-                  isLate = true;
-                }
-              }
+            if (parsedTtd.date.getTime() <= deadline.getTime()) {
+              isClear = true;
             } else {
-              // Belum TTD
-              const now = new Date();
-              if (now.getTime() > deadline.getTime()) {
-                isLate = true;
-              }
+              isLate = true;
             }
           }
         }
@@ -211,9 +201,9 @@ export function MonitoringIncClient({
           namaPenerima,
           alamatPenerima,
           cod,
-          waktuTtd: rawWaktuTtd,
+          waktuTtd: waktuTtdStr,
           maksimalTtd: maksimalTtdStr,
-          waktuUploadSistem: rawWaktuInput,
+          waktuUploadSistem: waktuUploadSistemStr,
           isClearTtd: isClear,
           isLate,
           status,
@@ -222,7 +212,7 @@ export function MonitoringIncClient({
       }
 
       setParsedRows(mappedRows);
-      const nowStr = getCurrentFormattedDate();
+      const nowStr = formatDisplayDateTime();
       setGenerateTimestamp(nowStr);
 
       // Simpan ke riwayat

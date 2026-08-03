@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - 2026-08-03
 
+### Fixed
+- **Perbaikan Parsing Format Tanggal & Waktu Excel Serial Date (`/monitoring-inc`)**:
+  - **Penyebab Masalah**: File tarikan JMS menyimpan tanggal dan waktu dalam bentuk bilangan desimal *Excel Serial Date Number* (contoh: `46237.36094907407` dan `46236.76099537037`). Hal ini menyebabkan parser standar JavaScript menghasilkan `Invalid Date`, kolom Maksimal TTD menjadi `-`, dan seluruh resi salah terkategorisasi sebagai `Belum TTD`.
+  - **Solusi**: Mengembangkan modul `web/src/lib/excel-date.ts` (`parseExcelDate` dan `formatDisplayDateTime`) yang mampu mendeteksi dan mengonversi:
+    1. *Excel Serial Float Numbers* (berbasis epoch 1899-12-30 dengan presisi jam, menit, dan detik).
+    2. Format teks ISO (`YYYY-MM-DD HH:mm:ss`) dan format DMY (`DD/MM/YYYY HH:mm:ss`).
+    3. Teks khusus seperti `Belum TTD`, `-`, `N/A`, atau string kosong secara cerdas dikembalikan sebagai `null`.
+  - **Dampak Perbaikan**:
+    - Kolom **Waktu Upload ke Sistem** tampil rapi sebagai `YYYY-MM-DD HH:mm:ss` (contoh: `2026-08-02 18:15:38`).
+    - Kolom **Maksimal TTD** berhasil dikalkulasi secara presisi (`Waktu Input + 24 Jam`, contoh: `18:15:38`).
+    - Kolom **Waktu TTD** tampil rapi sebagai `YYYY-MM-DD HH:mm:ss` (atau teks `Belum TTD` jika belum ada tanda terima).
+    - Status **Clear TTD** vs **Telat SLA** vs **Belum TTD** terkalkulasi 100% akurat sesuai waktu tanda terima.
+
 ### Added
 - **Modern Compact Enterprise Redesign — Monitoring INC (`/monitoring-inc`)**:
   - **Zero-Scroll Viewport Optimization (1920×1080 & 1366×768)**:
