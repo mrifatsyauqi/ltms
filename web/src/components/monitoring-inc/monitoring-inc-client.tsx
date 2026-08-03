@@ -27,7 +27,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SLOW_STALE_TIME } from '@/lib/query-config';
-import { isCityMatch, normalizeCityName } from '@/lib/city-matcher';
+import { isCityMatch, normalizeCityName, resolveCityFromDropPoint } from '@/lib/city-matcher';
 import type { CabangRow } from '@/lib/data/cabang';
 import type { DropPointRow } from '@/lib/data/drop-points';
 import { IncRow, MonitoringIncTable } from './monitoring-inc-table';
