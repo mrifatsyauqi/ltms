@@ -392,7 +392,8 @@ export function MonitoringIncClient({ userDropPoint, userRole, isFullAccess }: M
   const [dragOver, setDragOver] = useState(false);
 
   // Re-proses data ketika activeTargetCity berubah (misal admin memilih kota lain)
-  const handleCityChange = (newCity: string) => {
+  const handleCityChange = (newCity: string | null) => {
+    if (!newCity) return;
     setSelectedCity(newCity);
     if (rawSheetRows && rawSheetRows.length > 0) {
       const result = processRawJmsRows(rawSheetRows, newCity);
