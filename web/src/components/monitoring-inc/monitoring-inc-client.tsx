@@ -10,7 +10,6 @@ import {
   IncRow,
   UploadedFileInfo,
   RecentUploadHistoryItem,
-  SummaryStats,
   AVAILABLE_CITIES,
 } from './types';
 import { UploadCard } from './upload-card';
