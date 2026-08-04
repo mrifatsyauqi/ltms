@@ -29,7 +29,7 @@ export class FeishuAuthService {
     // 2. Validasi konfigurasi environment
     if (!isConfigured) {
       throw new Error(
-        'Kredensial FEISHU_APP_ID atau FEISHU_APP_SECRET belum dikonfigurasi di Environment Variables (.env.local).'
+        'Kredensial FEISHU_APP_ID atau FEISHU_APP_SECRET belum dikonfigurasi di Environment Variables Vercel Dashboard / .env.local.'
       );
     }
 

@@ -12,6 +12,8 @@ const ALLOWED_ROLES = new Set([
   'Admin Cabang',
   'Manager Kota',
   'Asisten Manager Kota',
+  'SPV Drop Point',
+  'Admin DP',
 ]);
 
 /**
@@ -26,13 +28,19 @@ export async function POST(request: Request) {
   }
 
   // 1. Permission Role Check
-  const userRole = (session.user as any)?.role || '';
-  if (userRole && !ALLOWED_ROLES.has(userRole) && userRole !== 'Super Admin') {
+  const userRole = ((session.user as any)?.role || '').trim();
+  const normalizedRole = userRole.toLowerCase();
+  const isAllowedRole =
+    !userRole ||
+    ALLOWED_ROLES.has(userRole) ||
+    Array.from(ALLOWED_ROLES).some((r) => r.toLowerCase() === normalizedRole);
+
+  if (!isAllowedRole) {
     return NextResponse.json(
       {
         ok: false,
         error: 'FORBIDDEN',
-        message: 'Akses ditolak: Hanya Admin Cabang atau Manajemen yang memiliki wewenang membagikan laporan ke Group Feishu.',
+        message: 'Akses ditolak: Hanya pengguna terotentikasi yang memiliki wewenang membagikan laporan ke Group Feishu.',
       },
       { status: 403 }
     );
