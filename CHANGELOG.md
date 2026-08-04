@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v2.5.0] - 2026-08-05 (Phase 2.5: Feishu Open Platform Production E2E Verification & Hardening)
+
+### Added
+- **Automated E2E Production Test Suite (`npm run test:feishu`)**:
+  - Script test runner mandiri (`web/scripts/test-feishu-e2e.mjs`) untuk validasi *end-to-end* seluruh alur Feishu Open Platform secara berkala:
+    1. Autentikasi dan penerbitan *Tenant Access Token* (`/auth/v3/tenant_access_token/internal`).
+    2. Query dan penemuan grup bot Feishu (`/im/v1/chats`).
+    3. Unggah gambar laporan visual HD ke penyimpanan Feishu Cloud (`/im/v1/images`).
+    4. Pembuatan dan pengiriman *Feishu Interactive Card 2.0* (`/im/v1/messages`).
+    5. Validasi konektivitas tabel audit Supabase (`feishu_groups` dan `communication_logs`).
+  - Dilengkapi pengukuran latensi respons per tahap (ms) dan pelaporan matriks diagnostik terperinci.
+
+### Changed & Hardened
+- **Role Permission Guard & Normalisasi Akses (`/api/communication/send`)**:
+  - Memperluas izin pengiriman laporan Monitoring INC ke seluruh role pengguna operasional aktif (`Super Admin`, `Admin Cabang`, `Manager Kota`, `Asisten Manager Kota`, `SPV Drop Point`, `Admin DP`).
+  - Menerapkan pencocokan *case-insensitive* pada string role session untuk mencegah kesalahan otorisasi `FORBIDDEN` tak terduga.
+- **Penyempurnaan Pesan Diagnostik Lingkungan Produksi**:
+  - Pesan error kredensial diperjelas untuk memandu konfigurasi pada *Vercel Dashboard Environment Variables* maupun file `.env.local`.
+- **Database Schema Cache Refresh (`feishu_communication_center.sql`)**:
+  - Menambahkan perintah `NOTIFY pgrst, 'reload schema';` pada script migrasi Supabase untuk sinkronisasi instan PostgREST cache.
+
+### Verified
+- **Validasi Produksi Nyata (Live Vercel Deployment)**:
+  - Sukses mengirimkan pesan *Feishu Interactive Card Monitoring INC* beresolusi tinggi langsung ke group chat resmi Feishu (*Uji Coba LTMS*) dari web aplikasi production Vercel.
+
+---
+
 ## [v2.4.0] - 2026-08-04 (Phase 2: Feishu Open Platform Production Integration & Enterprise Architecture)
 
 ### Added
