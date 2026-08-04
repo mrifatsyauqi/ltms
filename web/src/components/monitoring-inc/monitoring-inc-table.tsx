@@ -170,7 +170,7 @@ export function MonitoringIncTable({ data }: MonitoringIncTableProps) {
                 onClick={() => setCurrentPage(pageNum)}
                 className={`size-7 rounded-md text-xs font-semibold flex items-center justify-center transition-colors ${
                   isActive
-                    ? 'bg-slate-900 text-white shadow-2xs'
+                    ? 'bg-red-600 text-white shadow-2xs'
                     : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                 }`}
               >
@@ -187,7 +187,7 @@ export function MonitoringIncTable({ data }: MonitoringIncTableProps) {
                 onClick={() => setCurrentPage(totalPages)}
                 className={`size-7 rounded-md text-xs font-semibold flex items-center justify-center ${
                   currentPage === totalPages
-                    ? 'bg-slate-900 text-white'
+                    ? 'bg-red-600 text-white'
                     : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                 }`}
               >

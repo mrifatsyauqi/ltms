@@ -56,7 +56,7 @@ export function GenerateSection({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
-            <span className="flex items-center justify-center size-5 rounded-full bg-slate-900 text-white text-[11px] font-bold">
+            <span className="flex items-center justify-center size-5 rounded-full bg-red-600 text-white text-[11px] font-bold shadow-xs">
               3
             </span>
             <h3 className="text-sm font-semibold text-slate-900 tracking-tight">

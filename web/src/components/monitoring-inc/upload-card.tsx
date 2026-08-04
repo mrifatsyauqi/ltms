@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { CloudUpload, Upload, Loader2, FileSpreadsheet } from 'lucide-react';
+import { CloudUpload, Upload, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface UploadCardProps {
@@ -49,7 +49,7 @@ export function UploadCard({ onFileSelected, disabled }: UploadCardProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="flex items-center justify-center size-5 rounded-full bg-slate-900 text-white text-[11px] font-bold">
+          <span className="flex items-center justify-center size-5 rounded-full bg-red-600 text-white text-[11px] font-bold shadow-xs">
             1
           </span>
           <h3 className="text-sm font-semibold text-slate-900 tracking-tight">Upload File Excel</h3>
@@ -80,7 +80,7 @@ export function UploadCard({ onFileSelected, disabled }: UploadCardProps) {
           className={`relative group overflow-hidden flex flex-col items-center justify-center rounded-lg border-2 border-dashed px-4 py-3 text-center transition-all cursor-pointer select-none my-1 flex-1 ${
             isDragOver
               ? 'border-red-500 bg-red-50/50 ring-2 ring-red-500/20'
-              : 'border-slate-200 bg-slate-50/50 hover:border-slate-300 hover:bg-slate-50/80'
+              : 'border-slate-200 bg-slate-50/50 hover:border-red-300 hover:bg-red-50/20'
           } ${disabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
           onDragOver={(e) => {
             e.preventDefault();
@@ -108,11 +108,9 @@ export function UploadCard({ onFileSelected, disabled }: UploadCardProps) {
           </p>
 
           <div className="relative mt-2">
-            {/* Subtle Gradient Glow Ring around Button */}
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-red-600 to-rose-600 rounded-md blur-xs opacity-0 group-hover:opacity-40 transition duration-300" />
             <button
               type="button"
-              className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs transition-colors"
+              className="relative inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-red-600 hover:bg-red-700 active:scale-98 text-white text-xs font-semibold shadow-xs shadow-red-500/20 transition-all"
             >
               <Upload className="size-3.5" />
               Pilih File
