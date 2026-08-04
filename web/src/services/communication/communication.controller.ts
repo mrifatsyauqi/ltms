@@ -94,6 +94,33 @@ export class CommunicationController {
       };
     }
   }
+
+  /**
+   * Handler untuk Health Check diagnostik.
+   */
+  public async handleHealthCheck() {
+    try {
+      const health = await communicationService.healthCheck();
+      const statusCode = health.status === 'healthy' ? 200 : health.status === 'unconfigured' ? 503 : 500;
+      return {
+        status: statusCode,
+        body: health,
+      };
+    } catch (err: any) {
+      return {
+        status: 500,
+        body: {
+          status: 'error',
+          token: 'error',
+          bot: 'disconnected',
+          chat_api: 'error',
+          image_api: 'error',
+          message_api: 'error',
+          error: err?.message || 'Internal health check failure',
+        },
+      };
+    }
+  }
 }
 
 export const communicationController = new CommunicationController();

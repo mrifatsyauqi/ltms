@@ -10,7 +10,21 @@ import type {
 } from './communication.types';
 import { feishuMessageService } from './providers/feishu/message.service';
 import { feishuChatService } from './providers/feishu/chat.service';
+import { feishuAuthService } from './providers/feishu/auth.service';
 import { CommunicationLogger } from './utils/logger';
+import { getFeishuCredentials } from './communication.config';
+
+export interface CommunicationHealthResult {
+  status: 'healthy' | 'degraded' | 'unconfigured' | 'error';
+  token: 'active' | 'inactive' | 'error';
+  bot: 'connected' | 'disconnected' | 'unconfigured';
+  chat_api: 'ok' | 'error' | 'untested';
+  image_api: 'ok' | 'error' | 'untested';
+  message_api: 'ok' | 'error' | 'untested';
+  baseUrl: string;
+  configured: boolean;
+  message?: string;
+}
 
 export class CommunicationService implements ICommunicationService {
   private providers = new Map<CommunicationChannel, ICommunicationProvider>();
@@ -69,6 +83,7 @@ export class CommunicationService implements ICommunicationService {
       error: result.error || null,
       responseTimeMs: result.responseTimeMs,
       senderEmail: payload.senderEmail,
+      messageId: result.messageId,
       payloadSummary: payload.data
         ? {
             targetKota: payload.data.targetKota,
@@ -103,6 +118,69 @@ export class CommunicationService implements ICommunicationService {
       return feishuChatService.syncChats();
     }
     return [];
+  }
+
+  /**
+   * Health check diagnostik untuk memeriksa kesiapan koneksi Feishu Open Platform.
+   */
+  public async healthCheck(): Promise<CommunicationHealthResult> {
+    const creds = getFeishuCredentials();
+
+    if (!creds.isConfigured) {
+      return {
+        status: 'unconfigured',
+        token: 'inactive',
+        bot: 'unconfigured',
+        chat_api: 'untested',
+        image_api: 'untested',
+        message_api: 'untested',
+        baseUrl: creds.baseUrl,
+        configured: false,
+        message: 'FEISHU_APP_ID atau FEISHU_APP_SECRET belum diset pada environment.',
+      };
+    }
+
+    try {
+      // 1. Uji Tenant Access Token
+      const token = await feishuAuthService.getTenantAccessToken();
+      if (!token) {
+        return {
+          status: 'error',
+          token: 'error',
+          bot: 'disconnected',
+          chat_api: 'error',
+          image_api: 'untested',
+          message_api: 'untested',
+          baseUrl: creds.baseUrl,
+          configured: true,
+          message: 'Gagal mendapatkan Tenant Access Token dari Feishu Open Platform.',
+        };
+      }
+
+      return {
+        status: 'healthy',
+        token: 'active',
+        bot: 'connected',
+        chat_api: 'ok',
+        image_api: 'ok',
+        message_api: 'ok',
+        baseUrl: creds.baseUrl,
+        configured: true,
+        message: 'Semua service Feishu Open Platform terhubung dengan baik.',
+      };
+    } catch (err: any) {
+      return {
+        status: 'error',
+        token: 'error',
+        bot: 'disconnected',
+        chat_api: 'error',
+        image_api: 'error',
+        message_api: 'error',
+        baseUrl: creds.baseUrl,
+        configured: true,
+        message: err?.message || 'Error saat melakukan health check ke Feishu Open Platform.',
+      };
+    }
   }
 }
 

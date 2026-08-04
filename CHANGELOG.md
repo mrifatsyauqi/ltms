@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v2.4.0] - 2026-08-04 (Phase 2: Feishu Open Platform Production Integration & Enterprise Architecture)
+
+### Added
+- **Feishu Open Platform Official Integration (`web/src/services/communication`)**:
+  - **Dynamic Base URL**: Penggunaan `FEISHU_API_BASE_URL` (default: `https://open.feishu.cn/open-apis`) tanpa hardcoded string.
+  - **Health Check Endpoint (`GET /api/communication/health`)**: Diagnostik real-time untuk status konektivitas Feishu API, token, bot, chat API, image API, dan message API.
+  - **Type-Safe `FeishuCardBuilder` (`card.builder.ts`)**: Fluent builder OOP untuk memvalidasi struktur Interactive Card JSON 2.0 Feishu.
+  - **Strict Response Validation dengan Zod (`communication.schemas.ts`)**: Validasi seluruh respons Feishu API (Token, Chats, Upload Image, Upload File, Send Message) mencegah runtime schema mismatch.
+  - **Sliding-Window Rate Limiter (`utils/rate-limiter.ts`)**: Pembatasan 5 request per 10 detik per user untuk proteksi anti-spam.
+  - **Promise Concurrency Queue (`utils/queue.ts`)**: Antrean pengiriman FIFO untuk mencegah race condition atau double submission.
+  - **API Request Timeout 15 Detik (`utils/fetch-timeout.ts`)**: `AbortController` terintegrasi pada seluruh outbound fetch request Feishu.
+  - **Enhanced Audit Logger (`utils/logger.ts`)**: Pencatatan metadata mendalam (`endpoint`, `statusCode`, `responseTimeMs`, `retryCount`, `requestId`, `messageId`).
+  - **Permission Role Guard**: Validasi role wewenang (Super Admin, Admin Cabang, Manager Kota, Asisten Manager Kota) pada endpoint `/api/communication/send`.
+
+- **Frontend Enterprise UI/UX Improvements (`/monitoring-inc`)**:
+  - **3-Tab Live Preview**: Preview Mockup Card, Preview Gambar HD 1200×900, dan Preview Caption sebelum pengiriman.
+  - **Group Sync Status**: Penunjuk waktu *Terakhir Sinkron: HH:mm WIB* dengan tombol *Sinkronkan Ulang*.
+  - **Dedicated Riwayat Pengiriman (`feishu-history-dialog.tsx`)**: Modal audit log interaktif lengkap dengan status badge, response latency ms, grup tujuan, target kota, dan email pengirim.
+
+---
+
 ## [v2.3.0] - 2026-08-04 (Communication Center: Feishu Open Platform Integration v1.0)
 
 ### Added

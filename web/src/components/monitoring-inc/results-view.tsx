@@ -310,6 +310,28 @@ Terima kasih.`;
         isOpen={isFeishuShareOpen}
         onClose={() => setIsFeishuShareOpen(false)}
         targetKota={targetKota}
+        generateTime={generateTime}
+        summaryData={{
+          total: stats.total,
+          belum: stats.belum,
+          late: stats.late,
+          clear: stats.clear,
+          percent: stats.percent,
+          topKecamatan: Array.from(
+            data
+              .reduce((map, r) => {
+                const k = r.tempatTujuan?.trim() || 'Lainnya';
+                map.set(k, (map.get(k) || 0) + 1);
+                return map;
+              }, new Map<string, number>())
+              .entries()
+          )
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([k]) => k),
+        }}
+        captionPreview={buildSmartCaption()}
+        imagePreviewUrl={generatedImageUrl}
         onExecuteSend={handleExecuteFeishuSend}
       />
 
