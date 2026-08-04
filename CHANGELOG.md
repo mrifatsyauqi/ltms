@@ -4,6 +4,42 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v2.3.0] - 2026-08-04 (Communication Center: Feishu Open Platform Integration v1.0)
+
+### Added
+- **Communication Center Architecture (`web/src/services/communication`)**:
+  - **Modular Core Contracts**: Interface `ICommunicationProvider`, `ICommunicationService`, dan type definition untuk pengiriman pesan lintas channel.
+  - **Feishu Open Platform Provider (`providers/feishu/`)**:
+    - `FeishuAuthService`: Pengelolaan siklus Tenant Access Token otomatis (`tenant_access_token`) dengan caching in-memory berbasis TTL dan auto-refresh.
+    - `FeishuChatService`: Sinkronisasi dan caching daftar Group Feishu (`/im/v1/chats`) yang diikuti bot ke database Supabase (`feishu_groups`).
+    - `FeishuImageService`: Pengunggahan gambar report hasil render ke Feishu Open Platform (`/im/v1/images`) dengan return `image_key`.
+    - `FeishuFileService`: Pengunggahan file lampiran (`/im/v1/files`) dengan return `file_key`.
+    - `FeishuCardService`: Generator JSON Feishu Interactive Card 2.0 untuk Monitoring INC (header banner merah, metrik KPI, distribusi kecamatan, lampiran gambar HD).
+    - `FeishuMessageService`: Pengiriman pesan & Interactive Card ke Group Feishu (`/im/v1/messages?receive_id_type=chat_id`).
+  - **Resilience & Audit Layer**:
+    - `MemoryCache`: In-memory key-value cache dengan TTL expiry untuk token.
+    - `withRetry`: 3x exponential backoff retry mechanism (500ms, 1000ms, 2000ms) untuk mengantisipasi transient network failure.
+    - `CommunicationLogger`: Audit logging komprehensif ke tabel Supabase `communication_logs` (channel, chat_id, message_type, status, response_time_ms, error).
+
+- **Backend API Endpoints (`web/src/app/api/communication/`)**:
+  - `GET /api/communication/feishu/groups`: Mengambil daftar Group Feishu dari cache database.
+  - `POST /api/communication/feishu/groups/sync`: Menyinkronkan daftar Group langsung dari Feishu API.
+  - `POST /api/communication/send`: Endpoint utama pengiriman pesan/Interactive Card ke channel tujuan (terlindungi session NextAuth).
+  - `GET /api/communication/logs`: Endpoint riwayat audit log komunikasi.
+
+- **Frontend User Interface & Integration (`/monitoring-inc`)**:
+  - **Tombol "Bagikan" (`Share2`)**: Terintegrasi pada action toolbar Monitoring INC.
+  - **Feishu Share Dialog (`feishu-share-dialog.tsx`)**:
+    - Modal interaktif dengan pencarian group real-time dan tombol sinkronisasi (`RefreshCw`).
+    - Multi-stage loading progress bar (*Preparing Data* → *Rendering Report* → *Generating Caption* → *Uploading Image* → *Sending Interactive Card* → *Completed*).
+    - Auto-dismiss modal dan notifikasi toast hijau saat pengiriman berhasil.
+
+- **Database Migration (`supabase/feishu_communication_center.sql`)**:
+  - Tabel `feishu_groups`: Chat ID, nama group, member count, avatar, last sync timestamp.
+  - Tabel `communication_logs`: Log pengiriman pesan, status, response time, error message, dan JSON payload summary.
+
+---
+
 ## [v2.2.0] - 2026-08-04 (LTMS v2.2: Smart Share, Table Sorting & Enterprise UI/UX Overhaul)
 
 ### Added

@@ -19,6 +19,8 @@ import { IncRow, IncStats, AVAILABLE_CITIES } from './types';
 import { MonitoringIncTable } from './monitoring-inc-table';
 import { ReportImageCanvas } from './report-image-canvas';
 import { SmartShareModal, SmartShareStage } from './smart-share-modal';
+import { FeishuShareDialog, FeishuShareStage } from './feishu-share-dialog';
+import { FeishuGroup } from '@/services/communication/communication.types';
 
 interface ResultsViewProps {
   data: IncRow[];
@@ -42,6 +44,9 @@ export function ResultsView({
   userDropPoint,
 }: ResultsViewProps) {
   const hiddenCanvasRef = useRef<HTMLDivElement>(null);
+
+  // Feishu Communication Share Dialog state
+  const [isFeishuShareOpen, setIsFeishuShareOpen] = useState(false);
 
   // Smart Share state
   const [isSmartShareOpen, setIsSmartShareOpen] = useState(false);
@@ -211,6 +216,81 @@ Terima kasih.`;
     }
   };
 
+  // Handler Pengiriman Laporan ke Feishu Group
+  const handleExecuteFeishuSend = async (
+    selectedGroup: FeishuGroup,
+    updateStage: (stage: FeishuShareStage, progress: number) => void
+  ) => {
+    if (!hiddenCanvasRef.current) {
+      throw new Error('Canvas visual report belum siap dirender.');
+    }
+
+    // 1. Preparing Data
+    updateStage('preparing_data', 15);
+    await new Promise((r) => setTimeout(r, 200));
+
+    // 2. Rendering HD PNG Report (1200x900)
+    updateStage('rendering_report', 35);
+    const node = hiddenCanvasRef.current;
+    const dataUrl = await toPng(node, {
+      quality: 1,
+      pixelRatio: 2,
+      backgroundColor: '#FFFFFF',
+    });
+    setGeneratedImageUrl(dataUrl);
+    await new Promise((r) => setTimeout(r, 200));
+
+    // 3. Generating Caption
+    updateStage('generating_caption', 55);
+    const caption = buildSmartCaption();
+    setGeneratedCaption(caption);
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Ekstrak Top 5 Kecamatan
+    const kecCountMap = new Map<string, number>();
+    data.forEach((r) => {
+      const kec = r.tempatTujuan?.trim() || 'Lainnya';
+      kecCountMap.set(kec, (kecCountMap.get(kec) || 0) + 1);
+    });
+    const topKecamatan = Array.from(kecCountMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([kec]) => kec);
+
+    // 4. Uploading Image to Feishu
+    updateStage('uploading_image', 75);
+    await new Promise((r) => setTimeout(r, 250));
+
+    // 5. Sending Interactive Card Message
+    updateStage('sending_message', 90);
+    const res = await fetch('/api/communication/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        channel: 'feishu',
+        chatId: selectedGroup.chatId,
+        messageType: 'interactive_card',
+        data: {
+          targetKota,
+          total: stats.total,
+          belum: stats.belum,
+          late: stats.late,
+          clear: stats.clear,
+          percent: stats.percent,
+          topKecamatan,
+          generateTime,
+          imageBase64: dataUrl,
+          caption,
+        },
+      }),
+    });
+
+    const json = await res.json();
+    if (!res.ok || !json.ok) {
+      throw new Error(json.error || 'Gagal mengirim pesan ke API Feishu.');
+    }
+  };
+
   return (
     <div className="space-y-4 animate-in fade-in-50 duration-300">
       {/* Hidden Offscreen Canvas for Generating Crisp Formal Image */}
@@ -224,6 +304,14 @@ Terima kasih.`;
           userDropPoint={userDropPoint}
         />
       </div>
+
+      {/* Feishu Communication Share Dialog */}
+      <FeishuShareDialog
+        isOpen={isFeishuShareOpen}
+        onClose={() => setIsFeishuShareOpen(false)}
+        targetKota={targetKota}
+        onExecuteSend={handleExecuteFeishuSend}
+      />
 
       {/* Smart Share Modal */}
       <SmartShareModal
@@ -283,14 +371,24 @@ Terima kasih.`;
             )}
           </div>
 
-          {/* SMART SHARE Button (Primary 1-Click Action) */}
+          {/* BAGIKAN KE FEISHU Button (Primary Outbound Action) */}
+          <button
+            type="button"
+            onClick={() => setIsFeishuShareOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[6px] bg-[#E2231A] hover:bg-[#C91C15] active:scale-[0.98] text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
+          >
+            <Share2 className="size-3.5" />
+            Bagikan
+          </button>
+
+          {/* SMART SHARE Button (Quick Canvas & Caption Copy) */}
           <button
             type="button"
             disabled={smartShareStage === 'rendering'}
             onClick={handleSmartShare}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[6px] bg-[#E2231A] hover:bg-[#C91C15] active:scale-[0.98] text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs font-medium shadow-2xs transition-all cursor-pointer"
           >
-            <Share2 className="size-3.5" />
+            <Share2 className="size-3.5 text-slate-500" />
             Smart Share
           </button>
 
