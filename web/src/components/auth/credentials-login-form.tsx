@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState, useEffect, useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { credentialsSignInAction } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -76,7 +76,14 @@ export function CredentialsLoginForm() {
         </p>
       )}
       <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? 'Masuk…' : 'Masuk'}
+        {pending ? (
+          <>
+            <Loader2 className="size-4 animate-spin mr-2" />
+            <span>Memproses Masuk...</span>
+          </>
+        ) : (
+          'Masuk'
+        )}
       </Button>
     </form>
   );

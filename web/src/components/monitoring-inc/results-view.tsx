@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import {
   ArrowLeft,
-  Image as ImageIcon,
+  Share2,
   Download,
   FileText,
   CheckCircle2,
@@ -18,6 +18,7 @@ import { toPng } from 'html-to-image';
 import { IncRow, IncStats, AVAILABLE_CITIES } from './types';
 import { MonitoringIncTable } from './monitoring-inc-table';
 import { ReportImageCanvas } from './report-image-canvas';
+import { SmartShareModal, SmartShareStage } from './smart-share-modal';
 
 interface ResultsViewProps {
   data: IncRow[];
@@ -40,42 +41,127 @@ export function ResultsView({
   isCityLocked,
   userDropPoint,
 }: ResultsViewProps) {
-  const [isCopyingImage, setIsCopyingImage] = useState(false);
   const hiddenCanvasRef = useRef<HTMLDivElement>(null);
 
-  // Copy Gambar Laporan ke Clipboard
-  const handleCopyImage = async () => {
-    if (!hiddenCanvasRef.current || isCopyingImage) return;
+  // Smart Share state
+  const [isSmartShareOpen, setIsSmartShareOpen] = useState(false);
+  const [smartShareStage, setSmartShareStage] = useState<SmartShareStage>('idle');
+  const [smartShareProgress, setSmartShareProgress] = useState(0);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [generatedCaption, setGeneratedCaption] = useState<string>('');
+
+  // Auto Caption Generator (Clean format, WhatsApp/Feishu ready, NO dashboard links)
+  const buildSmartCaption = () => {
+    // Format tanggal & jam
+    const now = new Date();
+    const formattedDate = new Intl.DateTimeFormat('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(now);
+
+    const formattedTime = new Intl.DateTimeFormat('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(now);
+
+    // Ambil list unik kecamatan dengan jumlah paketnya
+    const kecCountMap = new Map<string, number>();
+    data.forEach((r) => {
+      const kec = r.tempatTujuan?.trim() || 'Lainnya';
+      kecCountMap.set(kec, (kecCountMap.get(kec) || 0) + 1);
+    });
+
+    const topKecStrings = Array.from(kecCountMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([kec, count]) => `• ${kec}: ${count} resi`)
+      .join('\n');
+
+    return `📊 MONITORING INC
+Kota: ${targetKota}
+Tanggal: ${formattedDate}
+Jam: ${formattedTime} WIB
+━━━━━━━━━━━━━━
+📦 Total Resi: ${stats.total.toLocaleString('id-ID')}
+⏳ Belum TTD: ${stats.belum.toLocaleString('id-ID')}
+🚨 Melebihi SLA: ${stats.late.toLocaleString('id-ID')}
+📈 Progress: ${stats.percent}%
+━━━━━━━━━━━━━━
+Tujuan Kecamatan:
+${topKecStrings || '• Sesuai data terlampir'}
+━━━━━━━━━━━━━━
+Mohon seluruh DP segera melakukan follow up terhadap seluruh paket yang belum TTD terutama paket yang telah melewati SLA.
+
+Terima kasih.`;
+  };
+
+  // 1-Click Smart Share Handler
+  const handleSmartShare = async () => {
+    if (!hiddenCanvasRef.current || smartShareStage === 'rendering') return;
 
     try {
-      setIsCopyingImage(true);
-      const node = hiddenCanvasRef.current;
+      setIsSmartShareOpen(true);
+      setSmartShareStage('preparing');
+      setSmartShareProgress(15);
+      await new Promise((r) => setTimeout(r, 200));
 
+      setSmartShareStage('generating');
+      setSmartShareProgress(35);
+      await new Promise((r) => setTimeout(r, 250));
+
+      // Render Canvas to HD Image
+      setSmartShareStage('rendering');
+      setSmartShareProgress(60);
+      const node = hiddenCanvasRef.current;
       const dataUrl = await toPng(node, {
         quality: 1,
         pixelRatio: 2,
         backgroundColor: '#FFFFFF',
       });
+      setGeneratedImageUrl(dataUrl);
+      await new Promise((r) => setTimeout(r, 250));
 
-      const res = await fetch(dataUrl);
-      const blob = await res.blob();
+      // Build Caption
+      setSmartShareStage('captioning');
+      setSmartShareProgress(80);
+      const caption = buildSmartCaption();
+      setGeneratedCaption(caption);
+      await new Promise((r) => setTimeout(r, 200));
 
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          'image/png': blob,
-        }),
-      ]);
+      // Auto Copy Caption to Clipboard
+      setSmartShareStage('copying');
+      setSmartShareProgress(95);
+      try {
+        await navigator.clipboard.writeText(caption);
+        toast.success('✔ Caption berhasil disalin ke clipboard!', {
+          description: 'Format WhatsApp/Feishu siap dibagikan.',
+          position: 'bottom-right',
+        });
+      } catch (clipErr) {
+        console.warn('Clipboard write error:', clipErr);
+        toast.error('Gagal otomatis menyalin caption. Anda dapat menyalinnya manual di popup.');
+      }
 
-      toast.success('Gambar laporan berhasil disalin ke clipboard!', {
-        description: 'Format formal siap di-paste ke WhatsApp, Telegram, atau grup cabang.',
-        position: 'bottom-right',
-      });
+      setSmartShareProgress(100);
+      await new Promise((r) => setTimeout(r, 200));
+      setSmartShareStage('success');
     } catch (err) {
-      console.error('Gagal menyalin gambar laporan:', err);
-      toast.error('Gagal menyalin gambar. Pastikan izin clipboard aktif.');
-    } finally {
-      setIsCopyingImage(false);
+      console.error('Smart Share error:', err);
+      setSmartShareStage('error');
+      toast.error('Gagal memproses Smart Share.');
     }
+  };
+
+  // Download Report PNG
+  const handleDownloadPng = () => {
+    if (!generatedImageUrl) return;
+    const link = document.createElement('a');
+    link.download = `MONITORING_INC_${targetKota}_${Date.now()}.png`;
+    link.href = generatedImageUrl;
+    link.click();
+    toast.success('Gambar laporan berhasil diunduh!');
   };
 
   // Export Excel (.xlsx)
@@ -139,8 +225,19 @@ export function ResultsView({
         />
       </div>
 
+      {/* Smart Share Modal */}
+      <SmartShareModal
+        isOpen={isSmartShareOpen}
+        onClose={() => setIsSmartShareOpen(false)}
+        stage={smartShareStage}
+        progress={smartShareProgress}
+        imageUrl={generatedImageUrl}
+        captionText={generatedCaption}
+        onDownload={handleDownloadPng}
+      />
+
       {/* 1. Header Bar with Integrated Action Toolbar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[#E5E7EB]">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-200">
         <div>
           <h1 className="text-lg md:text-xl font-semibold tracking-tight text-slate-900">
             Monitoring INC
@@ -157,14 +254,14 @@ export function ResultsView({
           <button
             type="button"
             onClick={onReset}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border border-[#E5E7EB] bg-white hover:bg-slate-50 active:scale-98 text-slate-700 text-xs font-medium shadow-2xs transition-all duration-150"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs font-medium shadow-2xs transition-all cursor-pointer"
           >
             <ArrowLeft className="size-3.5 text-slate-500" />
             Upload File Baru
           </button>
 
           {/* Target Kota Selector */}
-          <div className="flex items-center gap-1.5 bg-white border border-[#E5E7EB] rounded-[8px] px-2.5 py-1.5 shadow-2xs text-xs font-medium text-slate-800">
+          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-[6px] px-2.5 py-1.5 shadow-2xs text-xs font-medium text-slate-800">
             <MapPin className="size-3.5 text-[#E2231A]" />
             {isCityLocked ? (
               <div className="flex items-center gap-1">
@@ -186,22 +283,22 @@ export function ResultsView({
             )}
           </div>
 
-          {/* Copy Gambar Laporan */}
+          {/* SMART SHARE Button (Primary 1-Click Action) */}
           <button
             type="button"
-            disabled={isCopyingImage}
-            onClick={handleCopyImage}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border border-[#E5E7EB] bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium shadow-2xs active:scale-98 transition-all duration-150"
+            disabled={smartShareStage === 'rendering'}
+            onClick={handleSmartShare}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[6px] bg-[#E2231A] hover:bg-[#C91C15] active:scale-[0.98] text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
           >
-            <ImageIcon className="size-3.5 text-blue-600" />
-            {isCopyingImage ? 'Menyiapkan Gambar...' : 'Salin Gambar'}
+            <Share2 className="size-3.5" />
+            Smart Share
           </button>
 
           {/* Export Excel */}
           <button
             type="button"
             onClick={handleExportExcel}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100 text-emerald-800 text-xs font-medium shadow-2xs active:scale-98 transition-all duration-150"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs font-medium shadow-2xs transition-all cursor-pointer"
           >
             <Download className="size-3.5 text-emerald-600" />
             Ekspor Excel
@@ -212,37 +309,37 @@ export function ResultsView({
       {/* 2. 4 KPI Metric Cards Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Card 1: Total AWB INC */}
-        <div className="bg-white rounded-xl border border-[#E5E7EB] p-3.5 shadow-xs flex items-center gap-3">
-          <div className="size-9 rounded-[8px] bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+        <div className="bg-white rounded-[8px] border border-slate-200 p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-slate-300">
+          <div className="size-9 rounded-[6px] bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
             <FileText className="size-4.5" />
           </div>
           <div className="min-w-0">
             <p className="text-[11px] font-medium text-slate-500 uppercase tracking-tight">Total AWB INC</p>
-            <p className="text-xl font-bold text-slate-900 leading-tight">{stats.total}</p>
+            <p className="text-xl font-bold text-slate-900 leading-tight font-mono">{stats.total.toLocaleString('id-ID')}</p>
             <p className="text-[11px] text-slate-400">Total Pengiriman</p>
           </div>
         </div>
 
         {/* Card 2: Clear TTD */}
-        <div className="bg-white rounded-xl border border-[#E5E7EB] p-3.5 shadow-xs flex items-center gap-3">
-          <div className="size-9 rounded-[8px] bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+        <div className="bg-white rounded-[8px] border border-slate-200 p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-slate-300">
+          <div className="size-9 rounded-[6px] bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
             <CheckCircle2 className="size-4.5" />
           </div>
           <div className="min-w-0">
             <p className="text-[11px] font-medium text-slate-500 uppercase tracking-tight">Clear TTD (≤24 Jam)</p>
-            <p className="text-xl font-bold text-slate-900 leading-tight">{stats.clear}</p>
+            <p className="text-xl font-bold text-slate-900 leading-tight font-mono">{stats.clear.toLocaleString('id-ID')}</p>
             <p className="text-[11px] font-medium text-emerald-600">{stats.percent}% Tepat Waktu</p>
           </div>
         </div>
 
         {/* Card 3: Belum TTD / Telat */}
-        <div className="bg-white rounded-xl border border-[#E5E7EB] p-3.5 shadow-xs flex items-center gap-3">
-          <div className="size-9 rounded-[8px] bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
+        <div className="bg-white rounded-[8px] border border-slate-200 p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-slate-300">
+          <div className="size-9 rounded-[6px] bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
             <Clock className="size-4.5" />
           </div>
           <div className="min-w-0">
             <p className="text-[11px] font-medium text-slate-500 uppercase tracking-tight">Belum TTD / Telat</p>
-            <p className="text-xl font-bold text-slate-900 leading-tight">{stats.belum + stats.late}</p>
+            <p className="text-xl font-bold text-slate-900 leading-tight font-mono">{(stats.belum + stats.late).toLocaleString('id-ID')}</p>
             <p className="text-[11px] font-medium text-amber-600">
               {stats.total > 0 ? Math.round(((stats.belum + stats.late) / stats.total) * 100) : 0}% Belum Selesai
             </p>
@@ -250,19 +347,19 @@ export function ResultsView({
         </div>
 
         {/* Card 4: Presentase (Paling Kanan) */}
-        <div className="bg-white rounded-xl border border-[#E5E7EB] p-3.5 shadow-xs flex items-center gap-3">
-          <div className="size-9 rounded-[8px] bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
+        <div className="bg-white rounded-[8px] border border-slate-200 p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-slate-300">
+          <div className="size-9 rounded-[6px] bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
             <Percent className="size-4.5" />
           </div>
           <div className="min-w-0">
             <p className="text-[11px] font-medium text-slate-500 uppercase tracking-tight">Presentase</p>
-            <p className="text-xl font-bold text-indigo-900 leading-tight">{stats.percent}%</p>
+            <p className="text-xl font-bold text-indigo-900 leading-tight font-mono">{stats.percent}%</p>
             <p className="text-[11px] font-medium text-indigo-600">Pencapaian SLA</p>
           </div>
         </div>
       </div>
 
-      {/* 3. Modern Data Table */}
+      {/* 3. Modern Data Table with TanStack Table Sorting */}
       <MonitoringIncTable data={data} />
     </div>
   );

@@ -9,6 +9,8 @@ import { getMyMenuAccess, isGatedRole } from '@/lib/data/permissions';
  * Shell aplikasi: sidebar gelap (kiri) + area konten terang (kanan).
  * Halaman /login sengaja di luar grup ini supaya tampil tanpa sidebar.
  */
+import { PageTransition } from '@/components/layout/page-transition';
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   // Sesi valid HARUS punya role (diisi jwt callback hanya untuk login yang
@@ -53,7 +55,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           ikut salah saat sidebar di-collapse.
         */}
         <main className="bg-background @container flex min-w-0 flex-1 flex-col overflow-y-auto">
-          {children}
+          <PageTransition>
+            {children}
+          </PageTransition>
         </main>
       </div>
     </DashboardScopeProvider>

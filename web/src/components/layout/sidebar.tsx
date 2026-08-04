@@ -143,11 +143,11 @@ export function Sidebar({ role, nama, dropPoint, menuAccess = null }: SidebarPro
                         aria-current={active ? 'page' : undefined}
                         title={collapsed ? item.label : undefined}
                         className={cn(
-                          'flex flex-1 items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
-                          'focus-visible:ring-sidebar-ring focus-visible:ring-2 focus-visible:outline-none',
+                          'flex flex-1 items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-[13px] transition-all duration-150',
+                          'focus-visible:ring-sidebar-ring focus-visible:ring-2 focus-visible:outline-none active:scale-[0.98]',
                           active
-                            ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
-                            : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                            ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium shadow-xs'
+                            : 'hover:bg-slate-100 hover:text-slate-900 text-slate-600',
                         )}
                       >
                         <Icon className="size-[17px] shrink-0" aria-hidden />
@@ -159,7 +159,7 @@ export function Sidebar({ role, nama, dropPoint, menuAccess = null }: SidebarPro
                           onClick={() => toggleExpanded(item)}
                           aria-expanded={isOpen}
                           aria-label={isOpen ? `Tutup submenu ${item.label}` : `Buka submenu ${item.label}`}
-                          className="hover:bg-sidebar-accent focus-visible:ring-sidebar-ring shrink-0 rounded-lg p-1.5 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                          className="hover:bg-slate-100 focus-visible:ring-sidebar-ring shrink-0 rounded-[6px] p-1.5 transition-colors focus-visible:ring-2 focus-visible:outline-none"
                         >
                           <ChevronDown
                             className={cn('size-3.5 shrink-0 transition-transform', isOpen && 'rotate-180')}
@@ -181,11 +181,11 @@ export function Sidebar({ role, nama, dropPoint, menuAccess = null }: SidebarPro
                                 href={child.href}
                                 aria-current={childActive ? 'page' : undefined}
                                 className={cn(
-                                  'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
-                                  'focus-visible:ring-sidebar-ring focus-visible:ring-2 focus-visible:outline-none',
+                                  'flex items-center gap-2.5 rounded-[6px] px-2.5 py-1.5 text-[13px] transition-all duration-150',
+                                  'focus-visible:ring-sidebar-ring focus-visible:ring-2 focus-visible:outline-none active:scale-[0.98]',
                                   childActive
-                                    ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
-                                    : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                                    ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium shadow-xs'
+                                    : 'hover:bg-slate-100 hover:text-slate-900 text-slate-600',
                                 )}
                               >
                                 <ChildIcon className="size-[17px] shrink-0" aria-hidden />

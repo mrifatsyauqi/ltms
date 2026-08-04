@@ -73,100 +73,101 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  /* primary = brand J&T, jadi Button/checkbox/ring shadcn otomatis ikut merah. */
-  --primary: #e4032d;
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  /* Primary & Brand LTMS v2.2 */
+  --primary: #E2231A;
   --primary-foreground: #ffffff;
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: #e4032d;
-  --radius: 0.625rem;
+  --secondary: #f8fafc;
+  --secondary-foreground: #1e293b;
+  --muted: #f8fafc;
+  --muted-foreground: #64748b;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+  --destructive: #EF4444;
+  --border: #E5E7EB;
+  --input: #E5E7EB;
+  --ring: #E2231A;
+  --radius: 0.5rem; /* 8px default card radius */
 
-  /* Brand J&T Express - #E4032D. Kontras 4.83:1 thd putih (lolos WCAG AA
-     teks kecil), jadi teks putih di atas merah ini aman.
-     SEMUA warna merah aplikasi mengacu ke sini - jangan hardcode hex
-     di komponen, supaya ganti warna cukup di satu tempat. */
-  --brand: #e4032d;
+  /* Brand LTMS Standard */
+  --brand: #E2231A;
   --brand-foreground: #ffffff;
-  --brand-strong: #c00326; /* hover/pressed - kontras 6.43:1 thd putih */
-  --brand-muted: #fdedf0; /* latar lembut */
-  --brand-softer: #fbdce2; /* border/aksen lembut */
+  --brand-strong: #C91C15; /* hover/pressed */
+  --brand-muted: #fef2f2; /* soft red bg */
+  --brand-softer: #fee2e2; /* soft red border */
 
-  /* Aging: pasangan bg + foreground (kontras >= 4.5:1 utk teks kecil) */
-  --aging-1: oklch(0.94 0.06 150);
-  --aging-1-fg: oklch(0.42 0.13 150);
-  --aging-2: oklch(0.95 0.08 85);
-  --aging-2-fg: oklch(0.45 0.12 68);
-  --aging-3: oklch(0.94 0.05 25);
-  --aging-3-fg: oklch(0.48 0.19 27);
+  /* State colors */
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
 
-  /* Aksen ikon stat card (dipakai sbg bg lembut + ikon pekat) */
-  --accent-blue: oklch(0.62 0.17 255);
-  --accent-amber: oklch(0.72 0.16 70);
-  --accent-green: oklch(0.62 0.16 150);
-  --accent-violet: oklch(0.6 0.19 295);
-  --accent-red: oklch(0.6 0.21 27);
-  --accent-rose: oklch(0.62 0.19 12);
+  /* Aging: pasangan bg + foreground */
+  --aging-1: #d1fae5;
+  --aging-1-fg: #065f46;
+  --aging-2: #fef3c7;
+  --aging-2-fg: #92400e;
+  --aging-3: #fee2e2;
+  --aging-3-fg: #991b1b;
 
-  /* Chart: warna kategori Distribusi Feedback + seri lain */
-  --chart-1: oklch(0.62 0.16 150); /* hijau  - Clear TTD */
-  --chart-2: oklch(0.62 0.17 255); /* biru   - On Delivery */
-  --chart-3: oklch(0.72 0.16 55);  /* oranye - Reschedule */
-  --chart-4: oklch(0.7 0.13 230);  /* sky    - Penerima Tidak Di Tempat */
-  --chart-5: oklch(0.6 0.19 295);  /* ungu   - Alamat Tidak Ditemukan */
-  --chart-6: oklch(0.65 0.02 260); /* abu    - Lainnya */
-  --chart-7: oklch(0.85 0.01 260); /* abu terang - Belum Feedback */
+  /* Aksen ikon stat card */
+  --accent-blue: #3b82f6;
+  --accent-amber: #F59E0B;
+  --accent-green: #10B981;
+  --accent-violet: #8b5cf6;
+  --accent-red: #E2231A;
+  --accent-rose: #f43f5e;
 
-  /* Sidebar TERANG (tema J&T Express) - putih dgn item aktif merah brand. */
-  --sidebar: oklch(1 0 0);
-  --sidebar-foreground: oklch(0.42 0.01 260);
-  --sidebar-primary: #e4032d;
+  /* Chart colors */
+  --chart-1: #10B981; /* hijau  - Clear TTD */
+  --chart-2: #3b82f6; /* biru   - On Delivery */
+  --chart-3: #f97316; /* oranye - Reschedule */
+  --chart-4: #0ea5e9; /* sky    - Penerima Tidak Di Tempat */
+  --chart-5: #8b5cf6; /* ungu   - Alamat Tidak Ditemukan */
+  --chart-6: #94a3b8; /* abu    - Lainnya */
+  --chart-7: #cbd5e1; /* abu terang - Belum Feedback */
+
+  /* Sidebar TERANG */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #475569;
+  --sidebar-primary: #E2231A;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: oklch(0.965 0.004 260);
-  --sidebar-accent-foreground: oklch(0.22 0.01 260);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: #e4032d;
+  --sidebar-accent: #f8fafc;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #E5E7EB;
+  --sidebar-ring: #E2231A;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  /* Aging di dark mode: bg lebih pekat, teks terang */
-  --aging-1: oklch(0.3 0.08 150);
-  --aging-1-fg: oklch(0.88 0.14 150);
-  --aging-2: oklch(0.32 0.08 75);
-  --aging-2-fg: oklch(0.88 0.14 85);
-  --aging-3: oklch(0.31 0.1 27);
-  --aging-3-fg: oklch(0.85 0.13 25);
-  --brand-muted: oklch(0.3 0.08 27);
+  --background: #090d16;
+  --foreground: #f8fafc;
+  --card: #111827;
+  --card-foreground: #f8fafc;
+  --popover: #111827;
+  --popover-foreground: #f8fafc;
+  --primary: #E2231A;
+  --primary-foreground: #ffffff;
+  --secondary: #1f2937;
+  --secondary-foreground: #f8fafc;
+  --muted: #1f2937;
+  --muted-foreground: #94a3b8;
+  --accent: #1f2937;
+  --accent-foreground: #f8fafc;
+  --destructive: #EF4444;
+  --border: #1f2937;
+  --input: #1f2937;
+  --ring: #E2231A;
+  --aging-1: #064e3b;
+  --aging-1-fg: #6ee7b7;
+  --aging-2: #78350f;
+  --aging-2-fg: #fcd34d;
+  --aging-3: #7f1d1d;
+  --aging-3-fg: #fca5a5;
+  --brand-muted: #450a0a;
 }
 
 @utility no-scrollbar {

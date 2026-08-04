@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Search, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/layout/page-header';
 import { StatusBadge, isAktif } from '@/components/master/status-badge';
@@ -257,7 +257,14 @@ export function MasterFeedbackClient() {
               Batal
             </Button>
             <Button onClick={submit} disabled={!form.namaFeedback.trim() || saving}>
-              {saving ? 'Menyimpan…' : 'Simpan'}
+              {saving ? (
+                <>
+                  <Loader2 className="size-4 animate-spin mr-2" />
+                  <span>Menyimpan…</span>
+                </>
+              ) : (
+                'Simpan'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -281,7 +288,14 @@ export function MasterFeedbackClient() {
               onClick={() => confirmDelete && deleteMut.mutate(confirmDelete.ID)}
               disabled={deleteMut.isPending}
             >
-              {deleteMut.isPending ? 'Menghapus…' : 'Hapus'}
+              {deleteMut.isPending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin mr-2" />
+                  <span>Menghapus…</span>
+                </>
+              ) : (
+                'Hapus'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
