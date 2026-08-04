@@ -11,6 +11,7 @@ import {
   IncStats,
   UploadedFileInfo,
   RecentUploadHistoryItem,
+  UploadStage,
   AVAILABLE_CITIES,
 } from './types';
 import { UploadCard } from './upload-card';
@@ -24,7 +25,8 @@ interface MonitoringIncClientProps {
   userDropPoint?: string;
 }
 
-const STORAGE_KEY_RECENT = 'ltms_recent_inc_upload';
+const STORAGE_KEY_RECENT_LIST = 'ltms_recent_inc_upload_list';
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function MonitoringIncClient({
   userRole,
@@ -47,19 +49,53 @@ export function MonitoringIncClient({
   const [parsedRows, setParsedRows] = useState<IncRow[] | null>(null);
   const [generateTimestamp, setGenerateTimestamp] = useState<string>('');
   const [viewMode, setViewMode] = useState<'workflow' | 'results'>('workflow');
-  const [historyItem, setHistoryItem] = useState<RecentUploadHistoryItem | null>(null);
+  const [historyList, setHistoryList] = useState<RecentUploadHistoryItem[]>([]);
 
-  // Load riwayat terakhir dari localStorage
+  // 7-Day Auto Retention: Load & Cleanup expired items
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY_RECENT);
+      const saved = localStorage.getItem(STORAGE_KEY_RECENT_LIST);
       if (saved) {
-        setHistoryItem(JSON.parse(saved));
+        const parsed: RecentUploadHistoryItem[] = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const now = Date.now();
+          const validList = parsed.filter(
+            (item) => item.createdAt && now - item.createdAt <= SEVEN_DAYS_MS
+          );
+          setHistoryList(validList);
+          if (validList.length !== parsed.length) {
+            localStorage.setItem(STORAGE_KEY_RECENT_LIST, JSON.stringify(validList));
+          }
+          return;
+        }
+      }
+
+      // Fallback check legacy single key
+      const legacy = localStorage.getItem('ltms_recent_inc_upload');
+      if (legacy) {
+        const single = JSON.parse(legacy);
+        const item: RecentUploadHistoryItem = {
+          ...single,
+          createdAt: single.createdAt || Date.now(),
+        };
+        setHistoryList([item]);
+        localStorage.setItem(STORAGE_KEY_RECENT_LIST, JSON.stringify([item]));
+        localStorage.removeItem('ltms_recent_inc_upload');
       }
     } catch {
       // ignore
     }
   }, []);
+
+  // Helper untuk menyimpan history list ke localStorage
+  const saveHistoryList = (list: RecentUploadHistoryItem[]) => {
+    setHistoryList(list);
+    try {
+      localStorage.setItem(STORAGE_KEY_RECENT_LIST, JSON.stringify(list));
+    } catch {
+      // ignore
+    }
+  };
 
   // Format ukuran file
   const formatFileSize = (bytes: number) => {
@@ -68,32 +104,85 @@ export function MonitoringIncClient({
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   };
 
-  // Handler saat file dipilih di Step 1
-  const handleFileSelected = async (file: File) => {
+  // Handler proses upload bertahap (Reading -> Parsing -> Filtering -> Counting -> Validation -> Completed)
+  const handleFileSelected = async (
+    file: File,
+    updateStage: (stage: UploadStage) => void
+  ) => {
     try {
+      // Stage 1: Reading Excel
+      updateStage('reading');
       const buffer = await file.arrayBuffer();
+      await new Promise((r) => setTimeout(r, 60));
+
+      // Stage 2: Parsing Data
+      updateStage('parsing');
       const wb = XLSX.read(buffer, { type: 'array' });
       const firstSheet = wb.Sheets[wb.SheetNames[0]];
       const rawData = XLSX.utils.sheet_to_json<Record<string, any>>(firstSheet);
+      await new Promise((r) => setTimeout(r, 60));
 
       if (!rawData || rawData.length === 0) {
         toast.error('File Excel kosong atau tidak terbaca.');
         return;
       }
 
+      // Stage 3: Filtering Target City
+      updateStage('filtering');
+      let filteredCount = 0;
+      for (const row of rawData) {
+        const getCol = (...keys: string[]) => {
+          for (const k of keys) {
+            for (const rowKey of Object.keys(row)) {
+              if (rowKey.trim().toLowerCase() === k.trim().toLowerCase()) {
+                return row[rowKey];
+              }
+            }
+          }
+          return undefined;
+        };
+
+        const awb = String(getCol('No. Waybill', 'AWB', 'Nomor Resi', 'No Resi') || '').trim();
+        if (!awb) continue;
+
+        const kotaPenerima = String(getCol('Kota Penerima', 'Kota/Kabupaten', 'Kabupaten Penerima') || '').trim();
+        const tempatTujuan = String(getCol('Kecamatan Penerima', 'Kecamatan', 'Tempat Tujuan', 'Tujuan') || '').trim();
+        const alamatPenerima = String(getCol('Alamat Penerima', 'Alamat') || '-').trim();
+
+        const isMatchedCity =
+          isCityMatch(kotaPenerima, targetKota) ||
+          (!kotaPenerima && (isCityMatch(alamatPenerima, targetKota) || isCityMatch(tempatTujuan, targetKota)));
+
+        if (isMatchedCity) {
+          filteredCount++;
+        }
+      }
+      await new Promise((r) => setTimeout(r, 60));
+
+      // Stage 4: Counting Waybill
+      updateStage('counting');
+      await new Promise((r) => setTimeout(r, 60));
+
+      // Stage 5: Validation
+      updateStage('validating');
+      await new Promise((r) => setTimeout(r, 60));
+
+      // Stage 6: Completed
+      updateStage('completed');
+      await new Promise((r) => setTimeout(r, 50));
+
       const info: UploadedFileInfo = {
         name: file.name,
         sizeFormatted: formatFileSize(file.size),
-        totalResi: rawData.length,
+        totalResi: filteredCount, // Filtered count!
+        rawTotalResi: rawData.length,
         uploadTimestamp: formatDisplayDateTime(),
         targetKota,
         file,
       };
 
       setFileInfo(info);
-      toast.success(`File ${file.name} berhasil dimuat!`, {
-        description: `Terdeteksi ${rawData.length.toLocaleString('id-ID')} resi siap diproses.`,
-      });
+      // Popup toast sukses dihilangkan sesuai spesifikasi (diganti animasi verifikasi card)
     } catch (err) {
       console.error('Gagal membaca file Excel:', err);
       toast.error('Gagal memproses file Excel.');
@@ -115,7 +204,6 @@ export function MonitoringIncClient({
       let validSlaCount = 0;
 
       for (const row of rawData) {
-        // Cari kolom secara fleksibel & case-insensitive
         const getCol = (...keys: string[]) => {
           for (const k of keys) {
             for (const rowKey of Object.keys(row)) {
@@ -149,7 +237,7 @@ export function MonitoringIncClient({
           continue;
         }
 
-        // Parsing waktu secara presisi (mendukung Excel serial date number, string ISO/DMY, Date)
+        // Parsing waktu secara presisi
         const parsedInput = parseExcelDate(rawWaktuInput);
         const parsedTtd = parseExcelDate(rawWaktuTtd);
 
@@ -172,7 +260,6 @@ export function MonitoringIncClient({
         let slaHoursVal: number | null = null;
 
         if (parsedInput) {
-          // Maksimal TTD = Input + 24 Jam
           const deadline = new Date(parsedInput.date.getTime() + 24 * 60 * 60 * 1000);
           const hh = String(deadline.getHours()).padStart(2, '0');
           const mm = String(deadline.getMinutes()).padStart(2, '0');
@@ -215,26 +302,25 @@ export function MonitoringIncClient({
       const nowStr = formatDisplayDateTime();
       setGenerateTimestamp(nowStr);
 
-      // Simpan ke riwayat
+      // Simpan ke riwayat (maksimal 7 hari)
       const newHistory: RecentUploadHistoryItem = {
         id: String(Date.now()),
         fileName: fileInfo.name,
         targetKota,
-        totalResi: fileInfo.totalResi,
+        totalResi: mappedRows.length,
+        rawTotalResi: fileInfo.rawTotalResi,
         uploadTimestamp: nowStr,
-        status: 'Berhasil',
+        createdAt: Date.now(),
+        status: 'Success',
       };
-      setHistoryItem(newHistory);
-      try {
-        localStorage.setItem(STORAGE_KEY_RECENT, JSON.stringify(newHistory));
-      } catch {
-        // ignore
-      }
+
+      const updatedHistory = [newHistory, ...historyList.filter((h) => h.fileName !== fileInfo.name)].slice(0, 10);
+      saveHistoryList(updatedHistory);
 
       // Berikan jeda halus sebelum beralih ke tampilan hasil
       setTimeout(() => {
         setViewMode('results');
-      }, 700);
+      }, 500);
     } catch (err) {
       console.error('Gagal generate monitoring:', err);
       toast.error('Terjadi kesalahan saat memproses data monitoring.');
@@ -284,6 +370,48 @@ export function MonitoringIncClient({
     };
   }, [parsedRows]);
 
+  // Actions for Recent History Card
+  const handleViewDetail = (item: RecentUploadHistoryItem) => {
+    if (parsedRows && parsedRows.length > 0) {
+      setViewMode('results');
+    } else {
+      toast.info(`Memuat data ${item.fileName}... Silakan upload/generate ulang jika data belum tersimpan.`);
+    }
+  };
+
+  const handleRegenerate = (item: RecentUploadHistoryItem) => {
+    if (fileInfo) {
+      handleExecuteGenerate();
+    } else {
+      toast.info(`Silakan upload file ${item.fileName} untuk melakukan generate ulang.`);
+    }
+  };
+
+  const handleDownloadOriginal = (item: RecentUploadHistoryItem) => {
+    if (fileInfo?.file && fileInfo.name === item.fileName) {
+      const url = URL.createObjectURL(fileInfo.file);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileInfo.file.name;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('File asli berhasil diunduh.');
+    } else {
+      toast.info('File asli hanya dapat diunduh pada sesi aktif saat ini.');
+    }
+  };
+
+  const handleDeleteHistoryItem = (id: string) => {
+    const updated = historyList.filter((h) => h.id !== id);
+    saveHistoryList(updated);
+    toast.success('Riwayat berhasil dihapus.');
+  };
+
+  const handleClearAllHistory = () => {
+    saveHistoryList([]);
+    toast.success('Semua riwayat upload telah dibersihkan.');
+  };
+
   // Mode Tampilan Laporan Hasil
   if (viewMode === 'results' && parsedRows) {
     return (
@@ -304,7 +432,7 @@ export function MonitoringIncClient({
   return (
     <div className="space-y-3.5 max-w-7xl mx-auto animate-in fade-in-50 duration-300">
       {/* 1. Header Ringkas + Selector Target Kota */}
-      <div className="flex items-center justify-between gap-3 pb-2 border-b border-slate-200/80">
+      <div className="flex items-center justify-between gap-3 pb-2 border-b border-[#E5E7EB]">
         <div>
           <h1 className="text-lg md:text-xl font-semibold tracking-tight text-slate-900">
             Monitoring INC
@@ -319,8 +447,8 @@ export function MonitoringIncClient({
           <span className="text-xs font-medium text-slate-500 hidden sm:inline">
             Target Kota
           </span>
-          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-md px-2.5 py-1.5 shadow-2xs text-xs font-medium text-slate-800">
-            <MapPin className="size-3.5 text-red-600" />
+          <div className="flex items-center gap-1.5 bg-white border border-[#E5E7EB] rounded-[8px] px-2.5 py-1.5 shadow-2xs text-xs font-medium text-slate-800">
+            <MapPin className="size-3.5 text-[#E2231A]" />
             {isCityLocked ? (
               <div className="flex items-center gap-1">
                 <span>{targetKota}</span>
@@ -356,7 +484,6 @@ export function MonitoringIncClient({
           onDeleteFile={() => {
             setFileInfo(null);
             setParsedRows(null);
-            toast.info('File Excel dihapus.');
           }}
         />
       </div>
@@ -364,19 +491,17 @@ export function MonitoringIncClient({
       {/* 3. Step 3: Generate Monitoring Card */}
       <GenerateSection
         hasFile={!!fileInfo}
-        onStartGenerate={handleExecuteGenerate}
+        onGenerate={handleExecuteGenerate}
       />
 
-      {/* 4. Step 5: Riwayat File Terakhir */}
+      {/* 4. Step 4: Riwayat File (Maks 7 Hari) */}
       <RecentHistoryCard
-        historyItem={historyItem}
-        onDownloadHistory={() => {
-          if (parsedRows) {
-            setViewMode('results');
-          } else {
-            toast.info('Silakan generate ulang untuk melihat detail data terbaru.');
-          }
-        }}
+        history={historyList}
+        onViewDetail={handleViewDetail}
+        onRegenerate={handleRegenerate}
+        onDownloadOriginal={handleDownloadOriginal}
+        onDeleteHistoryItem={handleDeleteHistoryItem}
+        onClearHistory={handleClearAllHistory}
       />
     </div>
   );

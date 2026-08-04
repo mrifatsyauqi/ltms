@@ -31,11 +31,11 @@ export function MonitoringIncTable({ data }: MonitoringIncTableProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col">
+    <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-xs overflow-hidden flex flex-col">
       {/* Table Area with Sticky Header */}
       <div className="overflow-x-auto overflow-y-auto max-h-[520px]">
         <table className="w-full text-left text-xs border-collapse">
-          <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200">
+          <thead className="sticky top-0 z-10 bg-slate-50 border-b border-[#E5E7EB]">
             <tr className="text-slate-600 font-semibold uppercase text-[11px] tracking-wider">
               <th className="py-2.5 px-3.5 font-semibold">AWB</th>
               <th className="py-2.5 px-3.5 font-semibold">Tempat Tujuan</th>
@@ -85,7 +85,7 @@ export function MonitoringIncTable({ data }: MonitoringIncTableProps) {
                     {/* COD */}
                     <td className="py-2.5 px-3.5 font-mono text-right font-medium text-slate-800">
                       {row.cod > 0 ? (
-                        <span className="text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 text-[11px]">
+                        <span className="text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-[6px] border border-amber-200/60 text-[11px]">
                           Rp {formatCurrency(row.cod)}
                         </span>
                       ) : (
@@ -119,15 +119,15 @@ export function MonitoringIncTable({ data }: MonitoringIncTableProps) {
                     {/* Status Badge */}
                     <td className="py-2.5 px-3.5 text-center">
                       {row.status === 'CLEAR' ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                           Clear TTD
                         </span>
                       ) : row.status === 'BELUM' ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                           Belum TTD
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-[6px] text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
                           Telat SLA
                         </span>
                       )}
@@ -155,7 +155,7 @@ export function MonitoringIncTable({ data }: MonitoringIncTableProps) {
             type="button"
             disabled={currentPage <= 1}
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            className="size-7 rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center text-slate-600 shadow-2xs"
+            className="size-7 rounded-[6px] border border-[#E5E7EB] bg-white hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center text-slate-600 shadow-2xs"
           >
             <ChevronLeft className="size-4" />
           </button>
@@ -168,10 +168,10 @@ export function MonitoringIncTable({ data }: MonitoringIncTableProps) {
                 key={pageNum}
                 type="button"
                 onClick={() => setCurrentPage(pageNum)}
-                className={`size-7 rounded-md text-xs font-semibold flex items-center justify-center transition-colors ${
+                className={`size-7 rounded-[6px] text-xs font-semibold flex items-center justify-center transition-colors ${
                   isActive
-                    ? 'bg-red-600 text-white shadow-2xs'
-                    : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    ? 'bg-[#E2231A] text-white shadow-2xs'
+                    : 'border border-[#E5E7EB] bg-white text-slate-700 hover:bg-slate-50'
                 }`}
               >
                 {pageNum}
@@ -185,10 +185,10 @@ export function MonitoringIncTable({ data }: MonitoringIncTableProps) {
               <button
                 type="button"
                 onClick={() => setCurrentPage(totalPages)}
-                className={`size-7 rounded-md text-xs font-semibold flex items-center justify-center ${
+                className={`size-7 rounded-[6px] text-xs font-semibold flex items-center justify-center ${
                   currentPage === totalPages
-                    ? 'bg-red-600 text-white'
-                    : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    ? 'bg-[#E2231A] text-white'
+                    : 'border border-[#E5E7EB] bg-white text-slate-700 hover:bg-slate-50'
                 }`}
               >
                 {totalPages}
@@ -200,7 +200,7 @@ export function MonitoringIncTable({ data }: MonitoringIncTableProps) {
             type="button"
             disabled={currentPage >= totalPages}
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            className="size-7 rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center text-slate-600 shadow-2xs"
+            className="size-7 rounded-[6px] border border-[#E5E7EB] bg-white hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center text-slate-600 shadow-2xs"
           >
             <ChevronRight className="size-4" />
           </button>
@@ -214,7 +214,7 @@ export function MonitoringIncTable({ data }: MonitoringIncTableProps) {
               setPageSize(Number(e.target.value));
               setCurrentPage(1);
             }}
-            className="px-2 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-400 shadow-2xs"
+            className="px-2 py-1 rounded-[6px] border border-[#E5E7EB] bg-white text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-400 shadow-2xs"
           >
             <option value={10}>10 / halaman</option>
             <option value={25}>25 / halaman</option>
