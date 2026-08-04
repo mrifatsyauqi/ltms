@@ -4,6 +4,38 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased] - 2026-08-04 (Revisi 5: Upload Pipeline Berkesinambungan, Filter Count Resi, Retensi 7 Hari & UI/UX Linear/Vercel)
+
+### Added
+- **5-Stage Continuous Upload Pipeline (`upload-card.tsx` & `monitoring-inc-client.tsx`)**:
+  - Mengeliminasi *gap/glitch* UX saat upload di mana skeleton berhenti sebelum file terverifikasi muncul.
+  - Mengimplementasikan alur pemrosesan bertahap yang mulus:
+    1. `reading`: Membaca binary stream file Excel (`0% -> 25%`)
+    2. `parsing`: Parsing baris data Excel JMS (`25% -> 50%`)
+    3. `filtering`: Memfilter resi sesuai target kota terpilih (`50% -> 75%`)
+    4. `counting`: Kalkulasi SLA 24 jam & validasi data (`75% -> 100%`)
+    5. `completed`: Transisi instan ke kartu File Terverifikasi tanpa jeda skeleton.
+  - Menambahkan bar progres animasi dinamis dan status badge realtime untuk setiap tahap pemrosesan.
+
+- **Kalkulasi & Tampilan Jumlah Resi Terfilter Kota Target (`uploaded-file-card.tsx` & `types.ts`)**:
+  - Menambahkan properti `filteredResiCount` pada tipe `UploadedFileInfo`.
+  - Kartu *File Terverifikasi* menampilkan jumlah resi yang cocok secara spesifik untuk target kota terpilih (contoh: `32 resi cocok untuk BATANG (dari 150 total baris)`).
+
+- **Manajemen Riwayat Upload & Retensi 7 Hari Otomatis (`recent-history-card.tsx` & `monitoring-inc-client.tsx`)**:
+  - Menambahkan metadata `createdAt` (ISO timestamp) pada setiap item `RecentUploadHistoryItem` di `localStorage`.
+  - Otomatis mendeteksi dan menghapus (*auto-purge*) riwayat unggahan yang berumur lebih dari 7 hari saat inisialisasi aplikasi untuk menjaga performa memori browser.
+  - Memperbarui tombol aksi menggunakan ikon Lucide `Eye` untuk preview/regenerate instan, menu dropdown extended actions (Regenerate, Unduh Excel, Hapus), serta dialog modal konfirmasi sebelum menghapus item riwayat.
+
+### Changed
+- **Penyelarasan Desain Linear / Vercel Enterprise (`results-view.tsx`, `monitoring-inc-table.tsx`, `generate-section.tsx`)**:
+  - Menerapkan token visual konsisten: container `rounded-xl` (12px), border `border-[#E5E7EB]`, soft ambient background `#F8FAFC`, dan bayangan halus `shadow-2xs`.
+  - Menghilangkan notifikasi *toast* perantara selama proses parsing bertahap untuk menjaga antarmuka tetap bersih dan tenang (*anti-fatigue*), mengandalkan transisi kartu visual.
+
+### Verified
+- **Pengujian Lengkap**: 222/222 unit test suites (18 suites) lulus 100%, 0 lint/TypeScript error.
+
+---
+
 ## [Unreleased] - 2026-08-04 (Revisi 4: Visual Polish & Export Canvas Fixes Monitoring INC)
 
 ### Changed

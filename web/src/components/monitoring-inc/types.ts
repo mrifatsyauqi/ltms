@@ -24,10 +24,20 @@ export type IncStats = {
   avgSlaHours: number;
 };
 
+export type UploadStage =
+  | 'idle'
+  | 'reading'
+  | 'parsing'
+  | 'filtering'
+  | 'counting'
+  | 'validating'
+  | 'completed';
+
 export type UploadedFileInfo = {
   name: string;
   sizeFormatted: string;
-  totalResi: number;
+  totalResi: number; // Filtered count for target city
+  rawTotalResi: number; // Total rows in Excel file
   uploadTimestamp: string;
   targetKota: string;
   file?: File;
@@ -37,9 +47,11 @@ export type RecentUploadHistoryItem = {
   id: string;
   fileName: string;
   targetKota: string;
-  totalResi: number;
+  totalResi: number; // Filtered count
+  rawTotalResi?: number;
   uploadTimestamp: string;
-  status: 'Berhasil' | 'Gagal';
+  createdAt: number; // Unix timestamp in milliseconds for 7-day retention
+  status: 'Processing' | 'Success' | 'Failed' | 'Berhasil' | 'Gagal';
   dataUrl?: string;
 };
 

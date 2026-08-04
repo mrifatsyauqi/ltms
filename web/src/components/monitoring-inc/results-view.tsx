@@ -140,7 +140,7 @@ export function ResultsView({
       </div>
 
       {/* 1. Header Bar with Integrated Action Toolbar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-[#E5E7EB]">
         <div>
           <h1 className="text-lg md:text-xl font-semibold tracking-tight text-slate-900">
             Monitoring INC
@@ -157,15 +157,15 @@ export function ResultsView({
           <button
             type="button"
             onClick={onReset}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium shadow-2xs transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border border-[#E5E7EB] bg-white hover:bg-slate-50 active:scale-98 text-slate-700 text-xs font-medium shadow-2xs transition-all duration-150"
           >
             <ArrowLeft className="size-3.5 text-slate-500" />
             Upload File Baru
           </button>
 
           {/* Target Kota Selector */}
-          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-md px-2.5 py-1.5 shadow-2xs text-xs font-medium text-slate-800">
-            <MapPin className="size-3.5 text-red-600" />
+          <div className="flex items-center gap-1.5 bg-white border border-[#E5E7EB] rounded-[8px] px-2.5 py-1.5 shadow-2xs text-xs font-medium text-slate-800">
+            <MapPin className="size-3.5 text-[#E2231A]" />
             {isCityLocked ? (
               <div className="flex items-center gap-1">
                 <span>{targetKota}</span>
@@ -191,7 +191,7 @@ export function ResultsView({
             type="button"
             disabled={isCopyingImage}
             onClick={handleCopyImage}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium shadow-2xs active:scale-98 transition-all"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border border-[#E5E7EB] bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium shadow-2xs active:scale-98 transition-all duration-150"
           >
             <ImageIcon className="size-3.5 text-blue-600" />
             {isCopyingImage ? 'Menyiapkan Gambar...' : 'Salin Gambar'}
@@ -201,7 +201,7 @@ export function ResultsView({
           <button
             type="button"
             onClick={handleExportExcel}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium shadow-2xs active:scale-98 transition-all"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100 text-emerald-800 text-xs font-medium shadow-2xs active:scale-98 transition-all duration-150"
           >
             <Download className="size-3.5 text-emerald-600" />
             Ekspor Excel
@@ -212,8 +212,8 @@ export function ResultsView({
       {/* 2. 4 KPI Metric Cards Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Card 1: Total AWB INC */}
-        <div className="bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-xs flex items-center gap-3">
-          <div className="size-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+        <div className="bg-white rounded-xl border border-[#E5E7EB] p-3.5 shadow-xs flex items-center gap-3">
+          <div className="size-9 rounded-[8px] bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
             <FileText className="size-4.5" />
           </div>
           <div className="min-w-0">
@@ -224,8 +224,8 @@ export function ResultsView({
         </div>
 
         {/* Card 2: Clear TTD */}
-        <div className="bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-xs flex items-center gap-3">
-          <div className="size-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+        <div className="bg-white rounded-xl border border-[#E5E7EB] p-3.5 shadow-xs flex items-center gap-3">
+          <div className="size-9 rounded-[8px] bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
             <CheckCircle2 className="size-4.5" />
           </div>
           <div className="min-w-0">
@@ -236,8 +236,8 @@ export function ResultsView({
         </div>
 
         {/* Card 3: Belum TTD / Telat */}
-        <div className="bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-xs flex items-center gap-3">
-          <div className="size-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
+        <div className="bg-white rounded-xl border border-[#E5E7EB] p-3.5 shadow-xs flex items-center gap-3">
+          <div className="size-9 rounded-[8px] bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
             <Clock className="size-4.5" />
           </div>
           <div className="min-w-0">
@@ -250,8 +250,8 @@ export function ResultsView({
         </div>
 
         {/* Card 4: Presentase (Paling Kanan) */}
-        <div className="bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-xs flex items-center gap-3">
-          <div className="size-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
+        <div className="bg-white rounded-xl border border-[#E5E7EB] p-3.5 shadow-xs flex items-center gap-3">
+          <div className="size-9 rounded-[8px] bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
             <Percent className="size-4.5" />
           </div>
           <div className="min-w-0">
