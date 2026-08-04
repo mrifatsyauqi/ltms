@@ -61,7 +61,26 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
     const groups = navForRole('Admin DP', acc);
     const filtered = filterNavByAccess(groups, acc);
     const labels = filtered.flatMap((g) => g.items.map((i) => i.label));
-    assert.deepEqual(labels, ['Monitoring Delivery', 'Feedback Long Tail', 'Riwayat Feedback', 'Profil Saya']);
+    assert.deepEqual(labels, ['Monitoring Delivery', 'Monitoring INC', 'Feedback Long Tail', 'Riwayat Feedback', 'Profil Saya']);
+  });
+
+  // --------------------------------------------------------------------------
+  // Monitoring INC: Full Access dan DP roles memiliki menu_key "monitoring_inc"
+  // --------------------------------------------------------------------------
+
+  it('5b. Monitoring INC utk Full Access & DP roles punya menu_key "monitoring_inc" - mati kalau monitoring_inc=false', () => {
+    for (const role of ['Admin Cabang', 'SPV Drop Point', 'Admin DP']) {
+      const acc = access({ monitoring_inc: false });
+      const groups = navForRole(role, acc);
+      const filtered = filterNavByAccess(groups, acc);
+      const labels = filtered.flatMap((g) => g.items.map((i) => i.label));
+      assert.ok(!labels.includes('Monitoring INC'), `${role}: harus hilang krn monitoring_inc=false`);
+
+      const accOn = access({ monitoring_inc: true });
+      const filteredOn = filterNavByAccess(navForRole(role, accOn), accOn);
+      const labelsOn = filteredOn.flatMap((g) => g.items.map((i) => i.label));
+      assert.ok(labelsOn.includes('Monitoring INC'), `${role}: harus muncul saat monitoring_inc=true`);
+    }
   });
 
   // --------------------------------------------------------------------------

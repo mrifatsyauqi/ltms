@@ -47,13 +47,16 @@ const GATED_MENU_CARDS: MenuCardDef[] = [
     desc: 'Tabel Monitoring Delivery per Sprinter',
     toggles: [{ key: 'monitoring_delivery_dp', label: 'AKSES' }],
   },
+  {
+    title: 'Monitoring INC',
+    desc: 'Tabel Monitoring Inter City (INC)',
+    toggles: [{ key: 'monitoring_inc', label: 'AKSES' }],
+  },
   { title: 'Riwayat Feedback', desc: 'Histori aktivitas per waybill', toggles: [{ key: 'riwayat_feedback', label: 'AKSES' }] },
 ];
 
 // Editor Izin utk Admin Cabang/Manager Kota/Asisten Manager Kota (cakupan
-// sidebar full access, 14 menu_key relevan dari 15 di vocabulary - lihat
-// lib/data/supabase/permissions.ts; monitoring_delivery_dp SENGAJA tak
-// dipakai di sini, itu milik SPV Drop Point/Admin DP).
+// sidebar full access)
 const FULL_ACCESS_MENU_CARDS: MenuCardDef[] = [
   { title: 'Dashboard', desc: 'Ringkasan statistik & monitoring', toggles: [{ key: 'dashboard', label: 'AKSES' }] },
   {
@@ -70,6 +73,11 @@ const FULL_ACCESS_MENU_CARDS: MenuCardDef[] = [
     title: 'Monitoring Delivery',
     desc: 'Tabel Monitoring Delivery Refine Total per Drop Point',
     toggles: [{ key: 'monitoring_delivery_cabang', label: 'AKSES' }],
+  },
+  {
+    title: 'Monitoring INC',
+    desc: 'Tabel Monitoring Inter City (INC)',
+    toggles: [{ key: 'monitoring_inc', label: 'AKSES' }],
   },
   {
     title: 'Cabang & Drop Point',

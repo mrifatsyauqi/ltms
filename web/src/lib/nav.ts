@@ -1,6 +1,7 @@
 import {
   Building2,
   ClipboardList,
+  Clock,
   Database,
   FileClock,
   History,
@@ -45,48 +46,10 @@ export type NavGroup = {
  * - Full access (Super Admin/Admin Cabang/Manager Kota/Asisten Manager Kota):
  *   menu utama + grup Master Data, Laporan, Pengaturan - SAMA PERSIS, tidak
  *   dibedakan berdasar jabatan (lihat lib/roles.ts).
- * - Admin DP & SPV Drop Point: flat, hanya 4 menu. TIDAK punya akses Master
- *   Data / Import / Laporan Import - SPV Drop Point dapat menu SAMA PERSIS
- *   dgn Admin DP (cakupan >1 DP ditegakkan server-side, bukan lewat menu).
- * "Data Long Tail" & "Feedback Long Tail" memakai halaman yang sama (/feedback)
- * dengan view berbeda lewat query param.
- *
- * "Cabang" vs "Drop Point" (restrukturisasi): BUKAN lagi statis per-role,
- * tapi ikut akses NYATA ke menu_key 'master_cabang' (`canCabang` di bawah -
- * `access === null` [Super Admin, bypass permanen] dihitung SEBAGAI akses
- * penuh, konsisten dgn filterNavByAccess). Praktiknya HANYA Super Admin yang
- * default punya `master_cabang` (Admin Cabang/Manager Kota/Asisten Manager
- * Kota default false sejak revisi kebijakan - lihat
- * master_cabang_drop_point_default_false_migration.sql), TAPI logic ini
- * murni ikut nilai akses aktual, BUKAN hardcode nama role - kalau Super
- * Admin suatu saat menyalakan master_cabang utk 1 akun spesifik lewat "Per
- * Akun", akun itu otomatis dapat struktur "Cabang" yang sama persis, tanpa
- * perlu ubah kode ini lagi:
- * - `canCabang` true (Super Admin, atau akun manapun yg diberi akses
- *   master_cabang): SATU item "Cabang" SAJA - TIDAK ADA "Drop Point" terpisah
- *   ATAU nested di sidebar. Drop Point tetap dikelola dari sini, tapi lewat
- *   TAB di dalam halaman /master/cabang (lihat CabangDropPointTabs), bukan
- *   lewat item nav terpisah - keputusan desain eksplisit, BUKAN kelalaian
- *   (sempat salah diimplementasikan sbg nested child, diperbaiki setelah
- *   dilaporkan muncul di sidebar produksi).
- * - `canCabang` false (praktiknya: Admin Cabang/Manager Kota/Asisten
- *   Manager Kota): TIDAK ADA item "Cabang" sama sekali (mereka memang tak
- *   punya menu itu) - "Drop Point" jadi item LEVEL ATAS tersendiri, sejajar
- *   dgn Master Feedback/User Management, mengarah ke halaman & data PERSIS
- *   SAMA (`/master/drop-point`, tabel `master_drop_point`) dgn yang dikelola
- *   dari tab di halaman Cabang - tak ada duplikasi data, otomatis sinkron
- *   krn satu sumber.
+ * - Admin DP & SPV Drop Point: flat, hanya 5 menu (termasuk Monitoring Delivery & Monitoring INC).
  */
 export function navForRole(role: string | undefined, access: Record<MenuKey, boolean> | null): NavGroup[] {
   if (hasFullAccess(role)) {
-    // menuKey di cabang ini dipasang BARENGAN gate page + requirePermission()
-    // endpoint-nya (dashboard, feedback_longtail_view, riwayat_feedback,
-    // monitoring_delivery_cabang, role_akses, data_longtail, import_longtail,
-    // riwayat_import - CHECKPOINT 3; master_cabang, master_drop_point,
-    // master_feedback, user_management - CHECKPOINT 4; pengaturan -
-    // CHECKPOINT 5). SEMUA 15 menu_key SEKARANG punya menuKey - tak ada lagi
-    // yang "sengaja belum digating" (rollout 9 menu_key yang dimulai dari
-    // audit PRD v2.0 selesai).
     const canCabang = access === null || access.master_cabang === true;
     const masterDataItems: NavItem[] = canCabang
       ? [{ label: 'Cabang', href: '/master/cabang', icon: Building2, menuKey: 'master_cabang' }]
@@ -100,6 +63,7 @@ export function navForRole(role: string | undefined, access: Record<MenuKey, boo
           { label: 'Data Long Tail', href: '/feedback?view=data', icon: Table2, menuKey: 'data_longtail' },
           { label: 'Import Long Tail', href: '/import', icon: Upload, menuKey: 'import_longtail' },
           { label: 'Monitoring Delivery', href: '/monitoring-delivery', icon: Truck, menuKey: 'monitoring_delivery_cabang' },
+          { label: 'Monitoring INC', href: '/monitoring-inc', icon: Clock, menuKey: 'monitoring_inc' },
         ],
       },
       {
@@ -128,19 +92,13 @@ export function navForRole(role: string | undefined, access: Record<MenuKey, boo
     ];
   }
 
-  // Admin DP & SPV Drop Point - menuKey diisi utk 4 item yang diatur lewat
-  // Role & Akses (Profil Saya SENGAJA tanpa menuKey -> selalu tampil, lihat
-  // filterNavByAccess). Monitoring Delivery = mode per-Sprinter
-  // ('monitoring_delivery_dp') - dipakai KEDUA role ini (lihat
-  // app/(app)/monitoring-delivery/page.tsx: isCabang cuma true utk full
-  // access, SPV Drop Point TIDAK LAGI dapat mode Refine Total cabang -
-  // sebelumnya salah, ikut memicu FORBIDDEN krn mode itu fetch
-  // /api/drop-points yg cuma boleh full access).
+  // Admin DP & SPV Drop Point
   return [
     {
       items: [
         { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, menuKey: 'dashboard' },
         { label: 'Monitoring Delivery', href: '/monitoring-delivery', icon: Truck, menuKey: 'monitoring_delivery_dp' },
+        { label: 'Monitoring INC', href: '/monitoring-inc', icon: Clock, menuKey: 'monitoring_inc' },
         { label: 'Feedback Long Tail', href: '/feedback', icon: MessageSquareText, menuKey: 'feedback_longtail_view' },
         { label: 'Riwayat Feedback', href: '/riwayat-feedback', icon: History, menuKey: 'riwayat_feedback' },
         { label: 'Profil Saya', href: '/profil', icon: UserRound },
