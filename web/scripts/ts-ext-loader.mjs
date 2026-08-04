@@ -16,7 +16,7 @@ export async function resolve(specifier, context, nextResolve) {
   try {
     return await nextResolve(spec, context);
   } catch (err) {
-    if (!/\.[a-zA-Z0-9]+$/.test(spec)) {
+    if (!/\.(?:ts|tsx|js|jsx|mjs|cjs|json)$/.test(spec)) {
       // Import relatif tanpa ekstensi (gaya bundler) - coba tambahkan .ts.
       try {
         return await nextResolve(`${spec}.ts`, context);
