@@ -19,25 +19,22 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
       return new Intl.NumberFormat('id-ID').format(val);
     };
 
-    const dpDisplayName = userDropPoint && userDropPoint !== 'SEMUA DP'
-      ? userDropPoint
-      : `DP ${targetKota}`;
+    const targetDisplayName = userDropPoint && userDropPoint !== 'SEMUA DP'
+      ? userDropPoint.toUpperCase()
+      : targetKota.toUpperCase();
 
     return (
       <div
         ref={ref}
         style={{ width: '1200px', backgroundColor: '#FFFFFF' }}
-        className="p-8 text-slate-900 font-sans"
+        className="p-8 pb-12 text-slate-900 font-sans"
       >
-        {/* 1. Header Formal & Professional (Tanpa Logo LTMS) */}
+        {/* 1. Header Formal & Professional (Judul: MONITORING INC [NAMA DP], Tanpa Unit/Cabang) */}
         <div className="flex items-center justify-between border-b-2 border-slate-200 pb-4 mb-5">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 uppercase">
-              Monitoring INC
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 uppercase">
+              MONITORING INC {targetDisplayName}
             </h1>
-            <p className="text-xs font-semibold text-slate-600 tracking-wide mt-0.5">
-              UNIT / CABANG: <span className="text-slate-900 font-bold">{dpDisplayName}</span> • KOTA <span className="text-slate-900 font-bold">{targetKota}</span>
-            </p>
           </div>
 
           <div className="text-right">
@@ -53,8 +50,8 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
         {/* 2. 4 KPI Summary Cards Grid */}
         <div className="grid grid-cols-4 gap-3 mb-5">
           {/* Card 1: Total AWB */}
-          <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 flex items-center gap-3">
-            <div className="size-9 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+          <div className="bg-slate-50 rounded-md p-3 border border-slate-200 flex items-center gap-3">
+            <div className="size-9 rounded bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
               <FileText className="size-4.5" />
             </div>
             <div>
@@ -65,8 +62,8 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
           </div>
 
           {/* Card 2: Clear TTD */}
-          <div className="bg-emerald-50/60 rounded-lg p-3 border border-emerald-200 flex items-center gap-3">
-            <div className="size-9 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+          <div className="bg-emerald-50/60 rounded-md p-3 border border-emerald-200 flex items-center gap-3">
+            <div className="size-9 rounded bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
               <CheckCircle2 className="size-4.5" />
             </div>
             <div>
@@ -77,8 +74,8 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
           </div>
 
           {/* Card 3: Belum TTD / Telat */}
-          <div className="bg-amber-50/60 rounded-lg p-3 border border-amber-200 flex items-center gap-3">
-            <div className="size-9 rounded-md bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+          <div className="bg-amber-50/60 rounded-md p-3 border border-amber-200 flex items-center gap-3">
+            <div className="size-9 rounded bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
               <Clock className="size-4.5" />
             </div>
             <div>
@@ -90,9 +87,9 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
             </div>
           </div>
 
-          {/* Card 4: Presentase (Menggantikan Rata-rata SLA) */}
-          <div className="bg-indigo-50/60 rounded-lg p-3 border border-indigo-200 flex items-center gap-3">
-            <div className="size-9 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+          {/* Card 4: Presentase */}
+          <div className="bg-indigo-50/60 rounded-md p-3 border border-indigo-200 flex items-center gap-3">
+            <div className="size-9 rounded bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
               <Percent className="size-4.5" />
             </div>
             <div>
@@ -103,10 +100,10 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
           </div>
         </div>
 
-        {/* 3. Table with Crisp Borders */}
-        <div className="rounded-lg border border-slate-200 overflow-hidden">
+        {/* 3. Table with Crisp Borders & Extra Bottom Margin */}
+        <div className="rounded-md border border-slate-300 overflow-hidden bg-white mb-2 shadow-2xs">
           <table className="w-full text-left text-[11px] border-collapse">
-            <thead className="bg-slate-100 border-b border-slate-200">
+            <thead className="bg-slate-100 border-b border-slate-300">
               <tr className="text-slate-700 uppercase font-bold text-[10px] tracking-wider">
                 <th className="py-2.5 px-3 font-bold">AWB</th>
                 <th className="py-2.5 px-3 font-bold">Tempat Tujuan</th>
@@ -119,9 +116,9 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
                 <th className="py-2.5 px-3 font-bold text-center">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-200">
               {data.map((row, idx) => (
-                <tr key={`${row.awb}-${idx}`} className="even:bg-slate-50/50">
+                <tr key={`${row.awb}-${idx}`} className="even:bg-slate-50/60">
                   <td className="py-2 px-3 font-mono font-bold text-slate-900">{row.awb}</td>
                   <td className="py-2 px-3 font-medium text-slate-800">{row.tempatTujuan}</td>
                   <td className="py-2 px-3 text-slate-700">{row.namaPenerima}</td>

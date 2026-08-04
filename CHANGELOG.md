@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [Unreleased] - 2026-08-04 (Revisi 4: Visual Polish & Export Canvas Fixes Monitoring INC)
+
+### Changed
+- **Penyelarasan Warna Brand (Primary Red)**:
+  - Mengubah seluruh lencana nomor step workflow (Step 1 `Upload File Excel`, Step 2 `File Terverifikasi`, Step 3 `Generate Monitoring`) dari warna hitam (`bg-slate-900`) menjadi warna utama **Merah Brand** (`bg-red-600`).
+  - Mengubah tombol **"Pilih File"** pada dropzone Step 1 dari warna hitam menjadi warna utama **Merah Brand** (`bg-red-600 hover:bg-red-700`).
+  - Mengubah indikator aktif paginasi tabel data menjadi warna merah brand (`bg-red-600`).
+  - Mengubah badge target kota pada file terverifikasi menjadi `bg-red-600`.
+
+- **Penyempurnaan Hasil Salin Gambar (Export Canvas) (`report-image-canvas.tsx`)**:
+  - **Mencegah Garis / Border Terpotong di Bagian Bawah**: Menambahkan bottom padding `pb-12` pada container canvas dan merapikan border table sehingga baris terakhir tidak lagi terpotong/menempel pada ujung bawah gambar.
+  - **Pengurangan Border Radius**: Mengurangi sudut rounded pada tabel dan kartu ringkasan canvas menjadi `rounded-md` untuk tampilan yang lebih tajam, presisi, dan proporsional saat di-generate menjadi PNG.
+  - **Penyederhanaan Header Laporan**: Menghapus teks redundan `UNIT / CABANG:` dan menyederhanakan judul langsung menjadi **`MONITORING INC [NAMA DP / TARGET KOTA]`** (misal: `MONITORING INC BATANG01`).
+
+---
+
 ## [Unreleased] - 2026-08-03 (Revisi 3: UI & Ergonomic UX Overhaul Monitoring INC)
 
 ### Changed
