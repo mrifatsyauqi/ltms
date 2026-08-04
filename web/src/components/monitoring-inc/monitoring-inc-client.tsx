@@ -8,6 +8,7 @@ import { isCityMatch, resolveCityFromDropPoint } from '@/lib/city-matcher';
 import { parseExcelDate, formatDisplayDateTime } from '@/lib/excel-date';
 import {
   IncRow,
+  IncStats,
   UploadedFileInfo,
   RecentUploadHistoryItem,
   AVAILABLE_CITIES,
