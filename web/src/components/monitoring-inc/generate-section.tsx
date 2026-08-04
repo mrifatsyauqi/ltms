@@ -7,12 +7,14 @@ import { ProcessingStep, DEFAULT_PROCESSING_STEPS } from './types';
 
 interface GenerateSectionProps {
   hasFile: boolean;
-  onStartGenerate: () => Promise<void>;
+  onGenerate?: () => Promise<void>;
+  onStartGenerate?: () => Promise<void>;
   disabled?: boolean;
 }
 
 export function GenerateSection({
   hasFile,
+  onGenerate,
   onStartGenerate,
   disabled,
 }: GenerateSectionProps) {
@@ -41,7 +43,10 @@ export function GenerateSection({
 
     // Tandai semua selesai
     setSteps((prev) => prev.map((s) => ({ ...s, status: 'done' })));
-    await onStartGenerate();
+    const execute = onGenerate || onStartGenerate;
+    if (execute) {
+      await execute();
+    }
 
     setIsSuccess(true);
     setIsProcessing(false);

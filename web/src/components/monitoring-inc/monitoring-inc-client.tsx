@@ -11,7 +11,6 @@ import {
   IncStats,
   UploadedFileInfo,
   RecentUploadHistoryItem,
-  UploadStage,
   AVAILABLE_CITIES,
 } from './types';
 import { UploadCard } from './upload-card';
@@ -104,31 +103,20 @@ export function MonitoringIncClient({
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   };
 
-  // Handler proses upload bertahap (Reading -> Parsing -> Filtering -> Counting -> Validation -> Completed)
-  const handleFileSelected = async (
-    file: File,
-    updateStage: (stage: UploadStage) => void
-  ) => {
+  // Handler proses upload file Excel
+  const handleFileSelected = async (file: File) => {
     try {
-      // Stage 1: Reading Excel
-      updateStage('reading');
       const buffer = await file.arrayBuffer();
-      await new Promise((r) => setTimeout(r, 60));
-
-      // Stage 2: Parsing Data
-      updateStage('parsing');
       const wb = XLSX.read(buffer, { type: 'array' });
       const firstSheet = wb.Sheets[wb.SheetNames[0]];
       const rawData = XLSX.utils.sheet_to_json<Record<string, any>>(firstSheet);
-      await new Promise((r) => setTimeout(r, 60));
 
       if (!rawData || rawData.length === 0) {
         toast.error('File Excel kosong atau tidak terbaca.');
         return;
       }
 
-      // Stage 3: Filtering Target City
-      updateStage('filtering');
+      // Filter Target City untuk menghitung resi terfilter
       let filteredCount = 0;
       for (const row of rawData) {
         const getCol = (...keys: string[]) => {
@@ -157,24 +145,11 @@ export function MonitoringIncClient({
           filteredCount++;
         }
       }
-      await new Promise((r) => setTimeout(r, 60));
-
-      // Stage 4: Counting Waybill
-      updateStage('counting');
-      await new Promise((r) => setTimeout(r, 60));
-
-      // Stage 5: Validation
-      updateStage('validating');
-      await new Promise((r) => setTimeout(r, 60));
-
-      // Stage 6: Completed
-      updateStage('completed');
-      await new Promise((r) => setTimeout(r, 50));
 
       const info: UploadedFileInfo = {
         name: file.name,
         sizeFormatted: formatFileSize(file.size),
-        totalResi: filteredCount, // Filtered count!
+        totalResi: filteredCount, // Filtered count
         rawTotalResi: rawData.length,
         uploadTimestamp: formatDisplayDateTime(),
         targetKota,
@@ -182,7 +157,6 @@ export function MonitoringIncClient({
       };
 
       setFileInfo(info);
-      // Popup toast sukses dihilangkan sesuai spesifikasi (diganti animasi verifikasi card)
     } catch (err) {
       console.error('Gagal membaca file Excel:', err);
       toast.error('Gagal memproses file Excel.');

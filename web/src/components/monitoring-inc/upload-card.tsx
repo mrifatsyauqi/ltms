@@ -6,7 +6,7 @@ import { CloudUpload, Upload, Loader2, CheckCircle2, FileSpreadsheet } from 'luc
 import { toast } from 'sonner';
 
 interface UploadCardProps {
-  onFileSelected: (file: File) => void;
+  onFileSelected: (file: File) => void | Promise<void>;
   disabled?: boolean;
 }
 
@@ -75,7 +75,7 @@ export function UploadCard({ onFileSelected, disabled }: UploadCardProps) {
     }
 
     // Callback on file selected
-    onFileSelected(file);
+    await onFileSelected(file);
     setIsLoading(false);
     setLoadingFileName('');
     setProgressPercent(0);
