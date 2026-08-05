@@ -25,7 +25,7 @@ export interface ReportMetricItem {
   value: string | number;
   subValue?: string;
   highlight?: boolean;
-  color?: 'default' | 'red' | 'green' | 'blue' | 'yellow' | 'purple';
+  color?: 'default' | 'red' | 'green' | 'blue' | 'yellow' | 'orange' | 'purple';
 }
 
 export interface KecamatanStat {
