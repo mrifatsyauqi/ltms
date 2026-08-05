@@ -2,28 +2,6 @@ import { db } from './client';
 
 export type TemplateStatus = 'active' | 'archived';
 
-export interface MessageTemplateRecord {
-  id: string;
-  module: string;
-  template_name: string;
-  content: string;
-  is_default: boolean;
-  status: TemplateStatus;
-  version: string;
-  version_note?: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface MessageTemplateVersionRecord {
-  id: string;
-  template_id: string;
-  version: string;
-  content: string;
-  note?: string | null;
-  created_at: string;
-}
-
 export interface CardTemplateRecord {
   id: string;
   module: string;
@@ -59,270 +37,6 @@ export interface FeishuGroupConfigRecord {
   last_send?: string | null;
   created_at: string;
   updated_at: string;
-}
-
-// ==========================================
-// MESSAGE TEMPLATES
-// ==========================================
-
-export async function listMessageTemplates(options?: {
-  module?: string;
-  status?: TemplateStatus;
-}): Promise<MessageTemplateRecord[]> {
-  try {
-    const supabase = db();
-    let query = supabase
-      .from('message_templates')
-      .select('*')
-      .order('is_default', { ascending: false })
-      .order('updated_at', { ascending: false });
-
-    if (options?.module && options.module !== 'all') {
-      query = query.eq('module', options.module);
-    }
-    if (options?.status) {
-      query = query.eq('status', options.status);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      console.error('Error listing message_templates:', error);
-      return [];
-    }
-    return (data || []) as MessageTemplateRecord[];
-  } catch (err) {
-    console.error('Database error listing message templates:', err);
-    return [];
-  }
-}
-
-export async function getMessageTemplateById(id: string): Promise<MessageTemplateRecord | null> {
-  try {
-    const supabase = db();
-    const { data, error } = await supabase
-      .from('message_templates')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error) return null;
-    return data as MessageTemplateRecord;
-  } catch {
-    return null;
-  }
-}
-
-export async function getDefaultMessageTemplate(module: string): Promise<MessageTemplateRecord | null> {
-  try {
-    const supabase = db();
-    const { data, error } = await supabase
-      .from('message_templates')
-      .select('*')
-      .eq('module', module)
-      .eq('status', 'active')
-      .eq('is_default', true)
-      .limit(1)
-      .maybeSingle();
-
-    if (error || !data) {
-      // Fallback: ambil template active pertama
-      const { data: firstActive } = await supabase
-        .from('message_templates')
-        .select('*')
-        .eq('module', module)
-        .eq('status', 'active')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return (firstActive as MessageTemplateRecord) || null;
-    }
-    return data as MessageTemplateRecord;
-  } catch {
-    return null;
-  }
-}
-
-export async function createMessageTemplate(input: {
-  module: string;
-  template_name: string;
-  content: string;
-  is_default?: boolean;
-  version_note?: string;
-}): Promise<MessageTemplateRecord> {
-  const supabase = db();
-  const now = new Date().toISOString();
-
-  if (input.is_default) {
-    await supabase
-      .from('message_templates')
-      .update({ is_default: false })
-      .eq('module', input.module);
-  }
-
-  const { data, error } = await supabase
-    .from('message_templates')
-    .insert([
-      {
-        module: input.module,
-        template_name: input.template_name,
-        content: input.content,
-        is_default: Boolean(input.is_default),
-        status: 'active',
-        version: 'v1.0',
-        version_note: input.version_note || 'Initial version',
-        created_at: now,
-        updated_at: now,
-      },
-    ])
-    .select('*')
-    .single();
-
-  if (error) {
-    throw new Error(`Gagal membuat Message Template: ${error.message}`);
-  }
-
-  const created = data as MessageTemplateRecord;
-
-  // Insert version 1.0 history
-  await supabase.from('message_template_versions').insert([
-    {
-      template_id: created.id,
-      version: 'v1.0',
-      content: input.content,
-      note: input.version_note || 'Initial version',
-      created_at: now,
-    },
-  ]);
-
-  return created;
-}
-
-export async function updateMessageTemplate(
-  id: string,
-  input: {
-    template_name?: string;
-    content?: string;
-    is_default?: boolean;
-    version_note?: string;
-  }
-): Promise<MessageTemplateRecord> {
-  const supabase = db();
-  const current = await getMessageTemplateById(id);
-  if (!current) throw new Error('Template tidak ditemukan');
-
-  const now = new Date().toISOString();
-
-  if (input.is_default && !current.is_default) {
-    await supabase
-      .from('message_templates')
-      .update({ is_default: false })
-      .eq('module', current.module);
-  }
-
-  // Increment version if content changed
-  let nextVersion = current.version;
-  const isContentChanged = input.content && input.content !== current.content;
-  if (isContentChanged) {
-    const match = current.version.match(/^v(\d+)\.(\d+)$/);
-    if (match) {
-      const major = parseInt(match[1], 10);
-      const minor = parseInt(match[2], 10) + 1;
-      nextVersion = `v${major}.${minor}`;
-    } else {
-      nextVersion = 'v1.1';
-    }
-  }
-
-  const updatePayload: Record<string, any> = {
-    updated_at: now,
-  };
-  if (input.template_name !== undefined) updatePayload.template_name = input.template_name;
-  if (input.content !== undefined) updatePayload.content = input.content;
-  if (input.is_default !== undefined) updatePayload.is_default = input.is_default;
-  if (isContentChanged) {
-    updatePayload.version = nextVersion;
-    updatePayload.version_note = input.version_note || 'Pembaruan template';
-  }
-
-  const { data, error } = await supabase
-    .from('message_templates')
-    .update(updatePayload)
-    .eq('id', id)
-    .select('*')
-    .single();
-
-  if (error) throw new Error(`Gagal update template: ${error.message}`);
-
-  const updated = data as MessageTemplateRecord;
-
-  // Catat ke versi jika konten berubah
-  if (isContentChanged) {
-    await supabase.from('message_template_versions').insert([
-      {
-        template_id: updated.id,
-        version: nextVersion,
-        content: input.content!,
-        note: input.version_note || 'Pembaruan template',
-        created_at: now,
-      },
-    ]);
-  }
-
-  return updated;
-}
-
-export async function archiveMessageTemplate(id: string): Promise<boolean> {
-  const supabase = db();
-  const { error } = await supabase
-    .from('message_templates')
-    .update({ status: 'archived', is_default: false, updated_at: new Date().toISOString() })
-    .eq('id', id);
-  return !error;
-}
-
-export async function restoreMessageTemplate(id: string): Promise<boolean> {
-  const supabase = db();
-  const { error } = await supabase
-    .from('message_templates')
-    .update({ status: 'active', updated_at: new Date().toISOString() })
-    .eq('id', id);
-  return !error;
-}
-
-export async function setDefaultMessageTemplate(id: string): Promise<boolean> {
-  const supabase = db();
-  const tpl = await getMessageTemplateById(id);
-  if (!tpl) return false;
-
-  await supabase
-    .from('message_templates')
-    .update({ is_default: false })
-    .eq('module', tpl.module);
-
-  const { error } = await supabase
-    .from('message_templates')
-    .update({ is_default: true, updated_at: new Date().toISOString() })
-    .eq('id', id);
-
-  return !error;
-}
-
-export async function listMessageTemplateVersions(
-  templateId: string
-): Promise<MessageTemplateVersionRecord[]> {
-  try {
-    const supabase = db();
-    const { data, error } = await supabase
-      .from('message_template_versions')
-      .select('*')
-      .eq('template_id', templateId)
-      .order('created_at', { ascending: false });
-
-    if (error) return [];
-    return (data || []) as MessageTemplateVersionRecord[];
-  } catch {
-    return [];
-  }
 }
 
 // ==========================================
@@ -409,7 +123,8 @@ export async function createCardTemplate(input: {
   module: string;
   template_name: string;
   blocks_config: Record<string, any>;
-  json_template: Record<string, any>;
+  /** @deprecated blocks_config is the only source of truth; Feishu JSON is compiled fresh on every preview/send. */
+  json_template?: Record<string, any>;
   is_default?: boolean;
   version_note?: string;
 }): Promise<CardTemplateRecord> {
@@ -430,7 +145,7 @@ export async function createCardTemplate(input: {
         module: input.module,
         template_name: input.template_name,
         blocks_config: input.blocks_config,
-        json_template: input.json_template,
+        ...(input.json_template !== undefined ? { json_template: input.json_template } : {}),
         is_default: Boolean(input.is_default),
         status: 'active',
         version: 'v1.0',
@@ -466,6 +181,7 @@ export async function updateCardTemplate(
   input: {
     template_name?: string;
     blocks_config?: Record<string, any>;
+    /** @deprecated blocks_config is the only source of truth; Feishu JSON is compiled fresh on every preview/send. */
     json_template?: Record<string, any>;
     is_default?: boolean;
     version_note?: string;

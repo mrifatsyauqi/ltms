@@ -34,13 +34,13 @@ export class CommunicationController {
     if (!result.ok) {
       return {
         status: 500,
-        body: { ok: false, success: false, error: result.error, responseTimeMs: result.responseTimeMs },
+        body: { ok: false, error: result.error, responseTimeMs: result.responseTimeMs },
       };
     }
 
     return {
       status: 200,
-      body: { ok: true, success: true, data: result },
+      body: { ok: true, data: result },
     };
   }
 
@@ -52,12 +52,12 @@ export class CommunicationController {
       const groups = await communicationService.getGroups(channel);
       return {
         status: 200,
-        body: { ok: true, success: true, data: groups },
+        body: { ok: true, data: groups },
       };
     } catch (err: any) {
       return {
         status: 500,
-        body: { ok: false, success: false, error: err?.message || 'Gagal memuat daftar group.' },
+        body: { ok: false, error: err?.message || 'Gagal memuat daftar group.' },
       };
     }
   }
@@ -70,12 +70,12 @@ export class CommunicationController {
       const groups = await communicationService.syncGroups(channel);
       return {
         status: 200,
-        body: { ok: true, success: true, data: groups, count: groups.length },
+        body: { ok: true, data: groups, count: groups.length },
       };
     } catch (err: any) {
       return {
         status: 500,
-        body: { ok: false, success: false, error: err?.message || 'Gagal menyinkronkan group dari Feishu API.' },
+        body: { ok: false, error: err?.message || 'Gagal menyinkronkan group dari Feishu API.' },
       };
     }
   }
@@ -88,12 +88,12 @@ export class CommunicationController {
       const logs = await listCommunicationLogs(limit);
       return {
         status: 200,
-        body: { ok: true, success: true, data: logs },
+        body: { ok: true, data: logs },
       };
     } catch (err: any) {
       return {
         status: 500,
-        body: { ok: false, success: false, error: err?.message || 'Gagal memuat communication logs.' },
+        body: { ok: false, error: err?.message || 'Gagal memuat riwayat log.' },
       };
     }
   }

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   PanelsTopLeft,
@@ -35,14 +36,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
-import { communicationApi } from '@/services/communication/api-client';
-import {
-  toCardTemplatePayload,
-  type CardTemplateDTO,
-  type CardTemplateVersionDTO,
-  type NormalizedFeishuGroup,
-  type MentionDTO,
-} from '@/services/communication/dto';
+import type { CardTemplateRecord, CardTemplateVersionRecord, FeishuGroupConfigRecord } from '@/lib/data/supabase/communication-config';
 import type { StarterPreset } from '@/services/communication/configuration/template-presets';
 import { STARTER_PRESETS, OFFICIAL_VARIABLES } from '@/services/communication/configuration/template-presets';
 import type {
@@ -50,7 +44,8 @@ import type {
   CardTheme,
   CardKpiItem,
 } from '@/services/communication/configuration/template.types';
-import { FeishuCardPreview } from '@/components/communication/feishu-card-preview';
+import { InteractiveCardPreview } from '@/components/communication/interactive-card-preview';
+import { commApi, compileCardPreview, useDebouncedValue } from '@/lib/communication-client';
 
 const THEMES: Array<{ id: CardTheme; name: string; bgClass: string; hex: string }> = [
   { id: 'red', name: 'J&T Red (Utama)', bgClass: 'bg-[#E2231A]', hex: '#E2231A' },
@@ -59,11 +54,55 @@ const THEMES: Array<{ id: CardTheme; name: string; bgClass: string; hex: string 
   { id: 'green', name: 'Emerald Green', bgClass: 'bg-emerald-600', hex: '#059669' },
 ];
 
+// Mock variable context used for Live Preview in the Builder (Decision #9's
+// Mock Data mode). Kept identical to the Send Test payload so switching
+// between preview and test-send never changes the rendered layout.
+const MOCK_PREVIEW_VARIABLES = {
+  pickup_dp: 'BATANG01',
+  target_city: 'KOTA BATANG',
+  drop_point: 'BATANG01',
+  total_inc: '14.942',
+  clear_ttd: '14.816',
+  pending_ttd: '72',
+  over_sla: '54',
+  sla_percentage: '99.1',
+  total_delivery: '3.240',
+  delivered: '3.198',
+  pending_delivery: '42',
+  delivery_sla: '98.0',
+  last_scan_time: '08:21 WIB',
+  last_scan_awb: 'JT1234567890',
+  last_scan_status: 'Delivery',
+  generated_at: new Date().toLocaleString('id-ID'),
+  subdistricts: [
+    { name: 'BATANG', count: '10 AWB', picName: 'Agus Supriyanto' },
+    { name: 'WARUNGASEM', count: '8 AWB', picName: 'Dimas Prasetyo' },
+    { name: 'LIMPUNG', count: '6 AWB', picName: 'Rian Hidayat' },
+    { name: 'BANDAR', count: '5 AWB', picName: 'Arif Munandar' },
+  ],
+  kurirList: [
+    { name: 'Andi Setiawan', count: '12 Paket' },
+    { name: 'Rudi Hermawan', count: '8 Paket' },
+  ],
+};
+
+const TEMPLATES_KEY = ['communication-card-templates'];
+const GROUPS_KEY = ['communication-groups'];
+
 export default function CardTemplatesPage() {
-  const [templates, setTemplates] = useState<CardTemplateDTO[]>([]);
-  const [mentions, setMentions] = useState<MentionDTO[]>([]);
-  const [groups, setGroups] = useState<NormalizedFeishuGroup[]>([]);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+
+  const { data: templates = [], isLoading: loading, refetch: refetchTemplates } = useQuery({
+    queryKey: TEMPLATES_KEY,
+    queryFn: () => commApi<CardTemplateRecord[]>('/api/communication/card-templates?include_archived=true'),
+    staleTime: 30 * 1000,
+  });
+
+  const { data: groups = [] } = useQuery({
+    queryKey: GROUPS_KEY,
+    queryFn: () => commApi<FeishuGroupConfigRecord[]>('/api/communication/groups'),
+    staleTime: 30 * 1000,
+  });
 
   // Filters
   const [search, setSearch] = useState('');
@@ -74,9 +113,7 @@ export default function CardTemplatesPage() {
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isVersionsOpen, setIsVersionsOpen] = useState(false);
   const [isTestSendOpen, setIsTestSendOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<CardTemplateDTO | null>(null);
-  const [versions, setVersions] = useState<CardTemplateVersionDTO[]>([]);
-  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<CardTemplateRecord | null>(null);
 
   // Form State
   const [formData, setFormData] = useState<{
@@ -106,7 +143,6 @@ export default function CardTemplatesPage() {
 
   // Test Send State
   const [testChatId, setTestChatId] = useState('');
-  const [sendingTest, setSendingTest] = useState(false);
 
   // Notification Toast
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -116,41 +152,10 @@ export default function CardTemplatesPage() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [tplRes, mentionRes, groupRes] = await Promise.all([
-        communicationApi.cardTemplates.list({ include_archived: true }),
-        communicationApi.mentions.list(),
-        communicationApi.groups.list(),
-      ]);
-
-      if (tplRes.success) setTemplates(tplRes.data || []);
-      if (mentionRes.success) setMentions(mentionRes.data || []);
-      if (groupRes.success) {
-        setGroups(groupRes.data || []);
-        const defaultGrp = groupRes.data.find((g) => g.is_default);
-        if (defaultGrp && !testChatId) {
-          setTestChatId(defaultGrp.chatId);
-        } else if (groupRes.data[0] && !testChatId) {
-          setTestChatId(groupRes.data[0].chatId);
-        }
-      }
-    } catch {
-      showToast('Gagal memuat data template', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const filteredTemplates = templates.filter((t) => {
     const isArchived = t.status === 'archived';
-    const name = t.template_name || '';
-    const description = t.version_note || '';
+    const name = (t as any).template_name || (t as any).name || '';
+    const description = (t as any).version_note || (t as any).description || '';
 
     if (selectedStatus === 'active' && isArchived) return false;
     if (selectedStatus === 'archived' && !isArchived) return false;
@@ -179,11 +184,11 @@ export default function CardTemplatesPage() {
     setIsEditorOpen(true);
   };
 
-  const handleOpenEdit = (t: CardTemplateDTO) => {
+  const handleOpenEdit = (t: CardTemplateRecord) => {
     setEditingTemplate(t);
     setFormData({
-      name: t.template_name || '',
-      description: t.version_note || '',
+      name: (t as any).template_name || (t as any).name || '',
+      description: (t as any).version_note || (t as any).description || '',
       module: t.module,
       blocks_config: JSON.parse(JSON.stringify(t.blocks_config)),
       change_summary: '',
@@ -191,158 +196,143 @@ export default function CardTemplatesPage() {
     setIsEditorOpen(true);
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const createMut = useMutation({
+    mutationFn: (payload: typeof formData) =>
+      commApi('/api/communication/card-templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      showToast('Template baru berhasil dibuat');
+      setIsEditorOpen(false);
+      qc.invalidateQueries({ queryKey: TEMPLATES_KEY });
+    },
+    onError: (err: Error) => showToast(err.message || 'Gagal membuat template', 'error'),
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: typeof formData }) =>
+      commApi(`/api/communication/card-templates/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      showToast('Template berhasil diperbarui');
+      setIsEditorOpen(false);
+      qc.invalidateQueries({ queryKey: TEMPLATES_KEY });
+    },
+    onError: (err: Error) => showToast(err.message || 'Gagal menyimpan', 'error'),
+  });
+
+  const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
       showToast('Nama template wajib diisi', 'error');
       return;
     }
 
-    const payload = toCardTemplatePayload(formData);
-
-    try {
-      if (editingTemplate) {
-        const res = await communicationApi.cardTemplates.update(editingTemplate.id, payload);
-        if (res.success) {
-          showToast('Template berhasil diperbarui');
-          setIsEditorOpen(false);
-          fetchData();
-        } else {
-          showToast(res.error || 'Gagal menyimpan template', 'error');
-        }
-      } else {
-        const res = await communicationApi.cardTemplates.create(payload);
-        if (res.success) {
-          showToast('Template baru berhasil dibuat');
-          setIsEditorOpen(false);
-          fetchData();
-        } else {
-          showToast(res.error || 'Gagal membuat template', 'error');
-        }
-      }
-    } catch (err: any) {
-      showToast(err.message || 'Gagal menyimpan', 'error');
+    if (editingTemplate) {
+      updateMut.mutate({ id: editingTemplate.id, payload: formData });
+    } else {
+      createMut.mutate(formData);
     }
   };
 
-  const handleToggleDefault = async (t: CardTemplateDTO) => {
-    try {
-      const res = await communicationApi.cardTemplates.setDefault(t.id);
-      if (res.success) {
-        showToast(`Template "${t.template_name}" dijadikan template default ${t.module}`);
-        fetchData();
-      } else {
-        showToast(res.error || 'Gagal mengatur default', 'error');
-      }
-    } catch {
-      showToast('Gagal mengatur default', 'error');
-    }
-  };
+  const setDefaultMut = useMutation({
+    mutationFn: (t: CardTemplateRecord) =>
+      commApi(`/api/communication/card-templates/${t.id}/set-default`, { method: 'POST' }),
+    onSuccess: (_data, t) => {
+      const tName = (t as any).template_name || (t as any).name || '';
+      showToast(`Template "${tName}" dijadikan template default ${t.module}`);
+      qc.invalidateQueries({ queryKey: TEMPLATES_KEY });
+    },
+    onError: () => showToast('Gagal mengatur default', 'error'),
+  });
 
-  const handleArchive = async (t: CardTemplateDTO) => {
-    const isArchived = t.status === 'archived';
-    try {
-      const res = isArchived
-        ? await communicationApi.cardTemplates.restore(t.id)
-        : await communicationApi.cardTemplates.archive(t.id);
-      if (res.success) {
-        showToast(isArchived ? 'Template dipulihkan' : 'Template diarsipkan');
-        fetchData();
-      } else {
-        showToast(res.error || 'Gagal mengubah status arsip', 'error');
-      }
-    } catch {
-      showToast('Gagal mengubah status arsip', 'error');
-    }
-  };
+  const handleToggleDefault = (t: CardTemplateRecord) => setDefaultMut.mutate(t);
 
-  const handleOpenVersions = async (t: CardTemplateDTO) => {
+  const archiveMut = useMutation({
+    mutationFn: (t: CardTemplateRecord) => {
+      const isArchived = t.status === 'archived';
+      return isArchived
+        ? commApi(`/api/communication/card-templates/${t.id}/restore`, { method: 'POST' })
+        : commApi(`/api/communication/card-templates/${t.id}`, { method: 'DELETE' });
+    },
+    onSuccess: (_data, t) => {
+      const isArchived = t.status === 'archived';
+      showToast(isArchived ? 'Template dipulihkan' : 'Template diarsipkan');
+      qc.invalidateQueries({ queryKey: TEMPLATES_KEY });
+    },
+    onError: () => showToast('Gagal mengubah status arsip', 'error'),
+  });
+
+  const handleArchive = (t: CardTemplateRecord) => archiveMut.mutate(t);
+
+  const handleOpenVersions = (t: CardTemplateRecord) => {
     setEditingTemplate(t);
-    setLoadingVersions(true);
     setIsVersionsOpen(true);
-    try {
-      const res = await communicationApi.cardTemplates.getVersions(t.id);
-      if (res.success) setVersions(res.data || []);
-    } catch {
-      showToast('Gagal memuat riwayat versi', 'error');
-    } finally {
-      setLoadingVersions(false);
-    }
   };
 
-  const handleRollbackVersion = async (v: CardTemplateVersionDTO) => {
-    if (!editingTemplate) return;
-    const ver = v.version || v.version_number || '1.0';
-    if (!confirm(`Kembalikan template ke versi ${ver}?`)) return;
-    try {
-      const res = await communicationApi.cardTemplates.rollback(editingTemplate.id, v.id);
-      if (res.success) {
-        showToast(`Berhasil rollback ke ${ver}`);
-        setIsVersionsOpen(false);
-        fetchData();
-      } else {
-        showToast(res.error || 'Gagal rollback versi', 'error');
-      }
-    } catch {
-      showToast('Gagal rollback versi', 'error');
-    }
+  const { data: versions = [], isLoading: loadingVersions } = useQuery({
+    queryKey: ['communication-card-template-versions', editingTemplate?.id],
+    queryFn: () =>
+      commApi<CardTemplateVersionRecord[]>(
+        `/api/communication/card-templates/${editingTemplate?.id}/versions`
+      ),
+    enabled: isVersionsOpen && !!editingTemplate?.id,
+  });
+
+  const rollbackMut = useMutation({
+    mutationFn: (v: CardTemplateVersionRecord) =>
+      commApi(
+        `/api/communication/card-templates/${editingTemplate?.id}/versions/${v.id}/rollback`,
+        { method: 'POST' }
+      ),
+    onSuccess: (_data, v) => {
+      const ver = (v as any).version_number || v.version || '1.0';
+      showToast(`Berhasil rollback ke v${ver}`);
+      setIsVersionsOpen(false);
+      qc.invalidateQueries({ queryKey: TEMPLATES_KEY });
+    },
+    onError: () => showToast('Gagal rollback versi', 'error'),
+  });
+
+  const handleRollbackVersion = (v: CardTemplateVersionRecord) => {
+    const ver = (v as any).version_number || v.version || '1.0';
+    if (!confirm(`Kembalikan template ke versi v${ver}?`)) return;
+    rollbackMut.mutate(v);
   };
 
-  const handleSendTestCard = async () => {
+  const sendTestMut = useMutation({
+    mutationFn: (chatId: string) =>
+      commApi('/api/communication/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel: 'feishu',
+          chatId,
+          messageType: 'interactive_card',
+          cardConfig: formData.blocks_config,
+          data: { ...MOCK_PREVIEW_VARIABLES, module: formData.module },
+        }),
+      }),
+    onSuccess: () => {
+      showToast('Kartu berhasil dikirim ke group Feishu!');
+      setIsTestSendOpen(false);
+    },
+    onError: (err: Error) => showToast(err.message || 'Gagal mengirim test card', 'error'),
+  });
+
+  const handleSendTestCard = () => {
     if (!testChatId) {
       showToast('Pilih group Feishu penerima', 'error');
       return;
     }
-    setSendingTest(true);
-    try {
-      const res = await communicationApi.send.sendCard({
-        channel: 'feishu',
-        chatId: testChatId,
-        messageType: 'interactive_card',
-        cardConfig: formData.blocks_config,
-        data: {
-          module: formData.module,
-          pickup_dp: 'BATANG01',
-          target_city: 'KOTA BATANG',
-          drop_point: 'BATANG01',
-          total_inc: '14.942',
-          clear_ttd: '14.816',
-          pending_ttd: '72',
-          over_sla: '54',
-          sla_percentage: '99.1',
-          total_delivery: '3.240',
-          delivered: '3.198',
-          pending_delivery: '42',
-          delivery_sla: '98.0',
-          last_scan_time: '08:21 WIB',
-          last_scan_awb: 'JT1234567890',
-          last_scan_status: 'Delivery',
-          generated_at: new Date().toLocaleString('id-ID'),
-          subdistricts: [
-            { name: 'BATANG', count: '10 AWB', picName: 'Agus Supriyanto' },
-            { name: 'WARUNGASEM', count: '8 AWB', picName: 'Dimas Prasetyo' },
-            { name: 'LIMPUNG', count: '6 AWB', picName: 'Rian Hidayat' },
-            { name: 'BANDAR', count: '5 AWB', picName: 'Arif Munandar' },
-          ],
-          kurirList: [
-            { name: 'Andi Setiawan', count: '12 Paket' },
-            { name: 'Rudi Hermawan', count: '8 Paket' },
-          ],
-        },
-      });
-
-      if (res.success) {
-        showToast('Kartu berhasil dikirim ke group Feishu!');
-        setIsTestSendOpen(false);
-      } else {
-        showToast(res.error || 'Gagal mengirim kartu', 'error');
-      }
-    } catch (err: any) {
-      showToast(err.message || 'Gagal mengirim test card', 'error');
-    } finally {
-      setSendingTest(false);
-    }
+    sendTestMut.mutate(testChatId);
   };
+  const sendingTest = sendTestMut.isPending;
 
   // Helper Form Modifiers
   const updateHeader = (fields: Partial<VisualCardBlocksConfig['header']>) => {
@@ -413,6 +403,23 @@ export default function CardTemplatesPage() {
       };
     });
   };
+
+  // Live Feishu Interactive Card Preview: debounce edits so the server
+  // compiler (CardCompilerService, via CardRenderPipeline) isn't called on
+  // every keystroke, then compile fresh JSON through the single render
+  // pipeline shared with Share Dialog and History Preview.
+  const debouncedBlocksConfig = useDebouncedValue(formData.blocks_config, 400);
+  const { data: previewData, isFetching: isCompilingPreview } = useQuery({
+    queryKey: ['communication-card-preview', 'builder', formData.module, debouncedBlocksConfig],
+    queryFn: () =>
+      compileCardPreview({
+        module: formData.module,
+        cardConfig: debouncedBlocksConfig,
+        data: MOCK_PREVIEW_VARIABLES,
+      }),
+    enabled: isEditorOpen,
+    staleTime: 10 * 1000,
+  });
 
   return (
     <div className="space-y-6">
@@ -559,7 +566,7 @@ export default function CardTemplatesPage() {
           </div>
           <button
             type="button"
-            onClick={fetchData}
+            onClick={() => refetchTemplates()}
             disabled={loading}
             className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-50 border border-slate-200 rounded-xl"
             title="Refresh"
@@ -1081,32 +1088,9 @@ export default function CardTemplatesPage() {
                 </div>
 
                 <div className="w-full max-w-sm sticky top-0">
-                  <FeishuCardPreview
-                    blocksConfig={formData.blocks_config}
-                    variables={{
-                      pickup_dp: 'BATANG01',
-                      target_city: 'KOTA BATANG',
-                      drop_point: 'BATANG01',
-                      total_inc: '14.942',
-                      clear_ttd: '14.816',
-                      pending_ttd: '72',
-                      over_sla: '54',
-                      sla_percentage: '99.1',
-                      total_delivery: '3.240',
-                      delivered: '3.198',
-                      pending_delivery: '42',
-                      delivery_sla: '98.0',
-                      last_scan_time: '08:21 WIB',
-                      last_scan_awb: 'JT1234567890',
-                      last_scan_status: 'Delivery',
-                      generated_at: new Date().toLocaleString('id-ID'),
-                      subdistricts: [
-                        { name: 'BATANG', count: '10 AWB', picName: 'Agus' },
-                        { name: 'WARUNGASEM', count: '8 AWB', picName: 'Dimas' },
-                        { name: 'LIMPUNG', count: '6 AWB', picName: 'Rian' },
-                        { name: 'BANDAR', count: '5 AWB', picName: 'Arif' },
-                      ],
-                    }}
+                  <InteractiveCardPreview
+                    cardJson={previewData?.cardJson}
+                    loading={isCompilingPreview && !previewData}
                   />
                 </div>
               </div>
@@ -1161,8 +1145,8 @@ export default function CardTemplatesPage() {
                 >
                   <option value="">-- Pilih Group --</option>
                   {groups.map((g) => (
-                    <option key={g.chatId} value={g.chatId}>
-                      {g.name} ({g.chatId})
+                    <option key={g.chat_id} value={g.chat_id}>
+                      {g.group_name} ({g.chat_id})
                     </option>
                   ))}
                 </select>
@@ -1199,7 +1183,7 @@ export default function CardTemplatesPage() {
               <div className="flex items-center gap-2">
                 <History className="w-4 h-4 text-slate-700" />
                 <h3 className="text-sm font-bold text-slate-900">
-                  Riwayat Versi: {editingTemplate?.template_name}
+                  Riwayat Versi: {(editingTemplate as any)?.template_name || (editingTemplate as any)?.name}
                 </h3>
               </div>
               <button onClick={() => setIsVersionsOpen(false)} className="text-slate-400 hover:text-slate-600">

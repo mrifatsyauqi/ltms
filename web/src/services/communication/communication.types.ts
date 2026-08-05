@@ -92,6 +92,7 @@ export interface SendMessageResult {
   responseTimeMs: number;
   imageKey?: string;
   error?: string;
+  cardJson?: Record<string, any>;
 }
 
 export interface FeishuGroup {

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/auth';
 import { feishuAuthService } from '@/services/communication/providers/feishu/auth.service';
+import { unauthenticated, errorResponse } from '@/lib/api-response';
 
 /**
  * POST /api/communication/mentions/validate
@@ -7,14 +9,14 @@ import { feishuAuthService } from '@/services/communication/providers/feishu/aut
  * Body: { open_id: string }
  */
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.email) return unauthenticated();
+
   try {
     const { open_id } = await request.json();
 
     if (!open_id || typeof open_id !== 'string') {
-      return NextResponse.json(
-        { success: false, error: 'Open ID tidak boleh kosong' },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: 'Open ID tidak boleh kosong' }, { status: 400 });
     }
 
     const trimmed = open_id.trim();
@@ -22,10 +24,12 @@ export async function POST(request: NextRequest) {
     // Check basic Feishu open ID format (typically starts with ou_ and length >= 10)
     if (!trimmed.startsWith('ou_') && !trimmed.startsWith('on_') && !trimmed.startsWith('cli_')) {
       return NextResponse.json({
-        success: true,
-        valid: false,
-        status: 'invalid_format',
-        message: 'Format Open ID tidak valid (biasanya diawali dengan ou_)',
+        ok: true,
+        data: {
+          valid: false,
+          status: 'invalid_format',
+          message: 'Format Open ID tidak valid (biasanya diawali dengan ou_)',
+        },
       });
     }
 
@@ -42,16 +46,18 @@ export async function POST(request: NextRequest) {
         const json = await res.json();
         if (json.code === 0 && json.data?.user) {
           return NextResponse.json({
-            success: true,
-            valid: true,
-            status: 'valid',
-            userInfo: {
-              name: json.data.user.name,
-              email: json.data.user.email,
-              mobile: json.data.user.mobile,
-              department: json.data.user.department_ids,
+            ok: true,
+            data: {
+              valid: true,
+              status: 'valid',
+              userInfo: {
+                name: json.data.user.name,
+                email: json.data.user.email,
+                mobile: json.data.user.mobile,
+                department: json.data.user.department_ids,
+              },
+              message: `Valid: ${json.data.user.name}`,
             },
-            message: `Valid: ${json.data.user.name}`,
           });
         }
       }
@@ -61,15 +67,14 @@ export async function POST(request: NextRequest) {
 
     // Format is valid (starts with ou_)
     return NextResponse.json({
-      success: true,
-      valid: true,
-      status: 'valid_format',
-      message: 'Format Open ID valid (ou_*)',
+      ok: true,
+      data: {
+        valid: true,
+        status: 'valid_format',
+        message: 'Format Open ID valid (ou_*)',
+      },
     });
-  } catch (err: any) {
-    return NextResponse.json(
-      { success: false, error: err.message || 'Gagal memvalidasi Open ID' },
-      { status: 500 }
-    );
+  } catch (err) {
+    return errorResponse(err);
   }
 }

@@ -15,6 +15,7 @@ export interface CommunicationLogParams {
   statusCode?: number;
   retryCount?: number;
   messageId?: string;
+  cardJson?: Record<string, any> | null;
 }
 
 export class CommunicationLogger {
@@ -55,6 +56,7 @@ export class CommunicationLogger {
         response_time_ms: params.responseTimeMs,
         sender_email: params.senderEmail || null,
         payload_summary: summary,
+        card_json: params.cardJson || null,
       });
     } catch (dbErr) {
       console.warn('[CommunicationLogger] Could not persist log to DB:', dbErr);

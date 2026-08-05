@@ -502,22 +502,6 @@ export class CardCompilerService {
 
     return result;
   }
-
-  /**
-   * Alias backward-compatible untuk compileCard
-   */
-  public static compile(
-    config: VisualCardBlocksConfig,
-    variables: TemplateVariablesContext | Record<string, any> = {},
-    imageKey?: string | null,
-    mentionMapOrUrl?: Map<string, MentionMappingRecord[]> | Record<string, any> | string,
-    appBaseUrl = 'https://ltms.jt-express.id'
-  ): Record<string, any> {
-    if (typeof mentionMapOrUrl === 'string') {
-      return this.compileCard(config, variables, imageKey, undefined, mentionMapOrUrl);
-    }
-    return this.compileCard(config, variables, imageKey, mentionMapOrUrl, appBaseUrl);
-  }
 }
 
 export const cardCompilerService = CardCompilerService;

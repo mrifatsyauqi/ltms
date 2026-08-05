@@ -105,6 +105,7 @@ export class CommunicationService implements ICommunicationService {
             messageId: result.messageId,
           }
         : { textLength: payload.textContent?.length || 0 },
+      cardJson: result.cardJson || null,
     });
 
     return result;

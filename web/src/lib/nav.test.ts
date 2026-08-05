@@ -159,7 +159,6 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
     for (const item of all) {
       if (
         item.label === 'Profile' ||
-        item.label === 'Message Templates' ||
         item.label === 'Card Templates' ||
         item.label === 'Groups' ||
         item.label === 'Mention Mapping'

@@ -61,7 +61,7 @@ describe('Phase 2.6.2 Communication Center Single Source Compiler & Mentions', (
         ],
       };
 
-      const card = CardCompilerService.compile(incPreset.blocksConfig, context, 'img_test_inc_01');
+      const card = CardCompilerService.compileCard(incPreset.blocksConfig, context, 'img_test_inc_01');
 
       assert.ok(card.header?.title?.content.includes('Monitoring INC'));
       assert.equal(card.header?.template, 'red');
@@ -100,7 +100,7 @@ describe('Phase 2.6.2 Communication Center Single Source Compiler & Mentions', (
         },
       };
 
-      const card = CardCompilerService.compile(incPreset.blocksConfig, context, undefined, mentionMap);
+      const card = CardCompilerService.compileCard(incPreset.blocksConfig, context, undefined, mentionMap);
       const elementsStr = JSON.stringify(card.elements);
 
       // Verify <at id="ou_..."> is rendered for BATANG
@@ -133,7 +133,7 @@ describe('Phase 2.6.2 Communication Center Single Source Compiler & Mentions', (
         },
       };
 
-      const card = CardCompilerService.compile(incPreset.blocksConfig, context, undefined, mentionMap);
+      const card = CardCompilerService.compileCard(incPreset.blocksConfig, context, undefined, mentionMap);
       const elementsStr = JSON.stringify(card.elements);
 
       // Should contain text @Rian Hidayat instead of breaking
@@ -157,7 +157,7 @@ describe('Phase 2.6.2 Communication Center Single Source Compiler & Mentions', (
         ],
       };
 
-      const card = CardCompilerService.compile(deliveryPreset.blocksConfig, context);
+      const card = CardCompilerService.compileCard(deliveryPreset.blocksConfig, context);
       assert.ok(card.header?.title?.content.includes('Monitoring Delivery'));
       assert.equal(card.header?.template, 'grey'); // Dark theme maps to grey header template in Feishu
 

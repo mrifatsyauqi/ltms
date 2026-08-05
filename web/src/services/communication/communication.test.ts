@@ -1,7 +1,5 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { FeishuCardService } from './providers/feishu/card.service.ts';
-import { FeishuCardBuilder } from './providers/feishu/card.builder.ts';
 import { MemoryCache } from './utils/cache.ts';
 import { withRetry } from './utils/retry.ts';
 import { SlidingWindowRateLimiter } from './utils/rate-limiter.ts';
@@ -12,74 +10,12 @@ import {
   FeishuUploadImageResponseSchema,
   FeishuSendMessageResponseSchema,
 } from './communication.schemas.ts';
-import type { MonitoringIncSummaryData } from './communication.types.ts';
 
-describe('Communication Center: Feishu Card Service & Builder', () => {
-  const cardService = new FeishuCardService();
-
-  const sampleData: MonitoringIncSummaryData = {
-    targetKota: 'BATANG',
-    total: 14942,
-    belum: 72,
-    late: 54,
-    clear: 14816,
-    percent: 57,
-    topKecamatan: ['Batang', 'Warungasem', 'Limpung', 'Bandar', 'Tulis'],
-    generateTime: '4 Agu 2026 23:30',
-  };
-
-  it('1. Generates valid Feishu Interactive Card structure with header and template', () => {
-    const card = cardService.generateMonitoringIncCard(sampleData);
-
-    assert.equal(card.header?.title.content, 'LTMS • Monitoring INC BATANG');
-    assert.equal(card.header?.template, 'red');
-    assert.equal(card.config?.wide_screen_mode, true);
-    assert.ok(card.elements.length > 0);
-  });
-
-  it('2. Includes Target Kota and Metrics in Card elements', () => {
-    const card = cardService.generateMonitoringIncCard(sampleData);
-    const elementsStr = JSON.stringify(card.elements);
-
-    assert.ok(elementsStr.includes('BATANG'));
-    assert.ok(elementsStr.includes('14.942'));
-    assert.ok(elementsStr.includes('72'));
-    assert.ok(elementsStr.includes('54'));
-    assert.ok(elementsStr.includes('57%'));
-    assert.ok(elementsStr.includes('Warungasem'));
-  });
-
-  it('3. Attaches image element when imageKey is provided', () => {
-    const card = cardService.generateMonitoringIncCard(sampleData, 'img_v2_sample_key_123');
-    const imageEl = card.elements.find((el) => el.tag === 'img');
-
-    assert.ok(imageEl, 'Image element should be present');
-    assert.equal(imageEl.img_key, 'img_v2_sample_key_123');
-    assert.equal(imageEl.mode, 'fit_horizontal');
-  });
-
-  it('4. Omits image element when imageKey is undefined', () => {
-    const card = cardService.generateMonitoringIncCard(sampleData);
-    const imageEl = card.elements.find((el) => el.tag === 'img');
-
-    assert.equal(imageEl, undefined);
-  });
-
-  it('5. Fluent FeishuCardBuilder builds custom card with chained methods', () => {
-    const builder = new FeishuCardBuilder();
-    const card = builder
-      .setHeader('Laporan Khusus', 'blue')
-      .addHeaderInfo('PEKALONGAN', '10:00 WIB')
-      .addDivider()
-      .addKpiGrid({ total: 100, belum: 10, late: 5, percent: 90 })
-      .addFooter()
-      .build();
-
-    assert.equal(card.header?.title.content, 'Laporan Khusus');
-    assert.equal(card.header?.template, 'blue');
-    assert.ok(card.elements.length >= 4);
-  });
-});
+// Note: Interactive Card generation is covered by
+// configuration/__tests__/template-engine.test.ts, which exercises
+// CardCompilerService directly — the single render pipeline's actual
+// compiler. FeishuCardService/FeishuCardBuilder (which only wrapped it)
+// had zero production callers and were removed.
 
 describe('Communication Center: Zod Schema Validations', () => {
   it('6. Validates correct Feishu Token Response', () => {

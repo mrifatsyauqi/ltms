@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { mentionService } from '@/services/communication/configuration/mention.service';
+import { cardTemplateService } from '@/services/communication/configuration/card-template.service';
 import { unauthenticated, errorResponse } from '@/lib/api-response';
 import { ApiError } from '@/lib/errors';
 
-/**
- * GET /api/communication/mentions/[id]
- */
 export async function GET(
-  request: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
@@ -16,19 +13,16 @@ export async function GET(
 
   try {
     const { id } = await params;
-    const mapping = await mentionService.getById(id);
-    if (!mapping) throw new ApiError('NOT_FOUND', 'Mention mapping tidak ditemukan');
-    return NextResponse.json({ ok: true, data: mapping });
+    const tpl = await cardTemplateService.getById(id);
+    if (!tpl) throw new ApiError('NOT_FOUND', 'Card template tidak ditemukan');
+    return NextResponse.json({ ok: true, data: tpl });
   } catch (err) {
     return errorResponse(err);
   }
 }
 
-/**
- * PUT /api/communication/mentions/[id]
- */
 export async function PUT(
-  request: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
@@ -36,10 +30,14 @@ export async function PUT(
 
   try {
     const { id } = await params;
-    const body = await request.json();
+    const body = await req.json();
 
-    const updated = await mentionService.update(id, body);
-    if (!updated) throw new ApiError('INTERNAL_ERROR', 'Gagal memperbarui mention mapping');
+    const updated = await cardTemplateService.updateFromBlocks(id, {
+      template_name: body.name,
+      blocks_config: body.blocks_config,
+      is_default: body.is_default,
+      version_note: body.change_summary || body.version_note,
+    });
 
     return NextResponse.json({ ok: true, data: updated });
   } catch (err) {
@@ -47,11 +45,9 @@ export async function PUT(
   }
 }
 
-/**
- * DELETE /api/communication/mentions/[id]
- */
+/** Arsipkan (soft delete) - konsisten dgn tombol Archive di UI, BUKAN hard delete. */
 export async function DELETE(
-  request: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
@@ -59,8 +55,9 @@ export async function DELETE(
 
   try {
     const { id } = await params;
-    const ok = await mentionService.delete(id);
-    return NextResponse.json({ ok, data: { id } });
+    const ok = await cardTemplateService.archive(id);
+    if (!ok) throw new ApiError('INTERNAL_ERROR', 'Gagal mengarsipkan card template');
+    return NextResponse.json({ ok: true, data: { id } });
   } catch (err) {
     return errorResponse(err);
   }

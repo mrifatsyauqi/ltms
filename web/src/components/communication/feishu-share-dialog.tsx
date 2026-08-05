@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -26,11 +27,9 @@ import type {
   ReportMetricItem,
 } from '@/services/communication/communication.types';
 import { FeishuHistoryDialog } from './feishu-history-dialog';
-import { FeishuCardPreview } from './feishu-card-preview';
-import { STARTER_PRESETS } from '@/services/communication/configuration/template-presets';
-import type { VisualCardBlocksConfig } from '@/services/communication/configuration/template.types';
-import type { MentionMappingRecord } from '@/lib/data/supabase/mention-mapping';
-import { communicationApi } from '@/services/communication/api-client';
+import { InteractiveCardPreview } from './interactive-card-preview';
+import type { CardTemplateRecord, FeishuGroupConfigRecord } from '@/lib/data/supabase/communication-config';
+import { commApi, compileCardPreview } from '@/lib/communication-client';
 
 export type FeishuShareStage =
   | 'idle'
@@ -153,13 +152,9 @@ export function FeishuShareDialog({
   imagePreviewUrl,
   onExecuteSend,
 }: FeishuShareDialogProps) {
-  const [groups, setGroups] = useState<FeishuGroup[]>([]);
-  const [cardTemplates, setCardTemplates] = useState<any[]>([]);
+  const qc = useQueryClient();
   const [selectedCardTemplateId, setSelectedCardTemplateId] = useState<string>('');
-  const [mentions, setMentions] = useState<MentionMappingRecord[]>([]);
 
-  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedChatId, setSelectedChatId] = useState<string>('');
@@ -172,6 +167,22 @@ export function FeishuShareDialog({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const effectiveScopeName = targetScopeName || targetKota || 'Cabang';
+  const modKey = moduleName.toLowerCase().includes('delivery') ? 'monitoring_delivery' : 'monitoring_inc';
+
+  const { data: rawGroups = [], isLoading: isLoadingGroups } = useQuery({
+    queryKey: ['communication-groups'],
+    queryFn: () => commApi<FeishuGroupConfigRecord[]>('/api/communication/groups'),
+    enabled: isOpen,
+    staleTime: 30 * 1000,
+  });
+  const groups = useMemo(() => rawGroups.map(normalizeFeishuGroup), [rawGroups]);
+
+  const { data: cardTemplates = [] } = useQuery({
+    queryKey: ['communication-card-templates', 'active'],
+    queryFn: () => commApi<CardTemplateRecord[]>('/api/communication/card-templates?status=active'),
+    enabled: isOpen,
+    staleTime: 30 * 1000,
+  });
 
   useEffect(() => {
     if (!isOpen) {
@@ -179,72 +190,44 @@ export function FeishuShareDialog({
       setProgress(0);
       setErrorMessage(null);
       setActiveTab('group');
-      return;
+    } else {
+      setSelectedChatId('');
+      setSelectedCardTemplateId('');
     }
-
-    fetchGroupsAndTemplates();
   }, [isOpen]);
 
-  const fetchGroupsAndTemplates = async () => {
-    setIsLoadingGroups(true);
-    try {
-      const [grpRes, cardRes, mentionRes] = await Promise.all([
-        communicationApi.groups.list(),
-        communicationApi.cardTemplates.list({ status: 'active' }),
-        communicationApi.mentions.list(),
-      ]);
+  // Reactively select the default group once the groups query resolves.
+  useEffect(() => {
+    if (!isOpen || groups.length === 0 || selectedChatId) return;
+    const defaultGrp = groups.find((g: any) => g.is_default || g.isDefault);
+    setSelectedChatId((defaultGrp || groups[0]).chatId);
+  }, [isOpen, groups, selectedChatId]);
 
-      if (grpRes.success && Array.isArray(grpRes.data) && grpRes.data.length > 0) {
-        const normalized = grpRes.data.map(normalizeFeishuGroup);
-        setGroups(normalized);
-        const defaultGrp = normalized.find((g: any) => g.is_default || g.isDefault);
-        if (defaultGrp) {
-          setSelectedChatId(defaultGrp.chatId || (defaultGrp as any).chat_id);
-        } else if (normalized[0]) {
-          setSelectedChatId(normalized[0].chatId || (normalized[0] as any).chat_id);
-        }
-      }
+  // Reactively select the default card template once the templates query resolves.
+  useEffect(() => {
+    if (!isOpen || cardTemplates.length === 0 || selectedCardTemplateId) return;
+    const defCard = cardTemplates.find((t: any) => t.module === modKey && t.is_default) || cardTemplates[0];
+    if (defCard) setSelectedCardTemplateId(defCard.id);
+  }, [isOpen, cardTemplates, modKey, selectedCardTemplateId]);
 
-      if (cardRes.success && Array.isArray(cardRes.data)) {
-        setCardTemplates(cardRes.data as any);
-        const modKey = moduleName.toLowerCase().includes('delivery') ? 'monitoring_delivery' : 'monitoring_inc';
-        const defCard = cardRes.data.find((t: any) => t.module === modKey && t.is_default) || cardRes.data[0];
-        if (defCard) setSelectedCardTemplateId(defCard.id);
-      }
-
-      if (mentionRes.success && Array.isArray(mentionRes.data)) {
-        setMentions(mentionRes.data as any);
-      }
-    } catch (err) {
-      console.warn('Gagal memuat konfigurasi:', err);
-    } finally {
-      setIsLoadingGroups(false);
-    }
-  };
-
-  const handleSyncGroups = async () => {
-    setIsSyncing(true);
-    try {
-      const res = await communicationApi.groups.sync();
-      if (res.success && Array.isArray(res.data)) {
-        const normalized = res.data.map(normalizeFeishuGroup);
-        setGroups(normalized);
-        const now = new Date();
-        setLastSyncTime(
-          new Intl.DateTimeFormat('id-ID', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-          }).format(now) + ' WIB'
-        );
-        toast.success(`Berhasil sinkronisasi ${normalized.length} group`);
-      }
-    } catch {
-      toast.error('Gagal sinkronisasi group');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+  const syncMut = useMutation({
+    mutationFn: () => commApi<FeishuGroupConfigRecord[]>('/api/communication/groups', { method: 'POST' }),
+    onSuccess: (data) => {
+      qc.setQueryData(['communication-groups'], data);
+      const now = new Date();
+      setLastSyncTime(
+        new Intl.DateTimeFormat('id-ID', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        }).format(now) + ' WIB'
+      );
+      toast.success(`Berhasil sinkronisasi ${data.length} group`);
+    },
+    onError: () => toast.error('Gagal sinkronisasi group'),
+  });
+  const isSyncing = syncMut.isPending;
+  const handleSyncGroups = () => syncMut.mutate();
 
   const filteredGroups = useMemo(() => {
     if (!searchQuery.trim()) return groups;
@@ -287,16 +270,6 @@ export function FeishuShareDialog({
     }
   };
 
-  // Compile Active Blocks Config for Live Preview
-  const activeBlocksConfig: VisualCardBlocksConfig = useMemo(() => {
-    const selectedTpl = cardTemplates.find((t) => t.id === selectedCardTemplateId);
-    if (selectedTpl?.blocks_config) return selectedTpl.blocks_config;
-
-    const modKey = moduleName.toLowerCase().includes('delivery') ? 'monitoring_delivery' : 'monitoring_inc';
-    const preset = STARTER_PRESETS.find((p) => p.module === modKey) || STARTER_PRESETS[0];
-    return preset.blocksConfig;
-  }, [cardTemplates, selectedCardTemplateId, moduleName]);
-
   // Context Variables
   const previewVarContext = useMemo(() => {
     return {
@@ -327,6 +300,22 @@ export function FeishuShareDialog({
       kurirList: summaryData?.kurirList,
     };
   }, [effectiveScopeName, generateTime, summaryData]);
+
+  // Compiled through the single server-side pipeline (CardRenderPipeline ->
+  // CardCompilerService) — the same one Card Builder Preview and the real
+  // Feishu send call. Resolving blocksConfig from cardTemplateId happens
+  // server-side, so this component never touches raw blocks_config.
+  const { data: sharePreviewResult, isFetching: isCompilingSharePreview } = useQuery({
+    queryKey: ['communication-card-preview', 'share', modKey, selectedCardTemplateId, previewVarContext],
+    queryFn: () =>
+      compileCardPreview({
+        module: modKey,
+        cardTemplateId: selectedCardTemplateId || undefined,
+        data: previewVarContext,
+      }),
+    enabled: isOpen && activeTab === 'preview_card',
+    staleTime: 10 * 1000,
+  });
 
   if (!isOpen) return null;
 
@@ -455,9 +444,9 @@ export function FeishuShareDialog({
                       onChange={(e) => setSelectedCardTemplateId(e.target.value)}
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/20"
                     >
-                      {cardTemplates.map((t) => (
+                      {cardTemplates.map((t: any) => (
                         <option key={t.id} value={t.id}>
-                          {t.name} {t.is_default ? '★ (Default)' : ''}
+                          {t.template_name || t.name} {t.is_default ? '★ (Default)' : ''}
                         </option>
                       ))}
                     </select>
@@ -547,10 +536,10 @@ export function FeishuShareDialog({
             ) : activeTab === 'preview_card' ? (
               <div className="bg-slate-100 p-4 rounded-2xl flex justify-center">
                 <div className="w-full max-w-sm">
-                  <FeishuCardPreview
-                    blocksConfig={activeBlocksConfig}
-                    variables={previewVarContext}
+                  <InteractiveCardPreview
+                    cardJson={sharePreviewResult?.cardJson}
                     imagePreviewUrl={imagePreviewUrl}
+                    loading={isCompilingSharePreview && !sharePreviewResult}
                   />
                 </div>
               </div>

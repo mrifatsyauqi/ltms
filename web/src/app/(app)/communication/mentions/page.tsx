@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AtSign,
   Plus,
@@ -23,14 +24,26 @@ import {
   MapPin,
 } from 'lucide-react';
 import type { MentionMappingRecord, MentionScopeType } from '@/lib/data/supabase/mention-mapping';
-import { communicationApi } from '@/services/communication/api-client';
+import { commApi } from '@/lib/communication-client';
+
+const MENTIONS_KEY = ['communication-mentions'];
 
 export default function MentionMappingPage() {
-  const [mentions, setMentions] = useState<MentionMappingRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [scopeFilter, setScopeFilter] = useState<'all' | MentionScopeType>('all');
+
+  const {
+    data: mentions = [],
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: MENTIONS_KEY,
+    queryFn: () => commApi<MentionMappingRecord[]>('/api/communication/mentions'),
+    staleTime: 30 * 1000,
+  });
+  const error = queryError ? (queryError as Error).message || 'Gagal memuat data mapping mention' : null;
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -77,27 +90,6 @@ export default function MentionMappingPage() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
   };
-
-  const fetchMentions = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await communicationApi.mentions.list();
-      if (res.success && Array.isArray(res.data)) {
-        setMentions(res.data as any);
-      } else {
-        setError(res.error || 'Gagal memuat data mapping mention');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Terjadi kesalahan koneksi');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchMentions();
-  }, []);
 
   const filteredMentions = useMemo(() => {
     return mentions.filter((m) => {
@@ -151,6 +143,84 @@ export default function MentionMappingPage() {
     setIsModalOpen(true);
   };
 
+  const createMut = useMutation({
+    mutationFn: (payload: typeof formData) =>
+      commApi('/api/communication/mentions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      showToast('Mention mapping baru berhasil ditambahkan');
+      setIsModalOpen(false);
+      qc.invalidateQueries({ queryKey: MENTIONS_KEY });
+    },
+    onError: (err: Error) => showToast(err.message || 'Gagal menambahkan', 'error'),
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: Partial<typeof formData> }) =>
+      commApi(`/api/communication/mentions/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      showToast('Mention mapping berhasil diperbarui');
+      setIsModalOpen(false);
+      qc.invalidateQueries({ queryKey: MENTIONS_KEY });
+    },
+    onError: (err: Error) => showToast(err.message || 'Gagal menyimpan', 'error'),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => commApi(`/api/communication/mentions/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      showToast('Mapping berhasil dihapus');
+      qc.invalidateQueries({ queryKey: MENTIONS_KEY });
+    },
+    onError: (err: Error) => showToast(err.message || 'Gagal menghapus', 'error'),
+  });
+
+  const toggleActiveMut = useMutation({
+    mutationFn: (item: MentionMappingRecord) =>
+      commApi(`/api/communication/mentions/${item.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !item.is_active }),
+      }),
+    onMutate: async (item) => {
+      await qc.cancelQueries({ queryKey: MENTIONS_KEY });
+      const previous = qc.getQueryData<MentionMappingRecord[]>(MENTIONS_KEY);
+      qc.setQueryData<MentionMappingRecord[]>(MENTIONS_KEY, (prev) =>
+        (prev ?? []).map((m) => (m.id === item.id ? { ...m, is_active: !m.is_active } : m))
+      );
+      return { previous };
+    },
+    onSuccess: (_data, item) => showToast(`Status mention ${item.pic_name} diubah`),
+    onError: (_err, _item, ctx) => {
+      if (ctx?.previous) qc.setQueryData(MENTIONS_KEY, ctx.previous);
+      showToast('Gagal mengubah status', 'error');
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: MENTIONS_KEY }),
+  });
+
+  const bulkImportMut = useMutation({
+    mutationFn: (items: any[]) =>
+      commApi<any[]>('/api/communication/mentions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bulk: true, items }),
+      }),
+    onSuccess: (data, items) => {
+      showToast(`${(data && data.length) || items.length} mapping berhasil diimpor!`);
+      setIsBulkModalOpen(false);
+      setBulkInput('');
+      qc.invalidateQueries({ queryKey: MENTIONS_KEY });
+    },
+    onError: (err: Error) => showToast(err.message || 'Gagal mengimpor', 'error'),
+  });
+
   const handleValidateOpenId = async () => {
     if (!formData.feishu_open_id.trim()) {
       setValidationResult({ valid: false, message: 'Masukkan Open ID terlebih dahulu' });
@@ -159,87 +229,50 @@ export default function MentionMappingPage() {
     setValidatingOpenId(true);
     setValidationResult(null);
     try {
-      const res = await communicationApi.mentions.validateOpenId(formData.feishu_open_id);
-      if (res.success && res.data?.valid) {
-        setValidationResult({
-          valid: true,
-          status: (res.data as any).status || 'valid',
-          message: res.data.message || 'Open ID valid',
-        });
-      } else {
-        setValidationResult({
-          valid: false,
-          status: 'invalid',
-          message: res.data?.message || res.error || 'Format Open ID tidak valid',
-        });
-      }
-    } catch {
-      setValidationResult({ valid: false, message: 'Gagal memverifikasi Open ID' });
+      const data = await commApi<{ valid: boolean; status?: string; message?: string }>(
+        '/api/communication/mentions/validate',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ open_id: formData.feishu_open_id }),
+        }
+      );
+      setValidationResult({
+        valid: data.valid,
+        status: data.status,
+        message: data.message || (data.valid ? 'Open ID valid' : 'Format Open ID tidak valid'),
+      });
+    } catch (err: any) {
+      setValidationResult({ valid: false, message: err.message || 'Gagal memverifikasi Open ID' });
     } finally {
       setValidatingOpenId(false);
     }
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.scope_key.trim() || !formData.pic_name.trim()) {
       showToast('Wilayah / Key dan Nama PIC wajib diisi', 'error');
       return;
     }
 
-    try {
-      if (editingId) {
-        const res = await communicationApi.mentions.update(editingId, formData as any);
-        if (res.success) {
-          showToast('Mention mapping berhasil diperbarui');
-          setIsModalOpen(false);
-          fetchMentions();
-        } else {
-          showToast(res.error || 'Gagal menyimpan', 'error');
-        }
-      } else {
-        const res = await communicationApi.mentions.create(formData as any);
-        if (res.success) {
-          showToast('Mention mapping baru berhasil ditambahkan');
-          setIsModalOpen(false);
-          fetchMentions();
-        } else {
-          showToast(res.error || 'Gagal menambahkan', 'error');
-        }
-      }
-    } catch (err: any) {
-      showToast(err.message || 'Gagal menyimpan', 'error');
+    if (editingId) {
+      updateMut.mutate({ id: editingId, payload: formData });
+    } else {
+      createMut.mutate(formData);
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
+  const handleDelete = (id: string, name: string) => {
     if (!confirm(`Hapus mapping mention untuk "${name}"?`)) return;
-    try {
-      const res = await communicationApi.mentions.delete(id);
-      if (res.success) {
-        showToast('Mapping berhasil dihapus');
-        fetchMentions();
-      } else {
-        showToast(res.error || 'Gagal menghapus', 'error');
-      }
-    } catch (err: any) {
-      showToast(err.message || 'Gagal menghapus', 'error');
-    }
+    deleteMut.mutate(id);
   };
 
-  const handleToggleActive = async (item: MentionMappingRecord) => {
-    try {
-      const res = await communicationApi.mentions.update(item.id, { is_active: !item.is_active });
-      if (res.success) {
-        showToast(`Status mention ${item.pic_name} diubah`);
-        fetchMentions();
-      }
-    } catch {
-      showToast('Gagal mengubah status', 'error');
-    }
+  const handleToggleActive = (item: MentionMappingRecord) => {
+    toggleActiveMut.mutate(item);
   };
 
-  const handleBulkImport = async () => {
+  const handleBulkImport = () => {
     if (!bulkInput.trim()) return;
     const lines = bulkInput.trim().split('\n');
     const items: any[] = [];
@@ -261,7 +294,7 @@ export default function MentionMappingPage() {
             scope_type: ['kecamatan', 'drop_point', 'kurir'].includes(scope) ? scope : 'kecamatan',
             scope_key: key.toUpperCase(),
             pic_name: pic,
-            feishu_open_id: openId.startsWith('ou_') ? openId : undefined,
+            feishu_open_id: openId.startsWith('ou_') ? openId : null,
             role,
             is_active: true,
           });
@@ -274,19 +307,7 @@ export default function MentionMappingPage() {
       return;
     }
 
-    try {
-      const res = await communicationApi.mentions.bulkCreate(items);
-      if (res.success) {
-        showToast(`${res.data?.length || items.length} mapping berhasil diimpor!`);
-        setIsBulkModalOpen(false);
-        setBulkInput('');
-        fetchMentions();
-      } else {
-        showToast(res.error || 'Gagal impor bulk', 'error');
-      }
-    } catch (err: any) {
-      showToast(err.message || 'Gagal mengimpor', 'error');
-    }
+    bulkImportMut.mutate(items);
   };
 
   return (
@@ -420,7 +441,7 @@ export default function MentionMappingPage() {
           </div>
           <button
             type="button"
-            onClick={fetchMentions}
+            onClick={() => refetch()}
             disabled={loading}
             className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors"
             title="Refresh Data"
@@ -442,7 +463,7 @@ export default function MentionMappingPage() {
             <AlertCircle className="w-8 h-8 text-red-500 mx-auto" />
             <p className="text-sm font-semibold text-slate-800">{error}</p>
             <button
-              onClick={fetchMentions}
+              onClick={() => refetch()}
               className="text-xs font-bold text-red-600 hover:underline"
             >
               Coba Lagi

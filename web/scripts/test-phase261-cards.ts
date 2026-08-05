@@ -7,7 +7,7 @@ console.log('--- Testing Phase 2.6.1 Card Compiler ---');
 const incPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_inc');
 if (!incPreset) throw new Error('Monitoring INC preset not found');
 
-const incCard = CardCompilerService.compile(incPreset.blocksConfig, SAMPLE_DUMMY_CONTEXT, 'img_test_inc_123');
+const incCard = CardCompilerService.compileCard(incPreset.blocksConfig, SAMPLE_DUMMY_CONTEXT, 'img_test_inc_123');
 
 console.log('\n=== MONITORING INC CARD OUTPUT ===');
 console.log('Header Title:', incCard.header?.title?.content);
@@ -33,7 +33,7 @@ console.log('Has Image Attachment img_test_inc_123:', incElementsJson.includes('
 const delPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_delivery');
 if (!delPreset) throw new Error('Monitoring Delivery preset not found');
 
-const delCard = CardCompilerService.compile(delPreset.blocksConfig, SAMPLE_DUMMY_CONTEXT, 'img_test_del_456');
+const delCard = CardCompilerService.compileCard(delPreset.blocksConfig, SAMPLE_DUMMY_CONTEXT, 'img_test_del_456');
 
 console.log('\n=== MONITORING DELIVERY CARD OUTPUT ===');
 console.log('Header Title:', delCard.header?.title?.content);

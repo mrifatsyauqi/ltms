@@ -14,7 +14,6 @@ import {
   type TemplateStatus,
 } from '@/lib/data/supabase/communication-config';
 import { memoryCache } from '../utils/cache';
-import { CardCompilerService } from './card-compiler.service';
 import { STARTER_PRESETS } from './template-presets';
 import type { VisualCardBlocksConfig } from './template.types';
 
@@ -38,12 +37,10 @@ export class CardTemplateService {
       const preset = STARTER_PRESETS.find((p) => p.module === options?.module);
       if (preset) {
         try {
-          const compiledJson = CardCompilerService.compile(preset.blocksConfig);
           const created = await createCardTemplate({
             module: preset.module,
             template_name: `Kartu ${preset.name}`,
             blocks_config: preset.blocksConfig,
-            json_template: compiledJson,
             is_default: true,
             version_note: 'Auto-seeded from preset',
           });
@@ -80,12 +77,10 @@ export class CardTemplateService {
     if (!tpl) {
       const preset = STARTER_PRESETS.find((p) => p.module === module) || STARTER_PRESETS[0];
       try {
-        const compiledJson = CardCompilerService.compile(preset.blocksConfig);
         tpl = await createCardTemplate({
           module: preset.module,
           template_name: `Kartu ${preset.name}`,
           blocks_config: preset.blocksConfig,
-          json_template: compiledJson,
           is_default: true,
           version_note: 'Initial default card preset',
         });
@@ -107,13 +102,10 @@ export class CardTemplateService {
     is_default?: boolean;
     version_note?: string;
   }): Promise<CardTemplateRecord> {
-    const json_template = CardCompilerService.compile(input.blocks_config);
-
     const result = await createCardTemplate({
       module: input.module,
       template_name: input.template_name,
       blocks_config: input.blocks_config,
-      json_template,
       is_default: input.is_default,
       version_note: input.version_note,
     });
@@ -131,15 +123,9 @@ export class CardTemplateService {
       version_note?: string;
     }
   ): Promise<CardTemplateRecord> {
-    let json_template: Record<string, any> | undefined = undefined;
-    if (input.blocks_config) {
-      json_template = CardCompilerService.compile(input.blocks_config);
-    }
-
     const result = await updateCardTemplate(id, {
       template_name: input.template_name,
       blocks_config: input.blocks_config,
-      json_template,
       is_default: input.is_default,
       version_note: input.version_note,
     });
@@ -185,19 +171,21 @@ export class CardTemplateService {
     return listCardTemplateVersions(cardTemplateId);
   }
 
-  public async rollback(cardTemplateId: string, versionId: string): Promise<boolean> {
-    const versionRecord = await getCardTemplateVersionById(versionId);
-    if (!versionRecord || versionRecord.card_template_id !== cardTemplateId) {
+  /** Kembalikan blocks_config template ke isi versi lama - dicatat sbg versi
+   *  BARU (bukan menghapus riwayat), konsisten dgn semantik updateFromBlocks
+   *  yang lain (setiap perubahan blocks_config = versi baru). */
+  public async rollbackToVersion(
+    cardTemplateId: string,
+    versionId: string
+  ): Promise<CardTemplateRecord> {
+    const version = await getCardTemplateVersionById(versionId);
+    if (!version || version.card_template_id !== cardTemplateId) {
       throw new Error('Versi template tidak ditemukan');
     }
-
-    await this.updateFromBlocks(cardTemplateId, {
-      blocks_config: versionRecord.blocks_config as VisualCardBlocksConfig,
-      version_note: `Rollback ke versi ${versionRecord.version}`,
+    return this.updateFromBlocks(cardTemplateId, {
+      blocks_config: version.blocks_config as VisualCardBlocksConfig,
+      version_note: `Rollback ke v${version.version}`,
     });
-
-    memoryCache.clear();
-    return true;
   }
 }
 

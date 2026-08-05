@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/auth';
 import { mentionService } from '@/services/communication/configuration/mention.service';
+import { unauthenticated, errorResponse } from '@/lib/api-response';
+import { ApiError } from '@/lib/errors';
 
 /**
  * GET /api/communication/mentions
  * Query parameters: scope_type, search, is_active
  */
 export async function GET(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.email) return unauthenticated();
+
   try {
     const { searchParams } = new URL(request.url);
     const scope_type = (searchParams.get('scope_type') as any) || undefined;
@@ -19,18 +25,9 @@ export async function GET(request: NextRequest) {
       is_active,
     });
 
-    return NextResponse.json({
-      success: true,
-      data: list,
-    });
-  } catch (err: any) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: err.message || 'Gagal memuat data mention mapping',
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: true, data: list });
+  } catch (err) {
+    return errorResponse(err);
   }
 }
 
@@ -40,6 +37,9 @@ export async function GET(request: NextRequest) {
  * or bulk: { bulk: true, items: [...] }
  */
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.email) return unauthenticated();
+
   try {
     const body = await request.json();
 
@@ -59,21 +59,11 @@ export async function POST(request: NextRequest) {
         });
         createdList.push(created);
       }
-      return NextResponse.json({
-        success: true,
-        data: createdList,
-        count: createdList.length,
-      });
+      return NextResponse.json({ ok: true, data: createdList, count: createdList.length });
     }
 
     if (!body.scope_type || !body.scope_key || !body.pic_name) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Parameter scope_type, scope_key, dan pic_name wajib diisi',
-        },
-        { status: 400 }
-      );
+      throw new ApiError('VALIDATION_ERROR', 'Parameter scope_type, scope_key, dan pic_name wajib diisi');
     }
 
     const created = await mentionService.create({
@@ -87,20 +77,8 @@ export async function POST(request: NextRequest) {
       is_active: body.is_active ?? true,
     });
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: created,
-      },
-      { status: 201 }
-    );
-  } catch (err: any) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: err.message || 'Gagal menyimpan mention mapping',
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: true, data: created }, { status: 201 });
+  } catch (err) {
+    return errorResponse(err);
   }
 }

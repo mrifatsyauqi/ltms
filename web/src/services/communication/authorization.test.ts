@@ -4,9 +4,7 @@ import {
   CommunicationAuthorizationService,
   type UserCommunicationScope,
 } from './utils/authorization.ts';
-import { FeishuCardService } from './providers/feishu/card.service.ts';
-import { FeishuCardBuilder } from './providers/feishu/card.builder.ts';
-import type { SendMessagePayload, GenericReportData } from './communication.types.ts';
+import type { SendMessagePayload } from './communication.types.ts';
 
 describe('Communication Center: Role Scopes & Authorization Layer', () => {
   const authService = new CommunicationAuthorizationService();
@@ -219,79 +217,7 @@ describe('Communication Center: Role Scopes & Authorization Layer', () => {
   });
 });
 
-describe('Communication Center: Multi-Module Card Builders', () => {
-  const cardService = new FeishuCardService();
-
-  it('10. Builds Delivery Card with blue theme and metrics', () => {
-    const data: GenericReportData = {
-      module: 'monitoring_delivery',
-      targetDp: 'BATANG01',
-      metrics: [
-        { label: 'Total Resi Delivery', value: '1.250' },
-        { label: 'Selesai TTD', value: '1.180', color: 'green' },
-        { label: 'Pending / Gagal', value: '70', color: 'red' },
-      ],
-      generateTime: '5 Agu 2026 08:00',
-    };
-
-    const card = cardService.generateCard(data);
-    assert.equal(card.header?.title.content, 'LTMS • Monitoring Delivery BATANG01');
-    assert.equal(card.header?.template, 'blue');
-    const elStr = JSON.stringify(card.elements);
-    assert.ok(elStr.includes('Total Resi Delivery'));
-    assert.ok(elStr.includes('1.250'));
-  });
-
-  it('11. Builds Dashboard Summary Card with indigo theme', () => {
-    const data: GenericReportData = {
-      module: 'dashboard',
-      targetScope: { type: 'cabang', name: 'Batang Regional' },
-      total: 50000,
-      belum: 240,
-      late: 12,
-      percent: 99,
-    };
-
-    const card = cardService.generateCard(data);
-    assert.equal(card.header?.title.content, 'LTMS • Ringkasan Dashboard BATANG REGIONAL');
-    assert.equal(card.header?.template, 'indigo');
-    const elStr = JSON.stringify(card.elements);
-    assert.ok(elStr.includes('50.000'));
-    assert.ok(elStr.includes('99%'));
-  });
-
-  it('12. Builds Longtail Card with orange theme', () => {
-    const data: GenericReportData = {
-      module: 'longtail',
-      targetDp: 'BATANG02',
-      metrics: [
-        { label: 'Total Paket Long Tail', value: '45', color: 'orange' },
-        { label: 'Umur > 7 Hari', value: '12', color: 'red' },
-      ],
-    };
-
-    const card = cardService.generateCard(data);
-    assert.equal(card.header?.title.content, 'LTMS • Laporan Long Tail BATANG02');
-    assert.equal(card.header?.template, 'orange');
-    const elStr = JSON.stringify(card.elements);
-    assert.ok(elStr.includes('Total Paket Long Tail'));
-  });
-
-  it('13. Builds Generic Custom Card with custom title and header template', () => {
-    const data: GenericReportData = {
-      module: 'custom',
-      title: 'Laporan SLA Akhir Bulan',
-      headerTemplate: 'turquoise',
-      targetScope: { type: 'kota', name: 'Pekalongan' },
-      metrics: [{ label: 'Pencapaian SLA', value: '98.5%' }],
-      notes: 'Laporan resmi bulanan regional.',
-    };
-
-    const card = cardService.generateCard(data);
-    assert.equal(card.header?.title.content, 'Laporan SLA Akhir Bulan');
-    assert.equal(card.header?.template, 'turquoise');
-    const elStr = JSON.stringify(card.elements);
-    assert.ok(elStr.includes('Pencapaian SLA'));
-    assert.ok(elStr.includes('Laporan resmi bulanan regional.'));
-  });
-});
+// Note: FeishuCardService.generateCard (multi-module title/theme derivation)
+// had zero production callers and was removed along with card.service.ts /
+// card.builder.ts. Multi-module compilation is covered directly against
+// CardCompilerService in configuration/__tests__/template-engine.test.ts.

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
   Users,
@@ -15,102 +16,89 @@ import {
   ShieldCheck,
   Zap,
 } from 'lucide-react';
-import { communicationApi } from '@/services/communication/api-client';
-import type { NormalizedFeishuGroup } from '@/services/communication/dto';
+import type { FeishuGroupConfigRecord } from '@/lib/data/supabase/communication-config';
+import { commApi } from '@/lib/communication-client';
+
+const GROUPS_KEY = ['communication-groups'];
 
 export default function CommunicationGroupsPage() {
-  const [groups, setGroups] = useState<NormalizedFeishuGroup[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
+  const qc = useQueryClient();
   const [syncLatency, setSyncLatency] = useState<number | null>(null);
   const [search, setSearch] = useState('');
 
-  const loadGroups = async () => {
-    try {
-      setLoading(true);
-      const res = await communicationApi.groups.list();
-      if (res.success) {
-        setGroups(res.data || []);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: groups = [], isLoading: loading } = useQuery({
+    queryKey: GROUPS_KEY,
+    queryFn: () => commApi<FeishuGroupConfigRecord[]>('/api/communication/groups'),
+    staleTime: 30 * 1000,
+  });
 
-  useEffect(() => {
-    loadGroups();
-  }, []);
-
-  // Sync groups from remote Feishu API with latency tracker
-  const handleSyncFeishu = async () => {
-    try {
-      setSyncing(true);
+  const syncMut = useMutation({
+    mutationFn: async () => {
       const startTime = performance.now();
-      const res = await communicationApi.groups.sync();
-      const endTime = performance.now();
-      setSyncLatency(Math.round(endTime - startTime));
+      const data = await commApi<FeishuGroupConfigRecord[]>('/api/communication/groups', { method: 'POST' });
+      setSyncLatency(Math.round(performance.now() - startTime));
+      return data;
+    },
+    onSuccess: (data) => qc.setQueryData(GROUPS_KEY, data),
+    onError: (err: Error) => alert(err.message || 'Terjadi kesalahan jaringan saat sync Feishu'),
+  });
 
-      if (res.success) {
-        setGroups(res.data || []);
-      } else {
-        alert(res.error || 'Gagal menyinkronkan group dari Feishu');
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Terjadi kesalahan jaringan saat sync Feishu');
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  // 1-Click Radio Button Set Default Group
-  const handleSetDefault = async (chatId: string) => {
-    try {
-      // Optimistic update
-      setGroups((prev) =>
-        prev.map((g) => ({
-          ...g,
-          is_default: g.chatId === chatId,
-          isDefault: g.chatId === chatId,
-        }))
+  // 1-Click Radio Button Set Default Group - optimistic, auto-rollback via onError.
+  const setDefaultMut = useMutation({
+    mutationFn: (chatId: string) =>
+      commApi('/api/communication/groups', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId, isDefault: true }),
+      }),
+    onMutate: async (chatId) => {
+      await qc.cancelQueries({ queryKey: GROUPS_KEY });
+      const previous = qc.getQueryData<FeishuGroupConfigRecord[]>(GROUPS_KEY);
+      qc.setQueryData<FeishuGroupConfigRecord[]>(GROUPS_KEY, (prev) =>
+        (prev ?? []).map((g) => ({ ...g, is_default: g.chat_id === chatId }))
       );
+      return { previous };
+    },
+    onError: (_err, _chatId, ctx) => {
+      if (ctx?.previous) qc.setQueryData(GROUPS_KEY, ctx.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: GROUPS_KEY }),
+  });
 
-      const res = await communicationApi.groups.setDefault(chatId);
-      if (!res.success) {
-        await loadGroups(); // rollback
-      }
-    } catch (err) {
-      console.error(err);
-      await loadGroups();
-    }
-  };
-
-  // Toggle Connected / Disconnected Status
-  const handleToggleStatus = async (group: NormalizedFeishuGroup) => {
-    const nextStatus = group.status === 'active' ? 'disconnected' : 'active';
-    try {
-      setGroups((prev) =>
-        prev.map((g) =>
-          g.chatId === group.chatId ? { ...g, status: nextStatus } : g
-        )
+  // Toggle Connected / Disconnected Status - optimistic, auto-rollback via onError.
+  const toggleStatusMut = useMutation({
+    mutationFn: (group: FeishuGroupConfigRecord) => {
+      const nextStatus = group.status === 'active' ? 'disconnected' : 'active';
+      return commApi('/api/communication/groups', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId: group.chat_id, status: nextStatus }),
+      });
+    },
+    onMutate: async (group) => {
+      await qc.cancelQueries({ queryKey: GROUPS_KEY });
+      const previous = qc.getQueryData<FeishuGroupConfigRecord[]>(GROUPS_KEY);
+      const nextStatus = group.status === 'active' ? 'disconnected' : 'active';
+      qc.setQueryData<FeishuGroupConfigRecord[]>(GROUPS_KEY, (prev) =>
+        (prev ?? []).map((g) => (g.chat_id === group.chat_id ? { ...g, status: nextStatus } : g))
       );
+      return { previous };
+    },
+    onError: (_err, _group, ctx) => {
+      if (ctx?.previous) qc.setQueryData(GROUPS_KEY, ctx.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: GROUPS_KEY }),
+  });
 
-      const res = await communicationApi.groups.toggleStatus(group.chatId, nextStatus);
-      if (!res.success) {
-        await loadGroups();
-      }
-    } catch (err) {
-      console.error(err);
-      await loadGroups();
-    }
-  };
+  const handleSyncFeishu = () => syncMut.mutate();
+  const handleSetDefault = (chatId: string) => setDefaultMut.mutate(chatId);
+  const handleToggleStatus = (group: FeishuGroupConfigRecord) => toggleStatusMut.mutate(group);
+  const syncing = syncMut.isPending;
 
   const filteredGroups = groups.filter(
     (g) =>
-      g.name.toLowerCase().includes(search.toLowerCase()) ||
-      g.chatId.toLowerCase().includes(search.toLowerCase())
+      g.group_name.toLowerCase().includes(search.toLowerCase()) ||
+      g.chat_id.toLowerCase().includes(search.toLowerCase())
   );
 
   const defaultGroup = groups.find((g) => g.is_default);
@@ -203,7 +191,7 @@ export default function CommunicationGroupsPage() {
           </div>
 
           <button
-            onClick={loadGroups}
+            onClick={() => qc.invalidateQueries({ queryKey: GROUPS_KEY })}
             className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"
             title="Muat ulang tabel"
           >
