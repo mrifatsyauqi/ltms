@@ -7,9 +7,12 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const data = await cardTemplateService.duplicate(id);
-    return NextResponse.json({ ok: true, data });
+    const duplicated = await cardTemplateService.duplicate(id);
+    return NextResponse.json({ success: true, ok: true, data: duplicated });
   } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, ok: false, error: error.message || 'Gagal menduplikasi template' },
+      { status: 500 }
+    );
   }
 }

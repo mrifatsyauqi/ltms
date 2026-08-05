@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { MonitoringRow, MonitoringTable } from './monitoring-table';
 import { FeishuShareDialog, FeishuShareStage } from '@/components/communication/feishu-share-dialog';
 import type { FeishuGroup } from '@/services/communication/communication.types';
+import { communicationApi } from '@/services/communication/api-client';
 
 type Props = {
   dpName: string;
@@ -240,35 +241,30 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
     await new Promise((r) => setTimeout(r, 250));
 
     updateStage('sending_message', 90);
-    const res = await fetch('/api/communication/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        channel: 'feishu',
-        chatId: selectedGroup.chatId || (selectedGroup as any).chat_id,
-        messageType: 'interactive_card',
-        cardTemplateId: selectedCardTemplateId,
-        data: {
-          module: 'monitoring_delivery',
-          targetScope: {
-            type: 'drop_point',
-            name: dpName,
-          },
-          drop_point: dpName,
-          total_delivery: totalDelivery,
-          delivered: totalTtd,
-          pending_delivery: totalBelum,
-          delivery_sla: percentTtd,
-          kurirList,
-          imageBase64: dataUrl,
-          generated_at: new Date().toLocaleString('id-ID'),
+    const res = await communicationApi.send.sendCard({
+      channel: 'feishu',
+      chatId: selectedGroup.chatId || (selectedGroup as any).chat_id,
+      messageType: 'interactive_card',
+      cardTemplateId: selectedCardTemplateId,
+      data: {
+        module: 'monitoring_delivery',
+        targetScope: {
+          type: 'drop_point',
+          name: dpName,
         },
-      }),
+        drop_point: dpName,
+        total_delivery: totalDelivery,
+        delivered: totalTtd,
+        pending_delivery: totalBelum,
+        delivery_sla: percentTtd,
+        kurirList,
+        imageBase64: dataUrl,
+        generated_at: new Date().toLocaleString('id-ID'),
+      },
     });
 
-    const json = await res.json();
-    if (!res.ok || (!json.ok && !json.success)) {
-      throw new Error(json.error || 'Gagal mengirim pesan ke API Feishu.');
+    if (!res.success) {
+      throw new Error(res.error || 'Gagal mengirim pesan ke API Feishu.');
     }
   };
 

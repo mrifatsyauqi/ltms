@@ -30,6 +30,7 @@ import { FeishuCardPreview } from './feishu-card-preview';
 import { STARTER_PRESETS } from '@/services/communication/configuration/template-presets';
 import type { VisualCardBlocksConfig } from '@/services/communication/configuration/template.types';
 import type { MentionMappingRecord } from '@/lib/data/supabase/mention-mapping';
+import { communicationApi } from '@/services/communication/api-client';
 
 export type FeishuShareStage =
   | 'idle'
@@ -188,9 +189,9 @@ export function FeishuShareDialog({
     setIsLoadingGroups(true);
     try {
       const [grpRes, cardRes, mentionRes] = await Promise.all([
-        fetch('/api/communication/groups').then((r) => r.json()),
-        fetch('/api/communication/card-templates?status=active').then((r) => r.json()),
-        fetch('/api/communication/mentions').then((r) => r.json()),
+        communicationApi.groups.list(),
+        communicationApi.cardTemplates.list({ status: 'active' }),
+        communicationApi.mentions.list(),
       ]);
 
       if (grpRes.success && Array.isArray(grpRes.data) && grpRes.data.length > 0) {
@@ -205,14 +206,14 @@ export function FeishuShareDialog({
       }
 
       if (cardRes.success && Array.isArray(cardRes.data)) {
-        setCardTemplates(cardRes.data);
+        setCardTemplates(cardRes.data as any);
         const modKey = moduleName.toLowerCase().includes('delivery') ? 'monitoring_delivery' : 'monitoring_inc';
         const defCard = cardRes.data.find((t: any) => t.module === modKey && t.is_default) || cardRes.data[0];
         if (defCard) setSelectedCardTemplateId(defCard.id);
       }
 
       if (mentionRes.success && Array.isArray(mentionRes.data)) {
-        setMentions(mentionRes.data);
+        setMentions(mentionRes.data as any);
       }
     } catch (err) {
       console.warn('Gagal memuat konfigurasi:', err);
@@ -224,10 +225,9 @@ export function FeishuShareDialog({
   const handleSyncGroups = async () => {
     setIsSyncing(true);
     try {
-      const res = await fetch('/api/communication/groups/sync', { method: 'POST' });
-      const json = await res.json();
-      if (json.success && Array.isArray(json.data)) {
-        const normalized = json.data.map(normalizeFeishuGroup);
+      const res = await communicationApi.groups.sync();
+      if (res.success && Array.isArray(res.data)) {
+        const normalized = res.data.map(normalizeFeishuGroup);
         setGroups(normalized);
         const now = new Date();
         setLastSyncTime(

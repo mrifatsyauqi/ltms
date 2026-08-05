@@ -19,6 +19,7 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
+import { communicationApi } from '@/services/communication/api-client';
 
 interface CommunicationLogItem {
   id: string;
@@ -65,12 +66,11 @@ export function FeishuHistoryDialog(props: FeishuHistoryDialogProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/communication/logs?limit=30');
-      const data = await res.json();
-      if (data.ok && Array.isArray(data.data)) {
-        setLogs(data.data);
+      const res = await communicationApi.logs.list({ limit: 30 });
+      if (res.success && Array.isArray(res.data)) {
+        setLogs(res.data);
       } else {
-        setError(data.error || 'Gagal mengambil riwayat komunikasi.');
+        setError(res.error || 'Gagal mengambil riwayat komunikasi.');
       }
     } catch (err: any) {
       setError(err?.message || 'Terjadi kesalahan jaringan.');

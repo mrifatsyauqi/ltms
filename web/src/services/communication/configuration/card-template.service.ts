@@ -8,6 +8,7 @@ import {
   restoreCardTemplate,
   setDefaultCardTemplate,
   listCardTemplateVersions,
+  getCardTemplateVersionById,
   type CardTemplateRecord,
   type CardTemplateVersionRecord,
   type TemplateStatus,
@@ -182,6 +183,21 @@ export class CardTemplateService {
 
   public async getVersions(cardTemplateId: string): Promise<CardTemplateVersionRecord[]> {
     return listCardTemplateVersions(cardTemplateId);
+  }
+
+  public async rollback(cardTemplateId: string, versionId: string): Promise<boolean> {
+    const versionRecord = await getCardTemplateVersionById(versionId);
+    if (!versionRecord || versionRecord.card_template_id !== cardTemplateId) {
+      throw new Error('Versi template tidak ditemukan');
+    }
+
+    await this.updateFromBlocks(cardTemplateId, {
+      blocks_config: versionRecord.blocks_config as VisualCardBlocksConfig,
+      version_note: `Rollback ke versi ${versionRecord.version}`,
+    });
+
+    memoryCache.clear();
+    return true;
   }
 }
 

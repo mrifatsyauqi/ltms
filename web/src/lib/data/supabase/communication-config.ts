@@ -592,6 +592,24 @@ export async function listCardTemplateVersions(
   }
 }
 
+export async function getCardTemplateVersionById(
+  versionId: string
+): Promise<CardTemplateVersionRecord | null> {
+  try {
+    const supabase = db();
+    const { data, error } = await supabase
+      .from('card_template_versions')
+      .select('*')
+      .eq('id', versionId)
+      .single();
+
+    if (error) return null;
+    return data as CardTemplateVersionRecord;
+  } catch {
+    return null;
+  }
+}
+
 // ==========================================
 // FEISHU GROUPS CONFIGURATION
 // ==========================================

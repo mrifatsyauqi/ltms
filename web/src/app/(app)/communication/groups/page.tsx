@@ -15,10 +15,11 @@ import {
   ShieldCheck,
   Zap,
 } from 'lucide-react';
-import type { FeishuGroupConfigRecord } from '@/lib/data/supabase/communication-config';
+import { communicationApi } from '@/services/communication/api-client';
+import type { NormalizedFeishuGroup } from '@/services/communication/dto';
 
 export default function CommunicationGroupsPage() {
-  const [groups, setGroups] = useState<FeishuGroupConfigRecord[]>([]);
+  const [groups, setGroups] = useState<NormalizedFeishuGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncLatency, setSyncLatency] = useState<number | null>(null);
@@ -27,10 +28,9 @@ export default function CommunicationGroupsPage() {
   const loadGroups = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/communication/groups');
-      const json = await res.json();
-      if (json.ok) {
-        setGroups(json.data || []);
+      const res = await communicationApi.groups.list();
+      if (res.success) {
+        setGroups(res.data || []);
       }
     } catch (err) {
       console.error(err);
@@ -48,15 +48,14 @@ export default function CommunicationGroupsPage() {
     try {
       setSyncing(true);
       const startTime = performance.now();
-      const res = await fetch('/api/communication/groups', { method: 'POST' });
+      const res = await communicationApi.groups.sync();
       const endTime = performance.now();
       setSyncLatency(Math.round(endTime - startTime));
 
-      const json = await res.json();
-      if (json.ok) {
-        setGroups(json.data || []);
+      if (res.success) {
+        setGroups(res.data || []);
       } else {
-        alert(json.error || 'Gagal menyinkronkan group dari Feishu');
+        alert(res.error || 'Gagal menyinkronkan group dari Feishu');
       }
     } catch (err) {
       console.error(err);
@@ -73,18 +72,13 @@ export default function CommunicationGroupsPage() {
       setGroups((prev) =>
         prev.map((g) => ({
           ...g,
-          is_default: g.chat_id === chatId,
+          is_default: g.chatId === chatId,
+          isDefault: g.chatId === chatId,
         }))
       );
 
-      const res = await fetch('/api/communication/groups', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId, isDefault: true }),
-      });
-
-      const json = await res.json();
-      if (!json.ok) {
+      const res = await communicationApi.groups.setDefault(chatId);
+      if (!res.success) {
         await loadGroups(); // rollback
       }
     } catch (err) {
@@ -94,23 +88,17 @@ export default function CommunicationGroupsPage() {
   };
 
   // Toggle Connected / Disconnected Status
-  const handleToggleStatus = async (group: FeishuGroupConfigRecord) => {
+  const handleToggleStatus = async (group: NormalizedFeishuGroup) => {
     const nextStatus = group.status === 'active' ? 'disconnected' : 'active';
     try {
       setGroups((prev) =>
         prev.map((g) =>
-          g.chat_id === group.chat_id ? { ...g, status: nextStatus } : g
+          g.chatId === group.chatId ? { ...g, status: nextStatus } : g
         )
       );
 
-      const res = await fetch('/api/communication/groups', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId: group.chat_id, status: nextStatus }),
-      });
-
-      const json = await res.json();
-      if (!json.ok) {
+      const res = await communicationApi.groups.toggleStatus(group.chatId, nextStatus);
+      if (!res.success) {
         await loadGroups();
       }
     } catch (err) {
@@ -121,8 +109,8 @@ export default function CommunicationGroupsPage() {
 
   const filteredGroups = groups.filter(
     (g) =>
-      g.group_name.toLowerCase().includes(search.toLowerCase()) ||
-      g.chat_id.toLowerCase().includes(search.toLowerCase())
+      g.name.toLowerCase().includes(search.toLowerCase()) ||
+      g.chatId.toLowerCase().includes(search.toLowerCase())
   );
 
   const defaultGroup = groups.find((g) => g.is_default);

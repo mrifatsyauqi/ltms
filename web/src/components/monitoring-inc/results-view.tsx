@@ -21,6 +21,7 @@ import { ReportImageCanvas } from './report-image-canvas';
 import { SmartShareModal, SmartShareStage } from './smart-share-modal';
 import { FeishuShareDialog, FeishuShareStage } from './feishu-share-dialog';
 import { FeishuGroup } from '@/services/communication/communication.types';
+import { communicationApi } from '@/services/communication/api-client';
 
 interface ResultsViewProps {
   data: IncRow[];
@@ -268,41 +269,36 @@ Terima kasih.`;
 
     // 5. Sending Interactive Card Message
     updateStage('sending_message', 90);
-    const res = await fetch('/api/communication/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        channel: 'feishu',
-        chatId: selectedGroup.chatId || (selectedGroup as any).chat_id,
-        messageType: 'interactive_card',
-        cardTemplateId: selectedCardTemplateId,
-        data: {
-          module: 'monitoring_inc',
-          targetScope: {
-            type: 'kota',
-            name: targetKota,
-          },
-          targetKota,
-          pickup_dp: userDropPoint || 'BATANG01',
-          target_city: targetKota,
-          total_inc: stats.total,
-          clear_ttd: stats.clear,
-          pending_ttd: stats.belum,
-          over_sla: stats.late,
-          sla_percentage: stats.percent,
-          subdistricts,
-          topKecamatan,
-          generateTime,
-          generated_at: generateTime,
-          imageBase64: dataUrl,
-          caption,
+    const res = await communicationApi.send.sendCard({
+      channel: 'feishu',
+      chatId: selectedGroup.chatId || (selectedGroup as any).chat_id,
+      messageType: 'interactive_card',
+      cardTemplateId: selectedCardTemplateId,
+      data: {
+        module: 'monitoring_inc',
+        targetScope: {
+          type: 'kota',
+          name: targetKota,
         },
-      }),
+        targetKota,
+        pickup_dp: userDropPoint || 'BATANG01',
+        target_city: targetKota,
+        total_inc: stats.total,
+        clear_ttd: stats.clear,
+        pending_ttd: stats.belum,
+        over_sla: stats.late,
+        sla_percentage: stats.percent,
+        subdistricts,
+        topKecamatan,
+        generateTime,
+        generated_at: generateTime,
+        imageBase64: dataUrl,
+        caption,
+      },
     });
 
-    const json = await res.json();
-    if (!res.ok || (!json.ok && !json.success)) {
-      throw new Error(json.error || 'Gagal mengirim pesan ke API Feishu.');
+    if (!res.success) {
+      throw new Error(res.error || 'Gagal mengirim pesan ke API Feishu.');
     }
   };
 

@@ -5,17 +5,30 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const moduleParam = searchParams.get('module') || undefined;
-    const statusParam = (searchParams.get('status') as any) || undefined;
+    let statusParam = searchParams.get('status') || undefined;
+    const includeArchived = searchParams.get('include_archived') === 'true';
+
+    if (includeArchived || statusParam === 'all') {
+      statusParam = undefined;
+    }
 
     const templates = await cardTemplateService.listTemplates({
       module: moduleParam,
-      status: statusParam,
+      status: (statusParam as any),
     });
 
-    return NextResponse.json({ ok: true, data: templates });
+    return NextResponse.json({
+      success: true,
+      ok: true,
+      data: templates,
+    });
   } catch (error: any) {
     return NextResponse.json(
-      { ok: false, error: error.message || 'Gagal memuat card templates' },
+      {
+        success: false,
+        ok: false,
+        error: error.message || 'Gagal memuat card templates',
+      },
       { status: 500 }
     );
   }
@@ -24,25 +37,40 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    if (!body.template_name || !body.blocks_config || !body.module) {
+    const template_name = body.template_name || body.name;
+    const version_note = body.version_note || body.change_summary || body.description || 'Initial version';
+
+    if (!template_name || !body.blocks_config || !body.module) {
       return NextResponse.json(
-        { ok: false, error: 'template_name, blocks_config, dan module wajib diisi' },
+        {
+          success: false,
+          ok: false,
+          error: 'template_name, blocks_config, dan module wajib diisi',
+        },
         { status: 400 }
       );
     }
 
     const created = await cardTemplateService.createFromBlocks({
       module: body.module,
-      template_name: body.template_name,
+      template_name: template_name.trim(),
       blocks_config: body.blocks_config,
       is_default: Boolean(body.is_default),
-      version_note: body.version_note || 'Initial version',
+      version_note: version_note.trim(),
     });
 
-    return NextResponse.json({ ok: true, data: created });
+    return NextResponse.json({
+      success: true,
+      ok: true,
+      data: created,
+    });
   } catch (error: any) {
     return NextResponse.json(
-      { ok: false, error: error.message || 'Gagal membuat card template' },
+      {
+        success: false,
+        ok: false,
+        error: error.message || 'Gagal membuat card template',
+      },
       { status: 500 }
     );
   }
@@ -53,22 +81,37 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     if (!body.id) {
       return NextResponse.json(
-        { ok: false, error: 'ID card template wajib disertakan' },
+        {
+          success: false,
+          ok: false,
+          error: 'ID card template wajib disertakan',
+        },
         { status: 400 }
       );
     }
 
+    const template_name = body.template_name || body.name;
+    const version_note = body.version_note || body.change_summary || body.description;
+
     const updated = await cardTemplateService.updateFromBlocks(body.id, {
-      template_name: body.template_name,
+      template_name: template_name ? template_name.trim() : undefined,
       blocks_config: body.blocks_config,
-      is_default: body.is_default,
-      version_note: body.version_note,
+      is_default: body.is_default !== undefined ? Boolean(body.is_default) : undefined,
+      version_note: version_note ? version_note.trim() : undefined,
     });
 
-    return NextResponse.json({ ok: true, data: updated });
+    return NextResponse.json({
+      success: true,
+      ok: true,
+      data: updated,
+    });
   } catch (error: any) {
     return NextResponse.json(
-      { ok: false, error: error.message || 'Gagal memperbarui card template' },
+      {
+        success: false,
+        ok: false,
+        error: error.message || 'Gagal memperbarui card template',
+      },
       { status: 500 }
     );
   }
@@ -80,16 +123,27 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get('id');
     if (!id) {
       return NextResponse.json(
-        { ok: false, error: 'ID card template wajib disertakan' },
+        {
+          success: false,
+          ok: false,
+          error: 'ID card template wajib disertakan',
+        },
         { status: 400 }
       );
     }
 
     const success = await cardTemplateService.archive(id);
-    return NextResponse.json({ ok: success });
+    return NextResponse.json({
+      success,
+      ok: success,
+    });
   } catch (error: any) {
     return NextResponse.json(
-      { ok: false, error: error.message || 'Gagal mengarsipkan card template' },
+      {
+        success: false,
+        ok: false,
+        error: error.message || 'Gagal mengarsipkan card template',
+      },
       { status: 500 }
     );
   }

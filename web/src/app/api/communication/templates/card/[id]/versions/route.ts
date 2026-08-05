@@ -8,8 +8,11 @@ export async function GET(
   try {
     const { id } = await params;
     const versions = await cardTemplateService.getVersions(id);
-    return NextResponse.json({ ok: true, data: versions });
+    return NextResponse.json({ success: true, ok: true, data: versions });
   } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, ok: false, error: error.message || 'Gagal memuat riwayat versi' },
+      { status: 500 }
+    );
   }
 }

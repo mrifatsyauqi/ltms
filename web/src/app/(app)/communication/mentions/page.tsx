@@ -23,6 +23,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import type { MentionMappingRecord, MentionScopeType } from '@/lib/data/supabase/mention-mapping';
+import { communicationApi } from '@/services/communication/api-client';
 
 export default function MentionMappingPage() {
   const [mentions, setMentions] = useState<MentionMappingRecord[]>([]);
@@ -81,12 +82,11 @@ export default function MentionMappingPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/communication/mentions');
-      const json = await res.json();
-      if (json.success && Array.isArray(json.data)) {
-        setMentions(json.data);
+      const res = await communicationApi.mentions.list();
+      if (res.success && Array.isArray(res.data)) {
+        setMentions(res.data as any);
       } else {
-        setError(json.error || 'Gagal memuat data mapping mention');
+        setError(res.error || 'Gagal memuat data mapping mention');
       }
     } catch (err: any) {
       setError(err.message || 'Terjadi kesalahan koneksi');
@@ -159,23 +159,18 @@ export default function MentionMappingPage() {
     setValidatingOpenId(true);
     setValidationResult(null);
     try {
-      const res = await fetch('/api/communication/mentions/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ open_id: formData.feishu_open_id }),
-      });
-      const json = await res.json();
-      if (json.success && json.valid) {
+      const res = await communicationApi.mentions.validateOpenId(formData.feishu_open_id);
+      if (res.success && res.data?.valid) {
         setValidationResult({
           valid: true,
-          status: json.status,
-          message: json.message || 'Open ID valid',
+          status: (res.data as any).status || 'valid',
+          message: res.data.message || 'Open ID valid',
         });
       } else {
         setValidationResult({
           valid: false,
           status: 'invalid',
-          message: json.message || json.error || 'Format Open ID tidak valid',
+          message: res.data?.message || res.error || 'Format Open ID tidak valid',
         });
       }
     } catch {
@@ -194,32 +189,22 @@ export default function MentionMappingPage() {
 
     try {
       if (editingId) {
-        const res = await fetch(`/api/communication/mentions/${editingId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
-        });
-        const json = await res.json();
-        if (json.success) {
+        const res = await communicationApi.mentions.update(editingId, formData as any);
+        if (res.success) {
           showToast('Mention mapping berhasil diperbarui');
           setIsModalOpen(false);
           fetchMentions();
         } else {
-          showToast(json.error || 'Gagal menyimpan', 'error');
+          showToast(res.error || 'Gagal menyimpan', 'error');
         }
       } else {
-        const res = await fetch('/api/communication/mentions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
-        });
-        const json = await res.json();
-        if (json.success) {
+        const res = await communicationApi.mentions.create(formData as any);
+        if (res.success) {
           showToast('Mention mapping baru berhasil ditambahkan');
           setIsModalOpen(false);
           fetchMentions();
         } else {
-          showToast(json.error || 'Gagal menambahkan', 'error');
+          showToast(res.error || 'Gagal menambahkan', 'error');
         }
       }
     } catch (err: any) {
@@ -230,15 +215,12 @@ export default function MentionMappingPage() {
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Hapus mapping mention untuk "${name}"?`)) return;
     try {
-      const res = await fetch(`/api/communication/mentions/${id}`, {
-        method: 'DELETE',
-      });
-      const json = await res.json();
-      if (json.success) {
+      const res = await communicationApi.mentions.delete(id);
+      if (res.success) {
         showToast('Mapping berhasil dihapus');
         fetchMentions();
       } else {
-        showToast(json.error || 'Gagal menghapus', 'error');
+        showToast(res.error || 'Gagal menghapus', 'error');
       }
     } catch (err: any) {
       showToast(err.message || 'Gagal menghapus', 'error');
@@ -247,13 +229,8 @@ export default function MentionMappingPage() {
 
   const handleToggleActive = async (item: MentionMappingRecord) => {
     try {
-      const res = await fetch(`/api/communication/mentions/${item.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: !item.is_active }),
-      });
-      const json = await res.json();
-      if (json.success) {
+      const res = await communicationApi.mentions.update(item.id, { is_active: !item.is_active });
+      if (res.success) {
         showToast(`Status mention ${item.pic_name} diubah`);
         fetchMentions();
       }
@@ -284,7 +261,7 @@ export default function MentionMappingPage() {
             scope_type: ['kecamatan', 'drop_point', 'kurir'].includes(scope) ? scope : 'kecamatan',
             scope_key: key.toUpperCase(),
             pic_name: pic,
-            feishu_open_id: openId.startsWith('ou_') ? openId : null,
+            feishu_open_id: openId.startsWith('ou_') ? openId : undefined,
             role,
             is_active: true,
           });
@@ -298,19 +275,14 @@ export default function MentionMappingPage() {
     }
 
     try {
-      const res = await fetch('/api/communication/mentions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bulk: true, items }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        showToast(`${json.count || items.length} mapping berhasil diimpor!`);
+      const res = await communicationApi.mentions.bulkCreate(items);
+      if (res.success) {
+        showToast(`${res.data?.length || items.length} mapping berhasil diimpor!`);
         setIsBulkModalOpen(false);
         setBulkInput('');
         fetchMentions();
       } else {
-        showToast(json.error || 'Gagal impor bulk', 'error');
+        showToast(res.error || 'Gagal impor bulk', 'error');
       }
     } catch (err: any) {
       showToast(err.message || 'Gagal mengimpor', 'error');
