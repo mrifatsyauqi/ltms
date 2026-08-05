@@ -161,5 +161,29 @@ VALUES (
 )
 ON CONFLICT DO NOTHING;
 
--- Refresh PostgREST schema cache
+-- 8. Seed Initial Default Card Templates (Monitoring INC)
+INSERT INTO public.card_templates (id, module, template_name, blocks_config, json_template, is_default, status, version, version_note)
+VALUES (
+    '00000000-0000-0000-0000-000000000002',
+    'monitoring_inc',
+    'Kartu Interaktif Monitoring INC',
+    '{"title": "LTMS • Monitoring INC {{city}}", "theme": "red", "showLogo": true, "showSummary": true, "showKpiGrid": true, "kpiStyle": "4_column", "showTopKecamatan": true, "topKecamatanLimit": 5, "showImage": true, "showFooter": true, "footerText": "Logistics Traceability & Monitoring System (LTMS)", "actionButton": "open_dashboard"}'::jsonb,
+    '{"schema": "2.0", "header": {"title": {"tag": "plain_text", "content": "LTMS • Monitoring INC {{city}}"}, "template": "red"}}'::jsonb,
+    true,
+    'active',
+    'v1.0',
+    'Initial seed card template'
+)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.card_template_versions (card_template_id, version, blocks_config, note)
+VALUES (
+    '00000000-0000-0000-0000-000000000002',
+    'v1.0',
+    '{"title": "LTMS • Monitoring INC {{city}}", "theme": "red", "showLogo": true, "showSummary": true, "showKpiGrid": true, "kpiStyle": "4_column", "showTopKecamatan": true, "topKecamatanLimit": 5, "showImage": true, "showFooter": true, "footerText": "Logistics Traceability & Monitoring System (LTMS)", "actionButton": "open_dashboard"}'::jsonb,
+    'Initial default card template version'
+)
+ON CONFLICT DO NOTHING;
+
+-- 9. Refresh PostgREST schema cache
 NOTIFY pgrst, 'reload schema';
