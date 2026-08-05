@@ -186,6 +186,7 @@ export interface StarterPreset {
   id: string;
   module: TemplateModule;
   name: string;
+  badge?: string;
   description: string;
   messageContent: string;
   blocksConfig: VisualCardBlocksConfig;
@@ -196,6 +197,7 @@ export const STARTER_PRESETS: StarterPreset[] = [
     id: 'preset_monitoring_inc',
     module: 'monitoring_inc',
     name: 'Standar Monitoring INC (Phase 2.6.1)',
+    badge: 'Monitoring INC',
     description: 'Interactive card resmi Monitoring INC dengan 5 Grid KPI, Sub Header, dan daftar Kecamatan Tujuan.',
     messageContent:
       '📊 *LTMS | MONITORING INC*\n' +
@@ -278,6 +280,7 @@ export const STARTER_PRESETS: StarterPreset[] = [
     id: 'preset_monitoring_delivery',
     module: 'monitoring_delivery',
     name: 'Standar Monitoring Delivery (Phase 2.6.1)',
+    badge: 'Monitoring Delivery',
     description: 'Interactive card ringkasan performa delivery Drop Point dilengkapi Last Scan dan 5 KPI Delivery.',
     messageContent:
       '🚚 *LTMS | MONITORING DELIVERY*\n' +
@@ -364,6 +367,7 @@ export const STARTER_PRESETS: StarterPreset[] = [
     id: 'preset_longtail_alert',
     module: 'longtail',
     name: 'Peringatan Paket Long Tail',
+    badge: 'Long Tail',
     description: 'Peringatan operasional khusus paket tertahan (Long Tail SLA breach).',
     messageContent:
       '🚨 *PERINGATAN PAKET LONG TAIL*\n' +
