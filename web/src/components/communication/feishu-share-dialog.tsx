@@ -26,6 +26,8 @@ import type {
   ReportMetricItem,
 } from '@/services/communication/communication.types';
 import { FeishuHistoryDialog } from './feishu-history-dialog';
+import { MessageTemplateEngine } from '@/services/communication/configuration/message-template.engine';
+import type { VisualCardBlocksConfig } from '@/services/communication/configuration/template.types';
 
 export type FeishuShareStage =
   | 'idle'
@@ -146,6 +148,11 @@ export function FeishuShareDialog({
   onExecuteSend,
 }: FeishuShareDialogProps) {
   const [groups, setGroups] = useState<FeishuGroup[]>([]);
+  const [messageTemplates, setMessageTemplates] = useState<any[]>([]);
+  const [cardTemplates, setCardTemplates] = useState<any[]>([]);
+  const [selectedMessageTemplateId, setSelectedMessageTemplateId] = useState<string>('');
+  const [selectedCardTemplateId, setSelectedCardTemplateId] = useState<string>('');
+
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
@@ -170,52 +177,46 @@ export function FeishuShareDialog({
       return;
     }
 
-    fetchGroups();
+    fetchGroupsAndTemplates();
   }, [isOpen]);
 
-  const fetchGroups = async () => {
+  const fetchGroupsAndTemplates = async () => {
     setIsLoadingGroups(true);
     try {
-      const res = await fetch('/api/communication/feishu/groups');
-      const json = await res.json();
-      if (json.ok && Array.isArray(json.data) && json.data.length > 0) {
-        setGroups(json.data);
+      const [grpRes, msgRes, cardRes] = await Promise.all([
+        fetch('/api/communication/groups').then((r) => r.json()),
+        fetch('/api/communication/templates/message?status=active').then((r) => r.json()),
+        fetch('/api/communication/templates/card?status=active').then((r) => r.json()),
+      ]);
 
-        const latestUpdate = json.data[0]?.updatedAt;
-        if (latestUpdate) {
-          const d = new Date(latestUpdate);
-          setLastSyncTime(
-            new Intl.DateTimeFormat('id-ID', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-            }).format(d) + ' WIB'
-          );
-        } else {
-          setLastSyncTime('Hari ini');
-        }
-
-        // Auto match target scope / kota
-        const matched = json.data.find(
-          (g: FeishuGroup) =>
-            g.groupName.toLowerCase() === effectiveScopeName.toLowerCase() ||
-            g.groupName.toLowerCase().includes(effectiveScopeName.toLowerCase())
-        );
-        if (matched) {
-          setSelectedChatId(matched.chatId);
-        } else if (json.data[0]) {
-          setSelectedChatId(json.data[0].chatId);
+      if (grpRes.ok && Array.isArray(grpRes.data) && grpRes.data.length > 0) {
+        setGroups(grpRes.data);
+        const defaultGrp = grpRes.data.find((g: any) => g.is_default);
+        if (defaultGrp) {
+          setSelectedChatId(defaultGrp.chat_id || defaultGrp.chatId);
+        } else if (grpRes.data[0]) {
+          setSelectedChatId(grpRes.data[0].chat_id || grpRes.data[0].chatId);
         }
       } else {
         setGroups(SAMPLE_FALLBACK_GROUPS);
         setSelectedChatId(SAMPLE_FALLBACK_GROUPS[0].chatId);
-        setLastSyncTime('Grup Demo');
+      }
+
+      if (msgRes.ok && Array.isArray(msgRes.data)) {
+        setMessageTemplates(msgRes.data);
+        const defMsg = msgRes.data.find((t: any) => t.is_default) || msgRes.data[0];
+        if (defMsg) setSelectedMessageTemplateId(defMsg.id);
+      }
+
+      if (cardRes.ok && Array.isArray(cardRes.data)) {
+        setCardTemplates(cardRes.data);
+        const defCard = cardRes.data.find((t: any) => t.is_default) || cardRes.data[0];
+        if (defCard) setSelectedCardTemplateId(defCard.id);
       }
     } catch (err) {
-      console.warn('Gagal memuat group dari API, menggunakan daftar lokal:', err);
+      console.warn('Gagal memuat konfigurasi komunikasi:', err);
       setGroups(SAMPLE_FALLBACK_GROUPS);
       setSelectedChatId(SAMPLE_FALLBACK_GROUPS[0].chatId);
-      setLastSyncTime('Lokal');
     } finally {
       setIsLoadingGroups(false);
     }
@@ -474,6 +475,43 @@ export function FeishuShareDialog({
                       )}
                     </div>
 
+                    {/* Template Selectors */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-2.5 bg-slate-50 rounded-[6px] border border-slate-200/80">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                          Template Pesan (Caption)
+                        </label>
+                        <select
+                          value={selectedMessageTemplateId}
+                          onChange={(e) => setSelectedMessageTemplateId(e.target.value)}
+                          className="w-full px-2.5 py-1 bg-white border border-slate-200 rounded-[5px] text-xs font-medium text-slate-800 focus:outline-none focus:border-[#E2231A]"
+                        >
+                          {messageTemplates.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.template_name} {t.is_default ? '★ (Default)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                          Desain Kartu (Card Template)
+                        </label>
+                        <select
+                          value={selectedCardTemplateId}
+                          onChange={(e) => setSelectedCardTemplateId(e.target.value)}
+                          className="w-full px-2.5 py-1 bg-white border border-slate-200 rounded-[5px] text-xs font-medium text-slate-800 focus:outline-none focus:border-[#E2231A]"
+                        >
+                          {cardTemplates.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.template_name} {t.is_default ? '★ (Default)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
                     <div className="flex items-center gap-2">
                       <div className="relative flex-1">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-slate-400" />
@@ -509,7 +547,7 @@ export function FeishuShareDialog({
                       </div>
                     )}
 
-                    <div className="space-y-1.5 max-h-[190px] overflow-y-auto pr-1">
+                    <div className="space-y-1.5 max-h-[170px] overflow-y-auto pr-1">
                       {isLoadingGroups ? (
                         <div className="py-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
                           <Loader2 className="size-4 animate-spin text-[#E2231A]" />
@@ -520,12 +558,14 @@ export function FeishuShareDialog({
                           Tidak ada group Feishu yang cocok dengan pencarian.
                         </div>
                       ) : (
-                        filteredGroups.map((group) => {
-                          const isSelected = selectedChatId === group.chatId;
+                        filteredGroups.map((group: any) => {
+                          const cId = group.chat_id || group.chatId;
+                          const gName = group.group_name || group.groupName;
+                          const isSelected = selectedChatId === cId;
                           return (
                             <label
-                              key={group.chatId}
-                              onClick={() => setSelectedChatId(group.chatId)}
+                              key={cId}
+                              onClick={() => setSelectedChatId(cId)}
                               className={`flex items-center justify-between p-2.5 rounded-[6px] border transition-all cursor-pointer ${
                                 isSelected
                                   ? 'border-[#E2231A] bg-red-50/40 shadow-2xs ring-1 ring-[#E2231A]'
@@ -537,23 +577,30 @@ export function FeishuShareDialog({
                                   type="radio"
                                   name="feishu_group"
                                   checked={isSelected}
-                                  onChange={() => setSelectedChatId(group.chatId)}
+                                  onChange={() => setSelectedChatId(cId)}
                                   className="size-3.5 text-[#E2231A] focus:ring-[#E2231A] accent-[#E2231A]"
                                 />
                                 <div>
-                                  <p className="text-xs font-bold text-slate-900 leading-tight">
-                                    {group.groupName}
-                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-xs font-bold text-slate-900 leading-tight">
+                                      {gName}
+                                    </p>
+                                    {group.is_default && (
+                                      <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                                        Default
+                                      </span>
+                                    )}
+                                  </div>
                                   <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                                    ID: {group.chatId}
+                                    ID: {cId}
                                   </p>
                                 </div>
                               </div>
 
-                              {group.memberCount ? (
+                              {group.member_count || group.memberCount ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
                                   <Users className="size-3 text-slate-400" />
-                                  {group.memberCount}
+                                  {group.member_count || group.memberCount}
                                 </span>
                               ) : null}
                             </label>
@@ -565,78 +612,98 @@ export function FeishuShareDialog({
                 )}
 
                 {/* TAB 2: PREVIEW CARD */}
-                {activeTab === 'preview_card' && (
-                  <div className="space-y-3">
-                    <div className="p-1 rounded-[8px] bg-slate-100/70 border border-slate-200">
-                      <div className="bg-white rounded-[6px] border border-slate-200/90 shadow-sm overflow-hidden text-xs">
-                        <div className="bg-[#E2231A] text-white p-3 font-semibold text-xs flex items-center justify-between">
-                          <span>LTMS • {moduleName.toUpperCase()} {effectiveScopeName.toUpperCase()}</span>
-                          <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full">
-                            Interactive Card
-                          </span>
-                        </div>
+                {activeTab === 'preview_card' && (() => {
+                  const currentCardTpl = cardTemplates.find((t) => t.id === selectedCardTemplateId);
+                  const blocksConfig: VisualCardBlocksConfig | undefined = currentCardTpl?.blocks_config;
+                  const headerBg =
+                    blocksConfig?.theme === 'dark'
+                      ? 'bg-slate-800'
+                      : blocksConfig?.theme === 'blue'
+                      ? 'bg-blue-600'
+                      : blocksConfig?.theme === 'green'
+                      ? 'bg-emerald-600'
+                      : 'bg-[#E2231A]';
 
-                        <div className="p-3.5 space-y-3">
-                          <div className="grid grid-cols-2 gap-2 text-[11px] pb-2 border-b border-slate-100">
-                            <div>
-                              <p className="text-slate-500">Cakupan Scope:</p>
-                              <p className="font-bold text-slate-900">📍 {effectiveScopeName.toUpperCase()}</p>
-                            </div>
-                            <div>
-                              <p className="text-slate-500">Waktu Generate:</p>
-                              <p className="font-semibold text-slate-700">🕒 {generateTime || 'Sekarang'} WIB</p>
-                            </div>
+                  return (
+                    <div className="space-y-3">
+                      <div className="p-1 rounded-[8px] bg-slate-100/70 border border-slate-200">
+                        <div className="bg-white rounded-[6px] border border-slate-200/90 shadow-sm overflow-hidden text-xs">
+                          <div className={`${headerBg} text-white p-3 font-semibold text-xs flex items-center justify-between`}>
+                            <span>
+                              {blocksConfig?.title
+                                ? MessageTemplateEngine.render(blocksConfig.title, {
+                                    city: effectiveScopeName,
+                                    module: moduleName,
+                                  })
+                                : `LTMS • ${moduleName.toUpperCase()} ${effectiveScopeName.toUpperCase()}`}
+                            </span>
+                            <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full">
+                              Interactive Card
+                            </span>
                           </div>
 
-                          {summaryData?.metrics && summaryData.metrics.length > 0 ? (
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                              {summaryData.metrics.map((m, idx) => (
-                                <div key={idx} className="p-2 rounded-[6px] bg-slate-50 border border-slate-100">
-                                  <p className="text-[10px] text-slate-500 font-medium">{m.label}</p>
+                          <div className="p-3.5 space-y-3">
+                            <div className="grid grid-cols-2 gap-2 text-[11px] pb-2 border-b border-slate-100">
+                              <div>
+                                <p className="text-slate-500">Cakupan Scope:</p>
+                                <p className="font-bold text-slate-900">📍 {effectiveScopeName.toUpperCase()}</p>
+                              </div>
+                              <div>
+                                <p className="text-slate-500">Waktu Generate:</p>
+                                <p className="font-semibold text-slate-700">🕒 {generateTime || 'Sekarang'} WIB</p>
+                              </div>
+                            </div>
+
+                            {summaryData?.metrics && summaryData.metrics.length > 0 ? (
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                {summaryData.metrics.map((m, idx) => (
+                                  <div key={idx} className="p-2 rounded-[6px] bg-slate-50 border border-slate-100">
+                                    <p className="text-[10px] text-slate-500 font-medium">{m.label}</p>
+                                    <p className="text-sm font-bold text-slate-900 font-mono">
+                                      {String(m.value)}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div className="p-2 rounded-[6px] bg-slate-50 border border-slate-100">
+                                  <p className="text-[10px] text-slate-500 font-medium">📦 Total Resi</p>
                                   <p className="text-sm font-bold text-slate-900 font-mono">
-                                    {String(m.value)}
+                                    {summaryData?.total ? summaryData.total.toLocaleString('id-ID') : '-'}
                                   </p>
                                 </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                              <div className="p-2 rounded-[6px] bg-slate-50 border border-slate-100">
-                                <p className="text-[10px] text-slate-500 font-medium">📦 Total Resi</p>
-                                <p className="text-sm font-bold text-slate-900 font-mono">
-                                  {summaryData?.total ? summaryData.total.toLocaleString('id-ID') : '-'}
-                                </p>
+                                <div className="p-2 rounded-[6px] bg-slate-50 border border-slate-100">
+                                  <p className="text-[10px] text-slate-500 font-medium">⏳ Belum TTD</p>
+                                  <p className="text-sm font-bold text-slate-900 font-mono">
+                                    {summaryData?.belum ? summaryData.belum.toLocaleString('id-ID') : '-'}
+                                  </p>
+                                </div>
+                                <div className="p-2 rounded-[6px] bg-red-50/50 border border-red-100">
+                                  <p className="text-[10px] text-red-600 font-medium">🚨 Lewat SLA</p>
+                                  <p className="text-sm font-bold text-red-600 font-mono">
+                                    {summaryData?.late ? summaryData.late.toLocaleString('id-ID') : '-'}
+                                  </p>
+                                </div>
+                                <div className="p-2 rounded-[6px] bg-emerald-50/50 border border-emerald-100">
+                                  <p className="text-[10px] text-emerald-600 font-medium">📈 Progress</p>
+                                  <p className="text-sm font-bold text-emerald-600 font-mono">
+                                    {summaryData?.percent !== undefined ? `${summaryData.percent}%` : '-'}
+                                  </p>
+                                </div>
                               </div>
-                              <div className="p-2 rounded-[6px] bg-slate-50 border border-slate-100">
-                                <p className="text-[10px] text-slate-500 font-medium">⏳ Belum TTD</p>
-                                <p className="text-sm font-bold text-slate-900 font-mono">
-                                  {summaryData?.belum ? summaryData.belum.toLocaleString('id-ID') : '-'}
-                                </p>
-                              </div>
-                              <div className="p-2 rounded-[6px] bg-red-50/50 border border-red-100">
-                                <p className="text-[10px] text-red-600 font-medium">🚨 Lewat SLA</p>
-                                <p className="text-sm font-bold text-red-600 font-mono">
-                                  {summaryData?.late ? summaryData.late.toLocaleString('id-ID') : '-'}
-                                </p>
-                              </div>
-                              <div className="p-2 rounded-[6px] bg-emerald-50/50 border border-emerald-100">
-                                <p className="text-[10px] text-emerald-600 font-medium">📈 Progress</p>
-                                <p className="text-sm font-bold text-emerald-600 font-mono">
-                                  {summaryData?.percent !== undefined ? `${summaryData.percent}%` : '-'}
-                                </p>
-                              </div>
-                            </div>
-                          )}
+                            )}
 
-                          <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center justify-between">
-                            <span>Generated by LTMS Enterprise</span>
-                            <span>Target Group: {selectedGroup?.groupName || '-'}</span>
+                            <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center justify-between">
+                              <span>{blocksConfig?.footerText || 'Generated by LTMS Enterprise'}</span>
+                              <span>Target Group: {selectedGroup ? ((selectedGroup as any).group_name || selectedGroup.groupName) : '-'}</span>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* TAB 3: PREVIEW GAMBAR */}
                 {activeTab === 'preview_image' && (
@@ -662,19 +729,33 @@ export function FeishuShareDialog({
                 )}
 
                 {/* TAB 4: PREVIEW CAPTION */}
-                {activeTab === 'preview_caption' && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-slate-500">
-                      Teks ringkasan yang disertakan dalam pengiriman:
-                    </p>
-                    <pre className="p-3 bg-slate-50 border border-slate-200 rounded-[6px] text-[11px] font-mono text-slate-700 whitespace-pre-wrap max-h-[200px] overflow-y-auto">
-                      {captionPreview ||
-                        `📊 ${moduleName.toUpperCase()}\nCakupan: ${effectiveScopeName}\nTotal Resi: ${
-                          summaryData?.total || 0
-                        }`}
-                    </pre>
-                  </div>
-                )}
+                {activeTab === 'preview_caption' && (() => {
+                  const currentMsgTpl = messageTemplates.find((t) => t.id === selectedMessageTemplateId);
+                  const renderedText = currentMsgTpl
+                    ? MessageTemplateEngine.render(currentMsgTpl.content, {
+                        city: effectiveScopeName,
+                        total_package: summaryData?.total || 0,
+                        pending_package: summaryData?.belum || 0,
+                        over_sla: summaryData?.late || 0,
+                        progress: summaryData?.percent || 0,
+                        district_list: summaryData?.topKecamatan?.join('\n') || '',
+                      })
+                    : captionPreview ||
+                      `📊 ${moduleName.toUpperCase()}\nCakupan: ${effectiveScopeName}\nTotal Resi: ${
+                        summaryData?.total || 0
+                      }`;
+
+                  return (
+                    <div className="space-y-2">
+                      <p className="text-xs text-slate-500">
+                        Teks ringkasan yang disertakan dalam pengiriman:
+                      </p>
+                      <pre className="p-3 bg-slate-50 border border-slate-200 rounded-[6px] text-[11px] font-mono text-slate-700 whitespace-pre-wrap max-h-[200px] overflow-y-auto">
+                        {renderedText}
+                      </pre>
+                    </div>
+                  );
+                })()}
 
                 {/* Action Footer */}
                 <div className="flex items-center justify-between pt-3 border-t border-slate-100">

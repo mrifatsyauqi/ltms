@@ -24,6 +24,9 @@ export class CommunicationController {
       data: body.data,
       textContent: body.textContent,
       senderEmail: userEmail,
+      templateId: body.templateId,
+      cardTemplateId: body.cardTemplateId,
+      cardConfig: body.cardConfig,
     };
 
     const result = await communicationService.send(payload);

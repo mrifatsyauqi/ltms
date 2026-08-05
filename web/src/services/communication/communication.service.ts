@@ -74,6 +74,16 @@ export class CommunicationService implements ICommunicationService {
     // Eksekusi pengiriman melalui provider
     const result = await provider.sendMessage(payload);
 
+    // Jika sukses kirim, update last_send di feishu_groups
+    if (result.ok && payload.chatId) {
+      try {
+        const { groupService } = await import('./configuration/group.service');
+        await groupService.recordSend(payload.chatId);
+      } catch {
+        // silent fail on non-critical metadata update
+      }
+    }
+
     // Audit Logging ke Supabase Database
     await CommunicationLogger.log({
       channel,

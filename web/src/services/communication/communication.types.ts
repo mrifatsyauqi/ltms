@@ -77,6 +77,9 @@ export interface SendMessagePayload {
   data?: GenericReportData;
   textContent?: string;
   senderEmail?: string;
+  templateId?: string;
+  cardTemplateId?: string;
+  cardConfig?: Record<string, any>;
 }
 
 export interface SendMessageResult {

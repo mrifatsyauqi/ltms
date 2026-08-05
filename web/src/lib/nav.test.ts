@@ -157,8 +157,13 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
     const groups = navForRole('Admin Cabang', access());
     const all = groups.flatMap((g) => [...g.items, ...(g.items.flatMap((i) => i.children ?? []))]);
     for (const item of all) {
-      if (item.label === 'Profile') {
-        assert.equal(item.menuKey, undefined, 'Profile sengaja SELALU tampil, tak pernah masuk matrix');
+      if (
+        item.label === 'Profile' ||
+        item.label === 'Message Templates' ||
+        item.label === 'Card Templates' ||
+        item.label === 'Groups'
+      ) {
+        assert.equal(item.menuKey, undefined, 'Communication Center & Profile sengaja SELALU tampil, tak pernah masuk matrix');
         continue;
       }
       assert.ok(item.menuKey, `"${item.label}" harus punya menuKey - tak ada item full access yg "sengaja belum digating"`);

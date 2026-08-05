@@ -46,10 +46,15 @@ export class FeishuMessageService implements ICommunicationProvider {
 
         if (payload.messageType === 'interactive_card' && payload.data) {
           msgType = 'interactive';
-          contentObj = feishuCardService.generateCard(
-            payload.data,
-            uploadedImageKey
-          );
+          if (payload.cardConfig) {
+            const { CardCompilerService } = await import('../../configuration/card-compiler.service');
+            contentObj = CardCompilerService.compile(payload.cardConfig as any, payload.data, uploadedImageKey);
+          } else {
+            contentObj = feishuCardService.generateCard(
+              payload.data,
+              uploadedImageKey
+            );
+          }
         } else if (payload.messageType === 'image' && uploadedImageKey) {
           msgType = 'image';
           contentObj = { image_key: uploadedImageKey };
