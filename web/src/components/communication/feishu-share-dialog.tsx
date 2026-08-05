@@ -612,6 +612,7 @@ export function FeishuShareDialog({
                 )}
 
                 {/* TAB 2: PREVIEW CARD */}
+                {/* TAB 2: PREVIEW CARD */}
                 {activeTab === 'preview_card' && (() => {
                   const currentCardTpl = cardTemplates.find((t) => t.id === selectedCardTemplateId);
                   const blocksConfig: VisualCardBlocksConfig | undefined = currentCardTpl?.blocks_config;
@@ -624,79 +625,163 @@ export function FeishuShareDialog({
                       ? 'bg-emerald-600'
                       : 'bg-[#E2231A]';
 
+                  const previewVarContext = {
+                    pickup_dp: effectiveScopeName,
+                    drop_point: effectiveScopeName,
+                    target_city: effectiveScopeName,
+                    city: effectiveScopeName,
+                    target_kota: effectiveScopeName,
+                    generated_at: generateTime || '05 Agustus 2026 08.30 WIB',
+                    today: '05 Agu 2026',
+                    time: '08:30 WIB',
+                    total_inc: summaryData?.total?.toLocaleString('id-ID') || '0',
+                    total_package: summaryData?.total?.toLocaleString('id-ID') || '0',
+                    total_arrived: summaryData?.total?.toLocaleString('id-ID') || '0',
+                    total_delivery: summaryData?.total?.toLocaleString('id-ID') || '0',
+                    clear_ttd: summaryData?.clear?.toLocaleString('id-ID') || '0',
+                    pending_ttd: summaryData?.belum?.toLocaleString('id-ID') || '0',
+                    pending_package: summaryData?.belum?.toLocaleString('id-ID') || '0',
+                    over_sla: summaryData?.late?.toLocaleString('id-ID') || '0',
+                    sla_percentage: summaryData?.percent !== undefined ? String(summaryData.percent) : '0',
+                    delivery_percentage: summaryData?.percent !== undefined ? String(summaryData.percent) : '0',
+                    progress: summaryData?.percent !== undefined ? String(summaryData.percent) : '0',
+                    last_scan_time: '05 Agustus 2026 08:26 WIB',
+                    last_scan_awb: 'JT1234567890',
+                    last_scan_status: 'Delivery',
+                    destination_subdistricts: summaryData?.topKecamatan?.join('\n') || 'Belum ada data',
+                    district_list: summaryData?.topKecamatan?.join('\n') || '',
+                    footer: blocksConfig?.footer?.description || 'LTMS\nLong Tail Monitoring System\nGenerated Automatically',
+                  };
+
                   return (
                     <div className="space-y-3">
                       <div className="p-1 rounded-[8px] bg-slate-100/70 border border-slate-200">
                         <div className="bg-white rounded-[6px] border border-slate-200/90 shadow-sm overflow-hidden text-xs">
+                          {/* Banner Header */}
                           <div className={`${headerBg} text-white p-3 font-semibold text-xs flex items-center justify-between`}>
-                            <span>
-                              {blocksConfig?.title
-                                ? MessageTemplateEngine.render(blocksConfig.title, {
-                                    city: effectiveScopeName,
-                                    module: moduleName,
-                                  })
-                                : `LTMS • ${moduleName.toUpperCase()} ${effectiveScopeName.toUpperCase()}`}
-                            </span>
-                            <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full">
-                              Interactive Card
+                            <div>
+                              <div className="font-bold text-xs">
+                                {MessageTemplateEngine.render(
+                                  blocksConfig?.header?.title || blocksConfig?.title || `LTMS | ${moduleName.toUpperCase()}`,
+                                  previewVarContext
+                                )}
+                              </div>
+                              {blocksConfig?.header?.subtitle && (
+                                <div className="text-[10px] text-white/80 font-normal mt-0.5">
+                                  {MessageTemplateEngine.render(blocksConfig.header.subtitle, previewVarContext)}
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-[9px] bg-white/20 px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold">
+                              Feishu Card
                             </span>
                           </div>
 
                           <div className="p-3.5 space-y-3">
+                            {/* Header Info */}
                             <div className="grid grid-cols-2 gap-2 text-[11px] pb-2 border-b border-slate-100">
-                              <div>
-                                <p className="text-slate-500">Cakupan Scope:</p>
-                                <p className="font-bold text-slate-900">📍 {effectiveScopeName.toUpperCase()}</p>
-                              </div>
-                              <div>
-                                <p className="text-slate-500">Waktu Generate:</p>
-                                <p className="font-semibold text-slate-700">🕒 {generateTime || 'Sekarang'} WIB</p>
-                              </div>
+                              {blocksConfig?.header?.showPickupDp && (
+                                <div>
+                                  <p className="text-slate-400 font-semibold">{blocksConfig.header.pickupDpLabel || 'Pickup DP'}:</p>
+                                  <p className="font-bold text-slate-800">
+                                    {MessageTemplateEngine.render(blocksConfig.header.pickupDpValue || '{{pickup_dp}}', previewVarContext)}
+                                  </p>
+                                </div>
+                              )}
+                              {blocksConfig?.header?.showTargetCity && (
+                                <div>
+                                  <p className="text-slate-400 font-semibold">{blocksConfig.header.targetCityLabel || 'Tujuan'}:</p>
+                                  <p className="font-bold text-slate-800">
+                                    {MessageTemplateEngine.render(blocksConfig.header.targetCityValue || '{{target_city}}', previewVarContext)}
+                                  </p>
+                                </div>
+                              )}
+                              {blocksConfig?.header?.showUpdate && (
+                                <div className="col-span-2 pt-0.5">
+                                  <p className="text-slate-400 font-semibold">{blocksConfig.header.updateLabel || 'Update'}:</p>
+                                  <p className="font-medium text-slate-700">
+                                    {MessageTemplateEngine.render(blocksConfig.header.updateValue || '{{generated_at}}', previewVarContext)}
+                                  </p>
+                                </div>
+                              )}
                             </div>
 
-                            {summaryData?.metrics && summaryData.metrics.length > 0 ? (
-                              <div className="grid grid-cols-2 gap-2 text-xs">
-                                {summaryData.metrics.map((m, idx) => (
-                                  <div key={idx} className="p-2 rounded-[6px] bg-slate-50 border border-slate-100">
-                                    <p className="text-[10px] text-slate-500 font-medium">{m.label}</p>
-                                    <p className="text-sm font-bold text-slate-900 font-mono">
-                                      {String(m.value)}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="grid grid-cols-2 gap-2 text-xs">
-                                <div className="p-2 rounded-[6px] bg-slate-50 border border-slate-100">
-                                  <p className="text-[10px] text-slate-500 font-medium">📦 Total Resi</p>
-                                  <p className="text-sm font-bold text-slate-900 font-mono">
-                                    {summaryData?.total ? summaryData.total.toLocaleString('id-ID') : '-'}
-                                  </p>
+                            {/* Last Scan Block */}
+                            {blocksConfig?.lastScan?.show && (
+                              <div className="p-2 bg-slate-50 rounded border border-slate-200 text-[11px] space-y-0.5">
+                                <div className="font-bold text-slate-800">{blocksConfig.lastScan.title || 'Last Scan'}</div>
+                                <div className="text-slate-600 text-[10px]">
+                                  • Waktu: <strong className="text-slate-800">{MessageTemplateEngine.render(blocksConfig.lastScan.scanTimeValue, previewVarContext)}</strong>
                                 </div>
-                                <div className="p-2 rounded-[6px] bg-slate-50 border border-slate-100">
-                                  <p className="text-[10px] text-slate-500 font-medium">⏳ Belum TTD</p>
-                                  <p className="text-sm font-bold text-slate-900 font-mono">
-                                    {summaryData?.belum ? summaryData.belum.toLocaleString('id-ID') : '-'}
-                                  </p>
+                                <div className="text-slate-600 text-[10px]">
+                                  • AWB: <strong className="text-slate-800">{MessageTemplateEngine.render(blocksConfig.lastScan.awbValue, previewVarContext)}</strong>
                                 </div>
-                                <div className="p-2 rounded-[6px] bg-red-50/50 border border-red-100">
-                                  <p className="text-[10px] text-red-600 font-medium">🚨 Lewat SLA</p>
-                                  <p className="text-sm font-bold text-red-600 font-mono">
-                                    {summaryData?.late ? summaryData.late.toLocaleString('id-ID') : '-'}
-                                  </p>
-                                </div>
-                                <div className="p-2 rounded-[6px] bg-emerald-50/50 border border-emerald-100">
-                                  <p className="text-[10px] text-emerald-600 font-medium">📈 Progress</p>
-                                  <p className="text-sm font-bold text-emerald-600 font-mono">
-                                    {summaryData?.percent !== undefined ? `${summaryData.percent}%` : '-'}
-                                  </p>
+                                <div className="text-slate-600 text-[10px]">
+                                  • Status: <strong className="text-slate-800">{MessageTemplateEngine.render(blocksConfig.lastScan.statusValue, previewVarContext)}</strong>
                                 </div>
                               </div>
                             )}
 
-                            <div className="pt-2 border-t border-slate-100 text-[10px] text-slate-400 flex items-center justify-between">
-                              <span>{blocksConfig?.footerText || 'Generated by LTMS Enterprise'}</span>
-                              <span>Target Group: {selectedGroup ? ((selectedGroup as any).group_name || selectedGroup.groupName) : '-'}</span>
+                            {/* KPI Grid */}
+                            {blocksConfig?.kpiGrid ? (
+                              <div className="space-y-1">
+                                <div className="text-[11px] font-bold text-slate-800">
+                                  📊 {blocksConfig.kpiGrid.title || 'Ringkasan Monitoring'}
+                                </div>
+                                <div className="grid grid-cols-2 gap-1.5 text-xs">
+                                  {(blocksConfig.kpiGrid.items || []).map((kpi, idx) => (
+                                    <div key={idx} className="p-2 rounded bg-slate-50 border border-slate-100">
+                                      <p className="text-[10px] text-slate-500 font-medium truncate">{kpi.label}</p>
+                                      <p
+                                        className={`text-xs font-bold font-mono mt-0.5 ${
+                                          kpi.color === 'red'
+                                            ? 'text-[#E2231A]'
+                                            : kpi.color === 'green'
+                                            ? 'text-emerald-600'
+                                            : kpi.color === 'blue'
+                                            ? 'text-blue-600'
+                                            : 'text-slate-900'
+                                        }`}
+                                      >
+                                        {MessageTemplateEngine.render(kpi.valueTemplate, previewVarContext)}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : summaryData?.metrics && summaryData.metrics.length > 0 ? (
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                {summaryData.metrics.map((m, idx) => (
+                                  <div key={idx} className="p-2 rounded-[6px] bg-slate-50 border border-slate-100">
+                                    <p className="text-[10px] text-slate-500 font-medium">{m.label}</p>
+                                    <p className="text-sm font-bold text-slate-900 font-mono">{String(m.value)}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+
+                            {/* Kecamatan List */}
+                            {blocksConfig?.subdistricts?.show && (
+                              <div className="pt-1 border-t border-slate-100 text-[10px] space-y-1">
+                                <div className="font-bold text-slate-800">{blocksConfig.subdistricts.title || '📍 Kecamatan Tujuan'}</div>
+                                <div className="p-2 bg-slate-50 rounded border border-slate-200 text-slate-600 whitespace-pre-line leading-relaxed">
+                                  {summaryData?.topKecamatan?.join('\n') || 'BATANG (31 AWB)\nWARUNGASEM (26 AWB)\nLIMPUNG (23 AWB)'}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Action Button */}
+                            {blocksConfig?.actionButton?.enabled && (
+                              <div className="pt-1">
+                                <div className="w-full py-1.5 bg-[#E2231A] text-white text-center rounded font-bold text-[11px] shadow-xs">
+                                  {blocksConfig.actionButton.label || '🚀 Buka Dashboard LTMS'}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Footer */}
+                            <div className="pt-2 border-t border-slate-100 text-[9px] text-slate-400 text-center leading-tight whitespace-pre-line">
+                              {blocksConfig?.footer?.description || blocksConfig?.footerText || 'Logistics Traceability & Monitoring System (LTMS)'}
                             </div>
                           </div>
                         </div>
@@ -731,15 +816,36 @@ export function FeishuShareDialog({
                 {/* TAB 4: PREVIEW CAPTION */}
                 {activeTab === 'preview_caption' && (() => {
                   const currentMsgTpl = messageTemplates.find((t) => t.id === selectedMessageTemplateId);
+                  const previewVarContext = {
+                    pickup_dp: effectiveScopeName,
+                    drop_point: effectiveScopeName,
+                    target_city: effectiveScopeName,
+                    city: effectiveScopeName,
+                    target_kota: effectiveScopeName,
+                    generated_at: generateTime || '05 Agustus 2026 08.30 WIB',
+                    today: '05 Agu 2026',
+                    time: '08:30 WIB',
+                    total_inc: summaryData?.total?.toLocaleString('id-ID') || '0',
+                    total_package: summaryData?.total?.toLocaleString('id-ID') || '0',
+                    total_arrived: summaryData?.total?.toLocaleString('id-ID') || '0',
+                    total_delivery: summaryData?.total?.toLocaleString('id-ID') || '0',
+                    clear_ttd: summaryData?.clear?.toLocaleString('id-ID') || '0',
+                    pending_ttd: summaryData?.belum?.toLocaleString('id-ID') || '0',
+                    pending_package: summaryData?.belum?.toLocaleString('id-ID') || '0',
+                    over_sla: summaryData?.late?.toLocaleString('id-ID') || '0',
+                    sla_percentage: summaryData?.percent !== undefined ? String(summaryData.percent) : '0',
+                    delivery_percentage: summaryData?.percent !== undefined ? String(summaryData.percent) : '0',
+                    progress: summaryData?.percent !== undefined ? String(summaryData.percent) : '0',
+                    last_scan_time: '05 Agustus 2026 08:26 WIB',
+                    last_scan_awb: 'JT1234567890',
+                    last_scan_status: 'Delivery',
+                    destination_subdistricts: summaryData?.topKecamatan?.join('\n') || 'Belum ada data',
+                    district_list: summaryData?.topKecamatan?.join('\n') || '',
+                    footer: 'LTMS\nLong Tail Monitoring System\nGenerated Automatically',
+                  };
+
                   const renderedText = currentMsgTpl
-                    ? MessageTemplateEngine.render(currentMsgTpl.content, {
-                        city: effectiveScopeName,
-                        total_package: summaryData?.total || 0,
-                        pending_package: summaryData?.belum || 0,
-                        over_sla: summaryData?.late || 0,
-                        progress: summaryData?.percent || 0,
-                        district_list: summaryData?.topKecamatan?.join('\n') || '',
-                      })
+                    ? MessageTemplateEngine.render(currentMsgTpl.content, previewVarContext)
                     : captionPreview ||
                       `📊 ${moduleName.toUpperCase()}\nCakupan: ${effectiveScopeName}\nTotal Resi: ${
                         summaryData?.total || 0

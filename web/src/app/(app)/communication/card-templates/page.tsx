@@ -21,32 +21,90 @@ import {
   ExternalLink,
   Image as ImageIcon,
   Check,
+  Clock,
+  Package,
+  AlertTriangle,
+  TrendingUp,
+  MapPin,
+  Truck,
+  Trash2,
+  Settings,
+  LayoutGrid,
 } from 'lucide-react';
 import type { CardTemplateRecord, CardTemplateVersionRecord } from '@/lib/data/supabase/communication-config';
 import type { StarterPreset } from '@/services/communication/configuration/template-presets';
-import type { VisualCardBlocksConfig, CardTheme, KpiGridStyle } from '@/services/communication/configuration/template.types';
+import type {
+  VisualCardBlocksConfig,
+  CardTheme,
+  KpiGridStyle,
+  CardKpiItem,
+} from '@/services/communication/configuration/template.types';
 import { MessageTemplateEngine } from '@/services/communication/configuration/message-template.engine';
 
 const THEMES: Array<{ id: CardTheme; name: string; bgClass: string; hex: string }> = [
   { id: 'red', name: 'J&T Red', bgClass: 'bg-[#E2231A]', hex: '#E2231A' },
-  { id: 'dark', name: 'Dark Slate', bgClass: 'bg-slate-800', hex: '#1E293B' },
   { id: 'blue', name: 'Royal Blue', bgClass: 'bg-blue-600', hex: '#2563EB' },
+  { id: 'dark', name: 'Dark Slate', bgClass: 'bg-slate-800', hex: '#1E293B' },
   { id: 'green', name: 'Emerald Green', bgClass: 'bg-emerald-600', hex: '#059669' },
 ];
 
-const DEFAULT_BLOCKS_CONFIG: VisualCardBlocksConfig = {
-  title: 'LTMS • Monitoring Report {{city}}',
+const DEFAULT_INC_CONFIG: VisualCardBlocksConfig = {
   theme: 'red',
+  header: {
+    title: 'LTMS | Monitoring INC',
+    subtitle: 'Intercity Outgoing Monitoring',
+    pickupDpLabel: 'Pickup DP',
+    pickupDpValue: '{{pickup_dp}}',
+    targetCityLabel: 'Tujuan',
+    targetCityValue: '{{target_city}}',
+    updateLabel: 'Update',
+    updateValue: '{{generated_at}}',
+    showPickupDp: true,
+    showTargetCity: true,
+    showUpdate: true,
+  },
+  kpiGrid: {
+    title: 'Ringkasan Monitoring INC',
+    layout: 'horizontal_5',
+    items: [
+      { id: '1', label: 'Total AWB INC', valueTemplate: '{{total_inc}}', color: 'default', icon: 'package' },
+      { id: '2', label: 'Clear TTD', valueTemplate: '{{clear_ttd}}', color: 'green', icon: 'check' },
+      { id: '3', label: 'Belum TTD', valueTemplate: '{{pending_ttd}}', color: 'red', icon: 'clock' },
+      { id: '4', label: 'AWB Melebihi SLA', valueTemplate: '{{over_sla}}', color: 'red', icon: 'alert' },
+      { id: '5', label: 'Persentase SLA', valueTemplate: '{{sla_percentage}}%', color: 'default', icon: 'trend' },
+    ],
+  },
+  subdistricts: {
+    title: '📍 Kecamatan Tujuan',
+    maxItems: '5',
+    sortOrder: 'desc',
+    show: true,
+  },
+  screenshot: {
+    show: true,
+    hdQuality: true,
+  },
+  footer: {
+    title: 'LTMS',
+    description: 'Long Tail Monitoring System\nGenerated Automatically',
+    show: true,
+  },
+  actionButton: {
+    label: '🚀 Buka Dashboard LTMS',
+    url: 'https://ltms.jt-express.id',
+    enabled: true,
+  },
+  // Compatibility fields
+  title: 'LTMS | Monitoring INC',
   showLogo: true,
   showSummary: true,
   showKpiGrid: true,
-  kpiStyle: '4_column',
+  kpiStyle: 'horizontal_5',
   showTopKecamatan: true,
   topKecamatanLimit: 5,
   showImage: true,
   showFooter: true,
-  footerText: 'Logistics Traceability & Monitoring System (LTMS)',
-  actionButton: 'open_dashboard',
+  footerText: 'LTMS\nLong Tail Monitoring System\nGenerated Automatically',
 };
 
 export default function CardTemplatesPage() {
@@ -74,7 +132,8 @@ export default function CardTemplatesPage() {
   const [templateName, setTemplateName] = useState('');
   const [isDefault, setIsDefault] = useState(false);
   const [versionNote, setVersionNote] = useState('');
-  const [blocksConfig, setBlocksConfig] = useState<VisualCardBlocksConfig>(DEFAULT_BLOCKS_CONFIG);
+  const [blocksConfig, setBlocksConfig] = useState<VisualCardBlocksConfig>(DEFAULT_INC_CONFIG);
+  const [activeSection, setActiveSection] = useState<'header' | 'lastScan' | 'kpi' | 'subdistricts' | 'media' | 'footer' | 'action'>('header');
 
   const [saving, setSaving] = useState(false);
   const [previewMode, setPreviewMode] = useState<'dummy' | 'real'>('dummy');
@@ -119,6 +178,80 @@ export default function CardTemplatesPage() {
     refreshTemplates();
   }, [selectedStatus]);
 
+  // Normalize blocks config if loaded from legacy
+  const normalizeConfig = (raw: any): VisualCardBlocksConfig => {
+    if (!raw) return DEFAULT_INC_CONFIG;
+    return {
+      theme: raw.theme || 'red',
+      header: raw.header || {
+        title: raw.title || 'LTMS | Monitoring INC',
+        subtitle: raw.subtitle || 'Intercity Outgoing Monitoring',
+        pickupDpLabel: 'Pickup DP',
+        pickupDpValue: '{{pickup_dp}}',
+        targetCityLabel: 'Tujuan',
+        targetCityValue: '{{target_city}}',
+        updateLabel: 'Update',
+        updateValue: '{{generated_at}}',
+        showPickupDp: raw.showSummary ?? true,
+        showTargetCity: raw.showSummary ?? true,
+        showUpdate: raw.showSummary ?? true,
+      },
+      lastScan: raw.lastScan || {
+        title: 'Last Scan',
+        scanTimeLabel: 'Waktu Scan',
+        scanTimeValue: '{{last_scan_time}}',
+        awbLabel: 'AWB',
+        awbValue: '{{last_scan_awb}}',
+        statusLabel: 'Status',
+        statusValue: '{{last_scan_status}}',
+        fallbackText: 'Belum ada aktivitas scan hari ini.',
+        show: false,
+      },
+      kpiGrid: raw.kpiGrid || {
+        title: 'Ringkasan Monitoring INC',
+        layout: (raw.kpiStyle as any) || 'horizontal_5',
+        items: [
+          { id: '1', label: 'Total AWB INC', valueTemplate: '{{total_inc}}', color: 'default', icon: 'package' },
+          { id: '2', label: 'Clear TTD', valueTemplate: '{{clear_ttd}}', color: 'green', icon: 'check' },
+          { id: '3', label: 'Belum TTD', valueTemplate: '{{pending_ttd}}', color: 'red', icon: 'clock' },
+          { id: '4', label: 'AWB Melebihi SLA', valueTemplate: '{{over_sla}}', color: 'red', icon: 'alert' },
+          { id: '5', label: 'Persentase SLA', valueTemplate: '{{sla_percentage}}%', color: 'default', icon: 'trend' },
+        ],
+      },
+      subdistricts: raw.subdistricts || {
+        title: '📍 Kecamatan Tujuan',
+        maxItems: raw.topKecamatanLimit ? String(raw.topKecamatanLimit) : '5',
+        sortOrder: 'desc',
+        show: raw.showTopKecamatan ?? true,
+      },
+      screenshot: raw.screenshot || {
+        show: raw.showImage ?? true,
+        hdQuality: true,
+      },
+      footer: raw.footer || {
+        title: 'LTMS',
+        description: raw.footerText || 'Long Tail Monitoring System\nGenerated Automatically',
+        show: raw.showFooter ?? true,
+      },
+      actionButton: raw.actionButton?.label
+        ? raw.actionButton
+        : {
+            label: '🚀 Buka Dashboard LTMS',
+            url: 'https://ltms.jt-express.id',
+            enabled: raw.actionButton !== 'none',
+          },
+      title: raw.title || 'LTMS | Monitoring Report',
+      showLogo: true,
+      showSummary: raw.showSummary ?? true,
+      showKpiGrid: raw.showKpiGrid ?? true,
+      kpiStyle: raw.kpiStyle || 'horizontal_5',
+      showTopKecamatan: raw.showTopKecamatan ?? true,
+      topKecamatanLimit: raw.topKecamatanLimit || 5,
+      showImage: raw.showImage ?? true,
+      showFooter: raw.showFooter ?? true,
+    };
+  };
+
   // Open Builder from Preset
   const handleSelectPreset = (preset: StarterPreset | null) => {
     setPresetModalOpen(false);
@@ -126,13 +259,13 @@ export default function CardTemplatesPage() {
     if (preset) {
       setModuleVal(preset.module);
       setTemplateName(`Kartu ${preset.name}`);
-      setBlocksConfig(preset.blocksConfig);
+      setBlocksConfig(normalizeConfig(preset.blocksConfig));
       setIsDefault(false);
       setVersionNote('Template awal dari preset');
     } else {
       setModuleVal('monitoring_inc');
       setTemplateName('Kartu Interaktif Baru');
-      setBlocksConfig(DEFAULT_BLOCKS_CONFIG);
+      setBlocksConfig(DEFAULT_INC_CONFIG);
       setIsDefault(false);
       setVersionNote('Initial version');
     }
@@ -144,7 +277,7 @@ export default function CardTemplatesPage() {
     setEditingId(tpl.id);
     setModuleVal(tpl.module);
     setTemplateName(tpl.template_name);
-    setBlocksConfig(tpl.blocks_config as VisualCardBlocksConfig);
+    setBlocksConfig(normalizeConfig(tpl.blocks_config));
     setIsDefault(tpl.is_default);
     setVersionNote('');
     setBuilderOpen(true);
@@ -159,31 +292,30 @@ export default function CardTemplatesPage() {
       setSaving(true);
       const url = '/api/communication/templates/card';
       const method = editingId ? 'PUT' : 'POST';
-      const payload = {
-        id: editingId || undefined,
+      const body = {
+        id: editingId,
         module: moduleVal,
         template_name: templateName,
         blocks_config: blocksConfig,
         is_default: isDefault,
-        version_note: versionNote || undefined,
+        version_note: versionNote || (editingId ? 'Pembaruan desain kartu' : 'Inisialisasi kartu'),
       };
 
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       });
 
       const json = await res.json();
-      if (json.ok) {
-        setBuilderOpen(false);
-        await refreshTemplates();
-      } else {
-        alert(json.error || 'Gagal menyimpan template');
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || 'Gagal menyimpan template kartu');
       }
-    } catch (err) {
-      console.error(err);
-      alert('Terjadi kesalahan koneksi');
+
+      setBuilderOpen(false);
+      await refreshTemplates();
+    } catch (err: any) {
+      alert(err.message);
     } finally {
       setSaving(false);
     }
@@ -191,63 +323,65 @@ export default function CardTemplatesPage() {
 
   // Archive / Restore
   const handleToggleArchive = async (tpl: CardTemplateRecord) => {
-    const isArchiving = tpl.status === 'active';
-    const action = isArchiving ? 'archive' : 'restore';
-    if (
-      !confirm(
-        isArchiving
-          ? `Arsipkan template "${tpl.template_name}"?`
-          : `Aktifkan kembali template "${tpl.template_name}"?`
-      )
-    )
-      return;
+    const nextStatus = tpl.status === 'active' ? 'archived' : 'active';
+    const confirmMsg =
+      nextStatus === 'archived'
+        ? `Arsipkan template "${tpl.template_name}"? Template tidak akan muncul di dialog pengiriman.`
+        : `Pulihkan template "${tpl.template_name}" kembali ke status aktif?`;
+
+    if (!confirm(confirmMsg)) return;
 
     try {
-      const res = await fetch(`/api/communication/templates/card/${tpl.id}/${action}`, {
-        method: 'POST',
+      const res = await fetch('/api/communication/templates/card', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: tpl.id,
+          status: nextStatus,
+          version_note: nextStatus === 'archived' ? 'Arsipkan template' : 'Pulihkan template',
+        }),
       });
       const json = await res.json();
-      if (json.ok) refreshTemplates();
-    } catch (err) {
-      console.error(err);
+      if (!res.ok || !json.ok) throw new Error(json.error);
+      await refreshTemplates();
+    } catch (err: any) {
+      alert(err.message);
     }
   };
 
   // Duplicate
-  const handleDuplicate = async (id: string) => {
+  const handleDuplicate = async (tpl: CardTemplateRecord) => {
     try {
-      const res = await fetch(`/api/communication/templates/card/${id}/duplicate`, {
+      const res = await fetch('/api/communication/templates/card', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          module: tpl.module,
+          template_name: `${tpl.template_name} (Salinan)`,
+          blocks_config: tpl.blocks_config,
+          is_default: false,
+          version_note: `Duplikasi dari ${tpl.template_name}`,
+        }),
       });
       const json = await res.json();
-      if (json.ok) refreshTemplates();
-    } catch (err) {
-      console.error(err);
+      if (!res.ok || !json.ok) throw new Error(json.error);
+      await refreshTemplates();
+    } catch (err: any) {
+      alert(err.message);
     }
   };
 
-  // Set Default
-  const handleSetDefault = async (id: string) => {
-    try {
-      const res = await fetch(`/api/communication/templates/card/${id}/set-default`, {
-        method: 'POST',
-      });
-      const json = await res.json();
-      if (json.ok) refreshTemplates();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // View Versions
-  const handleViewVersions = async (tpl: CardTemplateRecord) => {
+  // Open Version History
+  const handleOpenVersions = async (tpl: CardTemplateRecord) => {
     setSelectedTemplateName(tpl.template_name);
     setVersionModalOpen(true);
     setVersionLoading(true);
     try {
-      const res = await fetch(`/api/communication/templates/card/${tpl.id}/versions`);
+      const res = await fetch(`/api/communication/templates/card/versions?id=${tpl.id}`);
       const json = await res.json();
-      if (json.ok) setActiveVersions(json.data || []);
+      if (json.ok) {
+        setActiveVersions(json.data || []);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -255,37 +389,90 @@ export default function CardTemplatesPage() {
     }
   };
 
-  // Filtered Templates
+  // Restore Version
+  const handleRestoreVersion = async (v: CardTemplateVersionRecord) => {
+    if (!confirm(`Pulihkan versi ${v.version}? Desain saat ini akan digantikan oleh versi ini.`)) return;
+
+    try {
+      setBlocksConfig(normalizeConfig(v.blocks_config));
+      setVersionNote(`Rollback ke versi ${v.version}`);
+      setVersionModalOpen(false);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  // KPI items helper
+  const handleAddKpiItem = () => {
+    const nextId = String(Date.now());
+    const newItems = [
+      ...(blocksConfig.kpiGrid?.items || []),
+      { id: nextId, label: 'Metrik Baru', valueTemplate: '{{total_inc}}', color: 'default' as const, icon: 'package' },
+    ];
+    setBlocksConfig({
+      ...blocksConfig,
+      kpiGrid: {
+        ...blocksConfig.kpiGrid,
+        items: newItems,
+      },
+    });
+  };
+
+  const handleRemoveKpiItem = (idx: number) => {
+    const updated = [...(blocksConfig.kpiGrid?.items || [])];
+    updated.splice(idx, 1);
+    setBlocksConfig({
+      ...blocksConfig,
+      kpiGrid: {
+        ...blocksConfig.kpiGrid,
+        items: updated,
+      },
+    });
+  };
+
+  const handleUpdateKpiItem = (idx: number, field: keyof CardKpiItem, val: any) => {
+    const updated = [...(blocksConfig.kpiGrid?.items || [])];
+    updated[idx] = { ...updated[idx], [field]: val };
+    setBlocksConfig({
+      ...blocksConfig,
+      kpiGrid: {
+        ...blocksConfig.kpiGrid,
+        items: updated,
+      },
+    });
+  };
+
+  // Active Context for Live Preview
+  const activePreviewContext = previewMode === 'dummy' ? dummyContext : {};
+
+  // Filter templates
   const filteredTemplates = templates.filter((tpl) => {
-    const matchSearch = tpl.template_name.toLowerCase().includes(search.toLowerCase());
+    const matchSearch =
+      tpl.template_name.toLowerCase().includes(search.toLowerCase()) ||
+      tpl.module.toLowerCase().includes(search.toLowerCase());
     const matchModule = selectedModule === 'all' || tpl.module === selectedModule;
     return matchSearch && matchModule;
   });
 
-  const normalizedCtx = MessageTemplateEngine.normalizeContext(dummyContext);
-  const renderedTitle = MessageTemplateEngine.render(blocksConfig.title, normalizedCtx);
-
   return (
-    <div className="min-h-screen bg-slate-50/50 p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-red-600 uppercase tracking-wider mb-1">
+    <div className="min-h-screen bg-slate-50/50 p-6 md:p-8 space-y-6">
+      {/* Header Halaman */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-xs font-semibold text-[#E2231A] tracking-wider uppercase">
             <PanelsTopLeft className="w-4 h-4" />
             Communication Center
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Card Templates
-          </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Desain tata letak Feishu Interactive Card dengan Visual Card Builder modular tanpa coding JSON.
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Card Templates (Visual Builder)</h1>
+          <p className="text-sm text-slate-500">
+            Desain tata letak Feishu Interactive Card dengan Content Builder modular tanpa coding JSON.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => setPresetModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#E2231A] hover:bg-[#c91d15] text-white text-sm font-semibold rounded-lg shadow-sm transition-all active:scale-95"
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#E2231A] hover:bg-[#c91d15] text-white rounded-xl font-medium text-sm transition-all shadow-sm hover:shadow active:scale-[0.98]"
           >
             <Plus className="w-4 h-4" />
             Buat Desain Kartu
@@ -293,9 +480,10 @@ export default function CardTemplatesPage() {
         </div>
       </div>
 
-      {/* Control Bar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2">
+      {/* Filter Bar */}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        {/* Module Tabs */}
+        <div className="flex items-center gap-1.5 p-1 bg-slate-200/60 rounded-xl overflow-x-auto w-full md:w-auto">
           {[
             { id: 'all', label: 'Semua Modul' },
             { id: 'monitoring_inc', label: 'Monitoring INC' },
@@ -306,10 +494,10 @@ export default function CardTemplatesPage() {
             <button
               key={tab.id}
               onClick={() => setSelectedModule(tab.id)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
                 selectedModule === tab.id
-                  ? 'bg-slate-900 text-white font-semibold shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
               }`}
             >
               {tab.label}
@@ -317,198 +505,185 @@ export default function CardTemplatesPage() {
           ))}
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Status Tabs */}
-          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+        {/* Status Filter & Search */}
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <div className="flex items-center bg-slate-200/60 p-1 rounded-xl text-xs font-medium">
             <button
               onClick={() => setSelectedStatus('active')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
-                selectedStatus === 'active'
-                  ? 'bg-white text-slate-900 font-semibold shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900'
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                selectedStatus === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
               }`}
             >
               Aktif
             </button>
             <button
               onClick={() => setSelectedStatus('archived')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
-                selectedStatus === 'archived'
-                  ? 'bg-white text-slate-900 font-semibold shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900'
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                selectedStatus === 'archived' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
               }`}
             >
               Diarsipkan
             </button>
           </div>
 
-          {/* Search */}
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <div className="relative flex-1 md:w-64">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
+              placeholder="Cari template kartu..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari template kartu..."
-              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#E2231A]/20 focus:border-[#E2231A]"
             />
           </div>
         </div>
       </div>
 
-      {/* Card Template Grid */}
+      {/* Grid Templates */}
       {loading ? (
-        <div className="py-20 text-center">
-          <RefreshCw className="w-6 h-6 animate-spin mx-auto text-slate-400 mb-2" />
-          <p className="text-xs text-slate-500">Memuat template kartu interaktif...</p>
+        <div className="py-20 text-center space-y-3">
+          <RefreshCw className="w-8 h-8 text-slate-400 animate-spin mx-auto" />
+          <p className="text-sm text-slate-500">Memuat konfigurasi template kartu...</p>
         </div>
       ) : filteredTemplates.length === 0 ? (
-        <div className="bg-white rounded-xl border border-dashed border-slate-300 p-12 text-center">
-          <PanelsTopLeft className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-base font-semibold text-slate-700">Belum ada template kartu</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
-            Gunakan Starter Preset Visual Card untuk membuat kartu laporan profesional dalam 1 klik.
-          </p>
+        <div className="py-20 text-center bg-white rounded-2xl border border-dashed border-slate-200 space-y-4">
+          <Layers className="w-12 h-12 text-slate-300 mx-auto" />
+          <div className="space-y-1">
+            <h3 className="text-base font-semibold text-slate-800">Belum ada template kartu</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              Mulai buat desain Feishu Interactive Card dengan Visual Builder atau pilih preset standar.
+            </p>
+          </div>
           <button
             onClick={() => setPresetModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#E2231A] text-white rounded-xl text-xs font-medium hover:bg-[#c91d15] transition-all"
           >
-            <Plus className="w-3.5 h-3.5" />
-            Pilih Starter Preset
+            <Plus className="w-4 h-4" />
+            Buat Dari Preset
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTemplates.map((tpl) => {
-            const config = tpl.blocks_config as VisualCardBlocksConfig;
-            const themeObj = THEMES.find((t) => t.id === config?.theme) || THEMES[0];
+            const config = normalizeConfig(tpl.blocks_config);
+            const themeObj = THEMES.find((t) => t.id === config.theme) || THEMES[0];
 
             return (
               <motion.div
                 key={tpl.id}
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all flex flex-col justify-between overflow-hidden group"
+                className="bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden"
               >
                 <div>
-                  {/* Card Header Color Bar */}
+                  {/* Top Bar Banner Theme */}
                   <div className={`h-2.5 w-full ${themeObj.bgClass}`} />
 
-                  <div className="p-5 space-y-3">
+                  <div className="p-5 space-y-4">
+                    {/* Header Info */}
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                            {tpl.module.replace('_', ' ')}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-semibold rounded text-[10px] tracking-wide uppercase">
+                          {tpl.module.replace('_', ' ')}
+                        </span>
+                        <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-mono">
+                          {tpl.version}
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-50 border border-slate-200">
+                          <span className={`w-2 h-2 rounded-full ${themeObj.bgClass}`} />
+                          {themeObj.name}
+                        </span>
+                        {tpl.is_default && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded text-[10px] font-medium">
+                            <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                            Default
                           </span>
-                          <span className="text-[10px] font-semibold text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
-                            {tpl.version}
-                          </span>
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                            <span
-                              className="w-2 h-2 rounded-full"
-                              style={{ backgroundColor: themeObj.hex }}
-                            />
-                            {themeObj.name}
-                          </span>
-                          {tpl.is_default && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                              <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
-                              Default
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="font-bold text-slate-900 text-base mt-2 line-clamp-1">
-                          {tpl.template_name}
-                        </h3>
+                        )}
                       </div>
+                    </div>
 
-                      {!tpl.is_default && tpl.status === 'active' && (
-                        <button
-                          onClick={() => handleSetDefault(tpl.id)}
-                          title="Jadikan template kartu default"
-                          className="text-xs text-slate-400 hover:text-amber-600 p-1 rounded hover:bg-slate-50"
-                        >
-                          <Star className="w-4 h-4" />
-                        </button>
+                    {/* Title */}
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 line-clamp-1">{tpl.template_name}</h3>
+                      {config.header?.subtitle && (
+                        <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">{config.header.subtitle}</p>
                       )}
                     </div>
 
-                    {/* Features Badges */}
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {config?.showSummary && (
-                        <span className="text-[10px] px-2 py-0.5 bg-slate-50 text-slate-600 rounded border border-slate-100">
-                          Wilayah & Waktu
+                    {/* Feature Badges */}
+                    <div className="flex flex-wrap gap-1.5 text-[11px] text-slate-600">
+                      {config.header?.showPickupDp && (
+                        <span className="px-2 py-0.5 bg-slate-100 rounded">Pickup DP</span>
+                      )}
+                      {config.lastScan?.show && (
+                        <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded">
+                          Last Scan
                         </span>
                       )}
-                      {config?.showKpiGrid && (
-                        <span className="text-[10px] px-2 py-0.5 bg-slate-50 text-slate-600 rounded border border-slate-100">
-                          Grid KPI ({config.kpiStyle === '4_column' ? '4 Kolom' : '2 Kolom'})
+                      {config.kpiGrid && (
+                        <span className="px-2 py-0.5 bg-slate-100 rounded">
+                          {config.kpiGrid.items?.length || 5} KPI ({config.kpiGrid.layout})
                         </span>
                       )}
-                      {config?.showTopKecamatan && (
-                        <span className="text-[10px] px-2 py-0.5 bg-slate-50 text-slate-600 rounded border border-slate-100">
-                          Top {config.topKecamatanLimit || 5} Kecamatan
+                      {config.subdistricts?.show && (
+                        <span className="px-2 py-0.5 bg-slate-100 rounded">
+                          Kecamatan ({config.subdistricts.maxItems})
                         </span>
                       )}
-                      {config?.showImage && (
-                        <span className="text-[10px] px-2 py-0.5 bg-slate-50 text-slate-600 rounded border border-slate-100">
-                          Bukti Gambar
-                        </span>
+                      {config.screenshot?.show && (
+                        <span className="px-2 py-0.5 bg-slate-100 rounded">Lampiran HD</span>
                       )}
-                      {config?.actionButton === 'open_dashboard' && (
-                        <span className="text-[10px] px-2 py-0.5 bg-slate-50 text-slate-600 rounded border border-slate-100">
-                          Tombol Dashboard
-                        </span>
+                      {config.actionButton?.enabled && (
+                        <span className="px-2 py-0.5 bg-slate-100 rounded">Tombol Dashboard</span>
                       )}
                     </div>
 
+                    {/* Version note */}
                     {tpl.version_note && (
-                      <p className="text-[11px] text-slate-400 italic line-clamp-1 pt-1">
+                      <div className="text-[11px] text-slate-400 italic line-clamp-1 border-t border-slate-100 pt-2">
                         💬 {tpl.version_note}
-                      </p>
+                      </div>
                     )}
                   </div>
                 </div>
 
-                {/* Action Bar */}
-                <div className="px-5 py-3 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between text-xs">
-                  <button
-                    onClick={() => handleViewVersions(tpl)}
-                    className="flex items-center gap-1 text-slate-500 hover:text-slate-800 font-medium"
-                  >
-                    <History className="w-3.5 h-3.5" />
-                    Riwayat
-                  </button>
-
-                  <div className="flex items-center gap-2">
+                {/* Card Actions Footer */}
+                <div className="px-5 py-3 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1">
                     <button
-                      onClick={() => handleDuplicate(tpl.id)}
-                      title="Duplikasi Template"
-                      className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-white rounded-md transition-colors"
+                      onClick={() => handleOpenVersions(tpl)}
+                      title="Riwayat Versi"
+                      className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition-all text-xs flex items-center gap-1 font-medium"
+                    >
+                      <History className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Riwayat</span>
+                    </button>
+                    <button
+                      onClick={() => handleDuplicate(tpl)}
+                      title="Duplikat Template"
+                      className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition-all"
                     >
                       <Copy className="w-3.5 h-3.5" />
                     </button>
-
                     <button
                       onClick={() => handleToggleArchive(tpl)}
-                      title={tpl.status === 'active' ? 'Arsipkan Template' : 'Aktifkan Kembali'}
-                      className="p-1.5 text-slate-500 hover:text-amber-700 hover:bg-white rounded-md transition-colors"
+                      title={tpl.status === 'active' ? 'Arsipkan' : 'Pulihkan'}
+                      className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition-all"
                     >
                       {tpl.status === 'active' ? (
                         <Archive className="w-3.5 h-3.5" />
                       ) : (
-                        <RotateCcw className="w-3.5 h-3.5" />
+                        <RotateCcw className="w-3.5 h-3.5 text-emerald-600" />
                       )}
                     </button>
-
-                    <button
-                      onClick={() => handleOpenEdit(tpl)}
-                      className="px-3 py-1 bg-white hover:bg-slate-100 text-slate-800 font-semibold border border-slate-200 rounded-md shadow-2xs"
-                    >
-                      Buka Builder
-                    </button>
                   </div>
+
+                  <button
+                    onClick={() => handleOpenEdit(tpl)}
+                    className="px-3.5 py-1.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-800 hover:text-slate-900 rounded-lg font-medium text-xs shadow-sm transition-all flex items-center gap-1.5"
+                  >
+                    Buka Builder
+                  </button>
                 </div>
               </motion.div>
             );
@@ -516,507 +691,839 @@ export default function CardTemplatesPage() {
         </div>
       )}
 
-      {/* MODAL 1: Starter Preset Picker */}
+      {/* MODAL 1: Preset Picker */}
       <AnimatePresence>
         {presetModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 space-y-6"
+              className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden border border-slate-100"
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900">
-                    Pilih Desain Starter Preset
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Mulai dengan tata letak kartu Feishu yang telah dioptimalkan untuk operasional.
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                <div className="space-y-1">
+                  <h3 className="text-lg font-bold text-slate-900">Pilih Preset Template Kartu</h3>
+                  <p className="text-xs text-slate-500">
+                    Gunakan template standar rekomendasi operasional atau mulai dengan template kosong.
                   </p>
                 </div>
                 <button
                   onClick={() => setPresetModalOpen(false)}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+                  className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 max-h-[60vh] overflow-y-auto pr-1">
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto">
                 {presets.map((preset) => (
-                  <button
+                  <div
                     key={preset.id}
                     onClick={() => handleSelectPreset(preset)}
-                    className="flex flex-col text-left p-4 rounded-xl border border-slate-200 hover:border-red-500 hover:ring-2 hover:ring-red-500/10 bg-white hover:bg-red-50/20 transition-all group"
+                    className="p-4 rounded-2xl border border-slate-200 hover:border-[#E2231A] hover:bg-[#E2231A]/[0.02] cursor-pointer transition-all space-y-3 group"
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700 group-hover:bg-red-100 group-hover:text-red-700">
-                        {preset.badge}
+                    <div className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-semibold uppercase">
+                        {preset.module.replace('_', ' ')}
                       </span>
-                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-red-600 group-hover:translate-x-0.5 transition-all" />
+                      <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-[#E2231A] group-hover:translate-x-0.5 transition-all" />
                     </div>
-                    <h4 className="font-bold text-slate-900 text-sm group-hover:text-red-600">
-                      {preset.name}
-                    </h4>
-                    <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                      {preset.description}
-                    </p>
-                  </button>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-slate-900 group-hover:text-[#E2231A] transition-colors">
+                        {preset.name}
+                      </h4>
+                      <p className="text-xs text-slate-500 leading-relaxed">{preset.description}</p>
+                    </div>
+                  </div>
                 ))}
 
-                <button
+                {/* Custom Blank */}
+                <div
                   onClick={() => handleSelectPreset(null)}
-                  className="flex flex-col justify-center items-center text-center p-4 rounded-xl border border-dashed border-slate-300 hover:border-slate-400 bg-slate-50/50 hover:bg-slate-100 transition-all group"
+                  className="p-4 rounded-2xl border border-dashed border-slate-300 hover:border-slate-400 hover:bg-slate-50 cursor-pointer transition-all flex flex-col items-center justify-center text-center space-y-2"
                 >
-                  <PanelsTopLeft className="w-5 h-5 text-slate-400 mb-1" />
-                  <h4 className="font-bold text-slate-700 text-sm">
-                    Mulai Kartu Kosong
-                  </h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Atur setiap blok secara manual
-                  </p>
-                </button>
+                  <Sparkles className="w-6 h-6 text-slate-400" />
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-800">Desain Dari Awal</h4>
+                    <p className="text-xs text-slate-500">Mulai dengan template kosong modular</p>
+                  </div>
+                </div>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* MODAL 2: Visual Card Builder */}
+      {/* MODAL 2: Full Content Builder (Drawer Mode) */}
       <AnimatePresence>
         {builderOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-8 bg-black/50 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex bg-slate-900/50 backdrop-blur-sm justify-end">
             <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-6xl w-full h-[90vh] flex flex-col overflow-hidden"
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="bg-white w-full max-w-5xl h-full shadow-2xl flex flex-col overflow-hidden"
             >
               {/* Builder Header */}
-              <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+              <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-red-100 text-red-600 flex items-center justify-center font-bold">
+                  <div className="w-10 h-10 rounded-xl bg-[#E2231A]/10 text-[#E2231A] flex items-center justify-center font-bold">
                     <PanelsTopLeft className="w-5 h-5" />
                   </div>
                   <div>
                     <h2 className="text-base font-bold text-slate-900">
-                      {editingId ? 'Edit Visual Card Template' : 'Visual Card Builder'}
+                      {editingId ? 'Edit Content Card Builder' : 'Content Card Builder Baru'}
                     </h2>
                     <p className="text-xs text-slate-500">
-                      Sesuaikan komponen kartu di panel kiri; lihat tampilan Feishu Interactive Card di panel kanan secara instan.
+                      Ubah seluruh isi, label, judul, metrik KPI, dan urutan kartu tanpa coding JSON.
                     </p>
                   </div>
                 </div>
 
-                <button
-                  onClick={() => setBuilderOpen(false)}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setBuilderOpen(false)}
+                    className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl transition-all"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving || !templateName.trim()}
+                    className="px-5 py-2 bg-[#E2231A] hover:bg-[#c91d15] disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                  >
+                    {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    Simpan Template
+                  </button>
+                </div>
               </div>
 
-              {/* Builder Body: Left Controls (7 cols) + Right Card Mockup (5 cols) */}
+              {/* Builder Body (2 Columns: Controls vs Live Feishu Mockup) */}
               <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
-                {/* Left Controls (7 cols) */}
-                <div className="lg:col-span-7 p-6 overflow-y-auto border-r border-slate-200 space-y-6">
-                  {/* Basic Info */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Nama Template Kartu <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={templateName}
-                        onChange={(e) => setTemplateName(e.target.value)}
-                        placeholder="Contoh: Kartu Monitoring INC"
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none"
-                      />
+                {/* Left: Configuration Sections (7 cols) */}
+                <div className="lg:col-span-7 border-r border-slate-200 overflow-y-auto p-6 space-y-6">
+                  {/* General Config */}
+                  <div className="bg-slate-50/70 p-4 rounded-2xl border border-slate-200 space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Template</label>
+                        <input
+                          type="text"
+                          value={templateName}
+                          onChange={(e) => setTemplateName(e.target.value)}
+                          placeholder="cth: Standar Monitoring INC Batang"
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#E2231A]/20 focus:border-[#E2231A]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">Modul Terkait</label>
+                        <select
+                          value={moduleVal}
+                          onChange={(e) => setModuleVal(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#E2231A]/20 focus:border-[#E2231A]"
+                        >
+                          <option value="monitoring_inc">Monitoring INC</option>
+                          <option value="monitoring_delivery">Monitoring Delivery</option>
+                          <option value="longtail">Long Tail Alert</option>
+                          <option value="dashboard">Dashboard Report</option>
+                          <option value="custom">Custom Modul</option>
+                        </select>
+                      </div>
                     </div>
 
+                    {/* Color Theme Selector */}
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Modul Terkait
-                      </label>
-                      <select
-                        value={moduleVal}
-                        onChange={(e) => setModuleVal(e.target.value)}
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none"
-                      >
-                        <option value="monitoring_inc">Monitoring INC</option>
-                        <option value="monitoring_delivery">Monitoring Delivery</option>
-                        <option value="longtail">Long Tail</option>
-                        <option value="dashboard">Dashboard</option>
-                        <option value="custom">Laporan Custom</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Section 1: Header & Theme */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3.5">
-                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-red-500" />
-                      1. Header & Tema Warna
-                    </h4>
-
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Judul Header Kartu
-                      </label>
-                      <input
-                        type="text"
-                        value={blocksConfig.title}
-                        onChange={(e) =>
-                          setBlocksConfig((p) => ({ ...p, title: e.target.value }))
-                        }
-                        placeholder="LTMS • Monitoring Report {{city}}"
-                        className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-2">
-                        Pilihan Tema Header Feishu
-                      </label>
+                      <label className="block text-xs font-semibold text-slate-700 mb-2">Tema Banner Kartu</label>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {THEMES.map((theme) => {
-                          const isSelected = blocksConfig.theme === theme.id;
-                          return (
-                            <button
-                              key={theme.id}
-                              type="button"
-                              onClick={() =>
-                                setBlocksConfig((p) => ({ ...p, theme: theme.id }))
-                              }
-                              className={`flex items-center gap-2 p-2.5 rounded-lg border text-xs font-medium transition-all ${
-                                isSelected
-                                  ? 'border-slate-900 bg-white ring-2 ring-slate-900/10 shadow-xs'
-                                  : 'border-slate-200 bg-white hover:bg-slate-100 text-slate-600'
-                              }`}
-                            >
-                              <span
-                                className="w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0"
-                                style={{ backgroundColor: theme.hex }}
-                              >
-                                {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
-                              </span>
-                              <span className="truncate">{theme.name}</span>
-                            </button>
-                          );
-                        })}
+                        {THEMES.map((theme) => (
+                          <button
+                            type="button"
+                            key={theme.id}
+                            onClick={() => setBlocksConfig({ ...blocksConfig, theme: theme.id })}
+                            className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-medium transition-all ${
+                              blocksConfig.theme === theme.id
+                                ? 'border-[#E2231A] bg-[#E2231A]/5 shadow-sm font-semibold'
+                                : 'border-slate-200 bg-white hover:bg-slate-50'
+                            }`}
+                          >
+                            <span className={`w-3.5 h-3.5 rounded-full ${theme.bgClass}`} />
+                            <span className="truncate">{theme.name}</span>
+                          </button>
+                        ))}
                       </div>
                     </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
+                      <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isDefault}
+                          onChange={(e) => setIsDefault(e.target.checked)}
+                          className="rounded text-[#E2231A] focus:ring-[#E2231A]"
+                        />
+                        Jadikan Default untuk Modul {moduleVal}
+                      </label>
+                    </div>
                   </div>
 
-                  {/* Section 2: Summary Block */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label
-                        htmlFor="summary_check"
-                        className="text-xs font-bold text-slate-800 uppercase tracking-wider cursor-pointer"
+                  {/* Section Tabs */}
+                  <div className="flex items-center gap-1 border-b border-slate-200 pb-2 overflow-x-auto text-xs font-medium">
+                    {[
+                      { id: 'header', label: '🏷️ Header & Info' },
+                      { id: 'lastScan', label: '⏱️ Last Scan' },
+                      { id: 'kpi', label: '📊 Ringkasan KPI' },
+                      { id: 'subdistricts', label: '📍 Kecamatan' },
+                      { id: 'media', label: '🖼️ Screenshot' },
+                      { id: 'action', label: '🚀 Tombol' },
+                      { id: 'footer', label: '📝 Footer' },
+                    ].map((sec) => (
+                      <button
+                        key={sec.id}
+                        type="button"
+                        onClick={() => setActiveSection(sec.id as any)}
+                        className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
+                          activeSection === sec.id
+                            ? 'bg-slate-900 text-white font-semibold shadow-sm'
+                            : 'text-slate-600 hover:bg-slate-100'
+                        }`}
                       >
-                        2. Blok Ringkasan (Wilayah & Waktu)
-                      </label>
-                      <input
-                        type="checkbox"
-                        id="summary_check"
-                        checked={blocksConfig.showSummary}
-                        onChange={(e) =>
-                          setBlocksConfig((p) => ({ ...p, showSummary: e.target.checked }))
-                        }
-                        className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500"
-                      />
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      Menampilkan target kota/cabang dan tanggal/jam update laporan secara otomatis.
-                    </p>
+                        {sec.label}
+                      </button>
+                    ))}
                   </div>
 
-                  {/* Section 3: KPI Statistics Grid */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label
-                        htmlFor="kpi_check"
-                        className="text-xs font-bold text-slate-800 uppercase tracking-wider cursor-pointer"
-                      >
-                        3. Grid Statistik KPI
-                      </label>
-                      <input
-                        type="checkbox"
-                        id="kpi_check"
-                        checked={blocksConfig.showKpiGrid}
-                        onChange={(e) =>
-                          setBlocksConfig((p) => ({ ...p, showKpiGrid: e.target.checked }))
-                        }
-                        className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500"
-                      />
-                    </div>
+                  {/* SECTION 1: Header & Info */}
+                  {activeSection === 'header' && (
+                    <div className="space-y-4">
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">
+                            Judul Utama (Mendukung Variabel)
+                          </label>
+                          <input
+                            type="text"
+                            value={blocksConfig.header?.title || ''}
+                            onChange={(e) =>
+                              setBlocksConfig({
+                                ...blocksConfig,
+                                header: { ...blocksConfig.header, title: e.target.value },
+                                title: e.target.value,
+                              })
+                            }
+                            placeholder="cth: LTMS | Monitoring INC"
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#E2231A]/20 focus:border-[#E2231A]"
+                          />
+                        </div>
 
-                    {blocksConfig.showKpiGrid && (
-                      <div className="pt-2 border-t border-slate-200/80">
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-2">
-                          Gaya Tata Letak KPI
-                        </label>
-                        <div className="grid grid-cols-2 gap-3">
-                          {[
-                            {
-                              id: '4_column',
-                              label: '4 Kolom Sejajar',
-                              desc: 'Total, Belum TTD, Lewat SLA, Progress',
-                            },
-                            {
-                              id: '2_column',
-                              label: '2 Kolom Ringkas',
-                              desc: '2 Baris x 2 Kolom (Cocok untuk Mobile)',
-                            },
-                          ].map((style) => (
-                            <button
-                              key={style.id}
-                              type="button"
-                              onClick={() =>
-                                setBlocksConfig((p) => ({
-                                  ...p,
-                                  kpiStyle: style.id as KpiGridStyle,
-                                }))
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">
+                            Sub Judul (Header Subtitle)
+                          </label>
+                          <input
+                            type="text"
+                            value={blocksConfig.header?.subtitle || ''}
+                            onChange={(e) =>
+                              setBlocksConfig({
+                                ...blocksConfig,
+                                header: { ...blocksConfig.header, subtitle: e.target.value },
+                              })
+                            }
+                            placeholder="cth: Intercity Outgoing Monitoring"
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#E2231A]/20 focus:border-[#E2231A]"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Header Info Fields */}
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                        <h4 className="text-xs font-bold text-slate-800">Informasi Sub Header</h4>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[11px] font-semibold text-slate-700">Pickup DP</label>
+                              <input
+                                type="checkbox"
+                                checked={blocksConfig.header?.showPickupDp ?? true}
+                                onChange={(e) =>
+                                  setBlocksConfig({
+                                    ...blocksConfig,
+                                    header: { ...blocksConfig.header, showPickupDp: e.target.checked },
+                                  })
+                                }
+                                className="rounded text-[#E2231A]"
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              value={blocksConfig.header?.pickupDpLabel || 'Pickup DP'}
+                              onChange={(e) =>
+                                setBlocksConfig({
+                                  ...blocksConfig,
+                                  header: { ...blocksConfig.header, pickupDpLabel: e.target.value },
+                                })
                               }
-                              className={`p-3 text-left rounded-lg border text-xs transition-all ${
-                                blocksConfig.kpiStyle === style.id
-                                  ? 'border-red-600 bg-white ring-2 ring-red-500/10 font-semibold'
-                                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
-                              }`}
+                              placeholder="Label: Pickup DP"
+                              className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                            />
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[11px] font-semibold text-slate-700">Kota Tujuan / Drop Point</label>
+                              <input
+                                type="checkbox"
+                                checked={blocksConfig.header?.showTargetCity ?? true}
+                                onChange={(e) =>
+                                  setBlocksConfig({
+                                    ...blocksConfig,
+                                    header: { ...blocksConfig.header, showTargetCity: e.target.checked },
+                                  })
+                                }
+                                className="rounded text-[#E2231A]"
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              value={blocksConfig.header?.targetCityLabel || 'Tujuan'}
+                              onChange={(e) =>
+                                setBlocksConfig({
+                                  ...blocksConfig,
+                                  header: { ...blocksConfig.header, targetCityLabel: e.target.value },
+                                })
+                              }
+                              placeholder="Label: Tujuan / Drop Point"
+                              className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[11px] font-semibold text-slate-700">Waktu Generate</label>
+                              <input
+                                type="checkbox"
+                                checked={blocksConfig.header?.showUpdate ?? true}
+                                onChange={(e) =>
+                                  setBlocksConfig({
+                                    ...blocksConfig,
+                                    header: { ...blocksConfig.header, showUpdate: e.target.checked },
+                                  })
+                                }
+                                className="rounded text-[#E2231A]"
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              value={blocksConfig.header?.updateLabel || 'Update'}
+                              onChange={(e) =>
+                                setBlocksConfig({
+                                  ...blocksConfig,
+                                  header: { ...blocksConfig.header, updateLabel: e.target.value },
+                                })
+                              }
+                              placeholder="Label: Update / Waktu Generate"
+                              className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SECTION 2: Last Scan (Delivery) */}
+                  {activeSection === 'lastScan' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-900">Aktifkan Blok Last Scan</h4>
+                          <p className="text-[11px] text-slate-500">
+                            Menampilkan informasi aktivitas scan terakhir (Waktu, No AWB, dan Status).
+                          </p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={blocksConfig.lastScan?.show ?? false}
+                          onChange={(e) =>
+                            setBlocksConfig({
+                              ...blocksConfig,
+                              lastScan: {
+                                ...(blocksConfig.lastScan || {
+                                  title: 'Last Scan',
+                                  scanTimeLabel: 'Waktu Scan',
+                                  scanTimeValue: '{{last_scan_time}}',
+                                  awbLabel: 'AWB',
+                                  awbValue: '{{last_scan_awb}}',
+                                  statusLabel: 'Status',
+                                  statusValue: '{{last_scan_status}}',
+                                  fallbackText: 'Belum ada aktivitas scan hari ini.',
+                                  show: true,
+                                }),
+                                show: e.target.checked,
+                              },
+                            })
+                          }
+                          className="rounded text-[#E2231A] w-4 h-4"
+                        />
+                      </div>
+
+                      {blocksConfig.lastScan?.show && (
+                        <div className="space-y-3 p-4 bg-white rounded-2xl border border-slate-200">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">Judul Blok</label>
+                            <input
+                              type="text"
+                              value={blocksConfig.lastScan?.title || 'Last Scan'}
+                              onChange={(e) =>
+                                setBlocksConfig({
+                                  ...blocksConfig,
+                                  lastScan: { ...blocksConfig.lastScan!, title: e.target.value },
+                                })
+                              }
+                              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <label className="block text-[11px] font-medium text-slate-600 mb-1">Label Waktu</label>
+                              <input
+                                type="text"
+                                value={blocksConfig.lastScan?.scanTimeLabel || 'Waktu Scan'}
+                                onChange={(e) =>
+                                  setBlocksConfig({
+                                    ...blocksConfig,
+                                    lastScan: { ...blocksConfig.lastScan!, scanTimeLabel: e.target.value },
+                                  })
+                                }
+                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-medium text-slate-600 mb-1">Label AWB</label>
+                              <input
+                                type="text"
+                                value={blocksConfig.lastScan?.awbLabel || 'AWB'}
+                                onChange={(e) =>
+                                  setBlocksConfig({
+                                    ...blocksConfig,
+                                    lastScan: { ...blocksConfig.lastScan!, awbLabel: e.target.value },
+                                  })
+                                }
+                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] font-medium text-slate-600 mb-1">Label Status</label>
+                              <input
+                                type="text"
+                                value={blocksConfig.lastScan?.statusLabel || 'Status'}
+                                onChange={(e) =>
+                                  setBlocksConfig({
+                                    ...blocksConfig,
+                                    lastScan: { ...blocksConfig.lastScan!, statusLabel: e.target.value },
+                                  })
+                                }
+                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                              Teks Fallback Jika Belum Ada Scan
+                            </label>
+                            <input
+                              type="text"
+                              value={blocksConfig.lastScan?.fallbackText || 'Belum ada aktivitas scan hari ini.'}
+                              onChange={(e) =>
+                                setBlocksConfig({
+                                  ...blocksConfig,
+                                  lastScan: { ...blocksConfig.lastScan!, fallbackText: e.target.value },
+                                })
+                              }
+                              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* SECTION 3: Ringkasan Grid KPI */}
+                  {activeSection === 'kpi' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Judul Grid KPI</label>
+                          <input
+                            type="text"
+                            value={blocksConfig.kpiGrid?.title || 'Ringkasan Monitoring INC'}
+                            onChange={(e) =>
+                              setBlocksConfig({
+                                ...blocksConfig,
+                                kpiGrid: { ...blocksConfig.kpiGrid, title: e.target.value },
+                              })
+                            }
+                            placeholder="cth: Ringkasan Monitoring INC"
+                            className="w-72 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Tata Letak (Layout)</label>
+                          <select
+                            value={blocksConfig.kpiGrid?.layout || 'horizontal_5'}
+                            onChange={(e) =>
+                              setBlocksConfig({
+                                ...blocksConfig,
+                                kpiGrid: { ...blocksConfig.kpiGrid, layout: e.target.value as any },
+                                kpiStyle: e.target.value as any,
+                              })
+                            }
+                            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                          >
+                            <option value="horizontal_5">5 Kolom / Horizontal Grid</option>
+                            <option value="4_column">4 Kolom Grid</option>
+                            <option value="2_column">2 Kolom Ringkas</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* KPI Items List */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800">Daftar Indikator KPI</span>
+                          <button
+                            type="button"
+                            onClick={handleAddKpiItem}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#E2231A] hover:underline"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Tambah KPI
+                          </button>
+                        </div>
+
+                        <div className="space-y-2">
+                          {(blocksConfig.kpiGrid?.items || []).map((item, idx) => (
+                            <div
+                              key={item.id || idx}
+                              className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center gap-2 text-xs"
                             >
-                              <div className="font-bold text-slate-900">{style.label}</div>
-                              <div className="text-[10px] text-slate-400 mt-0.5">
-                                {style.desc}
+                              <div className="flex-1 grid grid-cols-2 gap-2 w-full">
+                                <input
+                                  type="text"
+                                  value={item.label}
+                                  onChange={(e) => handleUpdateKpiItem(idx, 'label', e.target.value)}
+                                  placeholder="Label KPI"
+                                  className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-medium"
+                                />
+                                <input
+                                  type="text"
+                                  value={item.valueTemplate}
+                                  onChange={(e) => handleUpdateKpiItem(idx, 'valueTemplate', e.target.value)}
+                                  placeholder="Variabel cth: {{total_inc}}"
+                                  className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-700"
+                                />
                               </div>
-                            </button>
+
+                              <div className="flex items-center gap-2 w-full sm:w-auto justify-between">
+                                <select
+                                  value={item.color || 'default'}
+                                  onChange={(e) => handleUpdateKpiItem(idx, 'color', e.target.value)}
+                                  className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-medium"
+                                >
+                                  <option value="default">Default</option>
+                                  <option value="red">Merah (Alert)</option>
+                                  <option value="green">Hijau (Success)</option>
+                                  <option value="blue">Biru (Info)</option>
+                                </select>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveKpiItem(idx)}
+                                  className="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-slate-200 transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
-                    )}
-                  </div>
-
-                  {/* Section 4: Top Kecamatan */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label
-                        htmlFor="kecamatan_check"
-                        className="text-xs font-bold text-slate-800 uppercase tracking-wider cursor-pointer"
-                      >
-                        4. Rincian Top Kecamatan
-                      </label>
-                      <input
-                        type="checkbox"
-                        id="kecamatan_check"
-                        checked={blocksConfig.showTopKecamatan}
-                        onChange={(e) =>
-                          setBlocksConfig((p) => ({
-                            ...p,
-                            showTopKecamatan: e.target.checked,
-                          }))
-                        }
-                        className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500"
-                      />
                     </div>
+                  )}
 
-                    {blocksConfig.showTopKecamatan && (
-                      <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between">
-                        <span className="text-[11px] font-semibold text-slate-600">
-                          Batas Maksimal Kecamatan
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          {([5, 10, 15] as const).map((limit) => (
-                            <button
-                              key={limit}
-                              type="button"
-                              onClick={() =>
-                                setBlocksConfig((p) => ({
-                                  ...p,
-                                  topKecamatanLimit: limit,
-                                }))
+                  {/* SECTION 4: 📍 Kecamatan Tujuan */}
+                  {activeSection === 'subdistricts' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-900">Aktifkan Blok Kecamatan Tujuan</h4>
+                          <p className="text-[11px] text-slate-500">
+                            Menampilkan daftar kecamatan tujuan pengiriman beserta jumlah sisa AWB.
+                          </p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={blocksConfig.subdistricts?.show ?? true}
+                          onChange={(e) =>
+                            setBlocksConfig({
+                              ...blocksConfig,
+                              subdistricts: {
+                                ...(blocksConfig.subdistricts || {
+                                  title: '📍 Kecamatan Tujuan',
+                                  maxItems: '5',
+                                  sortOrder: 'desc',
+                                  show: true,
+                                }),
+                                show: e.target.checked,
+                              },
+                              showTopKecamatan: e.target.checked,
+                            })
+                          }
+                          className="rounded text-[#E2231A] w-4 h-4"
+                        />
+                      </div>
+
+                      {blocksConfig.subdistricts?.show && (
+                        <div className="space-y-3 p-4 bg-white rounded-2xl border border-slate-200">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">Judul Blok</label>
+                            <input
+                              type="text"
+                              value={blocksConfig.subdistricts?.title || '📍 Kecamatan Tujuan'}
+                              onChange={(e) =>
+                                setBlocksConfig({
+                                  ...blocksConfig,
+                                  subdistricts: { ...blocksConfig.subdistricts!, title: e.target.value },
+                                })
                               }
-                              className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
-                                blocksConfig.topKecamatanLimit === limit
-                                  ? 'bg-slate-900 text-white'
-                                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
-                              }`}
-                            >
-                              Top {limit}
-                            </button>
-                          ))}
+                              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[11px] font-medium text-slate-600 mb-1">Jumlah Data</label>
+                              <select
+                                value={blocksConfig.subdistricts?.maxItems || '5'}
+                                onChange={(e) =>
+                                  setBlocksConfig({
+                                    ...blocksConfig,
+                                    subdistricts: { ...blocksConfig.subdistricts!, maxItems: e.target.value as any },
+                                  })
+                                }
+                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                              >
+                                <option value="5">Top 5 Kecamatan</option>
+                                <option value="10">Top 10 Kecamatan</option>
+                                <option value="all">Semua Kecamatan</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-medium text-slate-600 mb-1">Urutan (Sorting)</label>
+                              <select
+                                value={blocksConfig.subdistricts?.sortOrder || 'desc'}
+                                onChange={(e) =>
+                                  setBlocksConfig({
+                                    ...blocksConfig,
+                                    subdistricts: { ...blocksConfig.subdistricts!, sortOrder: e.target.value as any },
+                                  })
+                                }
+                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                              >
+                                <option value="desc">Terbanyak ke Terkecil (Descending)</option>
+                                <option value="asc">Terkecil ke Terbanyak (Ascending)</option>
+                              </select>
+                            </div>
+                          </div>
                         </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* SECTION 5: Screenshot Media */}
+                  {activeSection === 'media' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-900">Lampirkan Screenshot Tabel HD</h4>
+                          <p className="text-[11px] text-slate-500">
+                            Menyisipkan bukti visual screenshot monitoring otomatis di bawah ringkasan.
+                          </p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={blocksConfig.screenshot?.show ?? true}
+                          onChange={(e) =>
+                            setBlocksConfig({
+                              ...blocksConfig,
+                              screenshot: { ...blocksConfig.screenshot, show: e.target.checked },
+                              showImage: e.target.checked,
+                            })
+                          }
+                          className="rounded text-[#E2231A] w-4 h-4"
+                        />
                       </div>
-                    )}
-                  </div>
-
-                  {/* Section 5: Bukti Gambar HD */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label
-                        htmlFor="image_check"
-                        className="text-xs font-bold text-slate-800 uppercase tracking-wider cursor-pointer"
-                      >
-                        5. Bukti Gambar HD Otomatis
-                      </label>
-                      <input
-                        type="checkbox"
-                        id="image_check"
-                        checked={blocksConfig.showImage}
-                        onChange={(e) =>
-                          setBlocksConfig((p) => ({ ...p, showImage: e.target.checked }))
-                        }
-                        className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500"
-                      />
                     </div>
-                    <p className="text-[11px] text-slate-500">
-                      Menyematkan tangkapan layar monitoring resmi di dalam badan kartu Feishu.
-                    </p>
-                  </div>
+                  )}
 
-                  {/* Section 6: Action Button */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5">
-                    <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                      6. Action Button Terkelola
+                  {/* SECTION 6: Action Button */}
+                  {activeSection === 'action' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-900">Tombol Aksi Dashboard</h4>
+                          <p className="text-[11px] text-slate-500">
+                            Tombol interaktif di Feishu untuk membuka halaman monitoring LTMS terkait.
+                          </p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={blocksConfig.actionButton?.enabled ?? true}
+                          onChange={(e) =>
+                            setBlocksConfig({
+                              ...blocksConfig,
+                              actionButton: { ...blocksConfig.actionButton, enabled: e.target.checked },
+                            })
+                          }
+                          className="rounded text-[#E2231A] w-4 h-4"
+                        />
+                      </div>
+
+                      {blocksConfig.actionButton?.enabled && (
+                        <div className="space-y-3 p-4 bg-white rounded-2xl border border-slate-200">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">Label Tombol</label>
+                            <input
+                              type="text"
+                              value={blocksConfig.actionButton?.label || '🚀 Buka Dashboard LTMS'}
+                              onChange={(e) =>
+                                setBlocksConfig({
+                                  ...blocksConfig,
+                                  actionButton: { ...blocksConfig.actionButton, label: e.target.value },
+                                })
+                              }
+                              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">Target URL</label>
+                            <input
+                              type="text"
+                              value={blocksConfig.actionButton?.url || 'https://ltms.jt-express.id'}
+                              onChange={(e) =>
+                                setBlocksConfig({
+                                  ...blocksConfig,
+                                  actionButton: { ...blocksConfig.actionButton, url: e.target.value },
+                                })
+                              }
+                              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* SECTION 7: Footer */}
+                  {activeSection === 'footer' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-900">Catatan Kaki (Footer)</h4>
+                          <p className="text-[11px] text-slate-500">
+                            Identitas sistem otomatis pada bagian bawah kartu.
+                          </p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={blocksConfig.footer?.show ?? true}
+                          onChange={(e) =>
+                            setBlocksConfig({
+                              ...blocksConfig,
+                              footer: { ...blocksConfig.footer, show: e.target.checked },
+                              showFooter: e.target.checked,
+                            })
+                          }
+                          className="rounded text-[#E2231A] w-4 h-4"
+                        />
+                      </div>
+
+                      {blocksConfig.footer?.show && (
+                        <div className="space-y-3 p-4 bg-white rounded-2xl border border-slate-200">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">Judul Footer</label>
+                            <input
+                              type="text"
+                              value={blocksConfig.footer?.title || 'LTMS'}
+                              onChange={(e) =>
+                                setBlocksConfig({
+                                  ...blocksConfig,
+                                  footer: { ...blocksConfig.footer, title: e.target.value },
+                                })
+                              }
+                              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">Deskripsi Footer</label>
+                            <textarea
+                              rows={2}
+                              value={
+                                blocksConfig.footer?.description ||
+                                'Long Tail Monitoring System\nGenerated Automatically'
+                              }
+                              onChange={(e) =>
+                                setBlocksConfig({
+                                  ...blocksConfig,
+                                  footer: { ...blocksConfig.footer, description: e.target.value },
+                                  footerText: e.target.value,
+                                })
+                              }
+                              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Version Note */}
+                  <div className="pt-2">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Catatan Perubahan Versi (Opsional)
                     </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setBlocksConfig((p) => ({ ...p, actionButton: 'none' }))
-                        }
-                        className={`p-2.5 text-left rounded-lg border text-xs transition-all ${
-                          blocksConfig.actionButton === 'none'
-                            ? 'border-slate-900 bg-white ring-2 ring-slate-900/10 font-bold'
-                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
-                        }`}
-                      >
-                        Tidak Ada Tombol
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setBlocksConfig((p) => ({ ...p, actionButton: 'open_dashboard' }))
-                        }
-                        className={`p-2.5 text-left rounded-lg border text-xs transition-all ${
-                          blocksConfig.actionButton === 'open_dashboard'
-                            ? 'border-red-600 bg-white ring-2 ring-red-500/10 font-bold text-red-700'
-                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
-                        }`}
-                      >
-                        🚀 Buka Dashboard LTMS
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-slate-400 italic">
-                      * URL tautan dikelola aman oleh sistem backend (tanpa input URL manual).
-                    </p>
-                  </div>
-
-                  {/* Section 7: Footer */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label
-                        htmlFor="footer_check"
-                        className="text-xs font-bold text-slate-800 uppercase tracking-wider cursor-pointer"
-                      >
-                        7. Teks Catatan Footer
-                      </label>
-                      <input
-                        type="checkbox"
-                        id="footer_check"
-                        checked={blocksConfig.showFooter}
-                        onChange={(e) =>
-                          setBlocksConfig((p) => ({ ...p, showFooter: e.target.checked }))
-                        }
-                        className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500"
-                      />
-                    </div>
-
-                    {blocksConfig.showFooter && (
-                      <input
-                        type="text"
-                        value={blocksConfig.footerText || ''}
-                        onChange={(e) =>
-                          setBlocksConfig((p) => ({ ...p, footerText: e.target.value }))
-                        }
-                        placeholder="Logistics Traceability & Monitoring System (LTMS)"
-                        className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs outline-none"
-                      />
-                    )}
-                  </div>
-
-                  {/* Version Note & Default Switch */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                        Catatan Perubahan (Versi)
-                      </label>
-                      <input
-                        type="text"
-                        value={versionNote}
-                        onChange={(e) => setVersionNote(e.target.value)}
-                        placeholder="Contoh: Ubah Tema ke Dark & 4 Kolom"
-                        className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none"
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-3 pt-4">
-                      <input
-                        type="checkbox"
-                        id="is_default_card_check"
-                        checked={isDefault}
-                        onChange={(e) => setIsDefault(e.target.checked)}
-                        className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500"
-                      />
-                      <label
-                        htmlFor="is_default_card_check"
-                        className="text-xs font-semibold text-slate-700 cursor-pointer"
-                      >
-                        Jadikan Template Kartu Default
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Submit Bar */}
-                  <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => setBuilderOpen(false)}
-                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg"
-                    >
-                      Batal
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSave}
-                      disabled={saving}
-                      className="px-5 py-2 bg-[#E2231A] hover:bg-[#c91d15] text-white text-xs font-semibold rounded-lg shadow-sm disabled:opacity-50"
-                    >
-                      {saving ? 'Menyimpan...' : 'Simpan Desain Kartu'}
-                    </button>
+                    <input
+                      type="text"
+                      value={versionNote}
+                      onChange={(e) => setVersionNote(e.target.value)}
+                      placeholder="cth: Mengubah indikator KPI dan label tujuan"
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs"
+                    />
                   </div>
                 </div>
 
-                {/* Right Interactive Card Mockup (5 cols) */}
-                <div className="lg:col-span-5 bg-slate-100/70 p-6 flex flex-col justify-between overflow-hidden">
-                  <div className="space-y-3 flex-1 flex flex-col overflow-hidden">
+                {/* Right: Real-time Live Preview Feishu Card (5 cols) */}
+                <div className="lg:col-span-5 bg-slate-100/70 p-6 flex flex-col items-center justify-start overflow-y-auto">
+                  <div className="w-full max-w-sm space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                      <div className="flex items-center gap-1 text-xs font-bold text-slate-800">
                         <Eye className="w-4 h-4 text-slate-500" />
-                        Feishu Card Mockup (Live)
+                        Live Feishu Preview
                       </div>
-
-                      {/* Preview Mode Selector */}
-                      <div className="flex items-center bg-white p-0.5 rounded-lg border border-slate-200 text-[11px]">
+                      <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-slate-200 text-[10px] font-medium">
                         <button
                           type="button"
                           onClick={() => setPreviewMode('dummy')}
-                          className={`px-2.5 py-0.5 rounded font-medium ${
-                            previewMode === 'dummy'
-                              ? 'bg-slate-800 text-white font-semibold shadow-xs'
-                              : 'text-slate-600'
+                          className={`px-2 py-0.5 rounded ${
+                            previewMode === 'dummy' ? 'bg-[#E2231A] text-white font-semibold' : 'text-slate-600'
                           }`}
                         >
                           Data Dummy
@@ -1024,166 +1531,216 @@ export default function CardTemplatesPage() {
                         <button
                           type="button"
                           onClick={() => setPreviewMode('real')}
-                          className={`px-2.5 py-0.5 rounded font-medium ${
-                            previewMode === 'real'
-                              ? 'bg-slate-800 text-white font-semibold shadow-xs'
-                              : 'text-slate-600'
+                          className={`px-2 py-0.5 rounded ${
+                            previewMode === 'real' ? 'bg-[#E2231A] text-white font-semibold' : 'text-slate-600'
                           }`}
                         >
-                          Data Saat Ini
+                          Data Riil
                         </button>
                       </div>
                     </div>
 
-                    {/* FEISHU CARD UI MOCKUP CONTAINER */}
-                    <div className="flex-1 bg-white rounded-xl border border-slate-300 shadow-md overflow-hidden flex flex-col font-sans">
-                      {/* Card Header Bar with Selected Theme */}
+                    {/* MOCK FEISHU CARD CONTAINER */}
+                    <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden text-xs">
+                      {/* Feishu Header Banner */}
                       <div
-                        className={`px-4 py-3.5 text-white flex items-center justify-between ${
-                          THEMES.find((t) => t.id === blocksConfig.theme)?.bgClass ||
-                          'bg-[#E2231A]'
+                        className={`p-3.5 text-white ${
+                          THEMES.find((t) => t.id === blocksConfig.theme)?.bgClass || 'bg-[#E2231A]'
                         }`}
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm tracking-tight line-clamp-1">
-                            {renderedTitle}
-                          </span>
+                        <div className="font-bold text-sm leading-tight">
+                          {MessageTemplateEngine.render(
+                            blocksConfig.header?.title || blocksConfig.title || 'LTMS | Monitoring Report',
+                            activePreviewContext
+                          )}
                         </div>
+                        {blocksConfig.header?.subtitle && (
+                          <div className="text-[11px] text-white/80 font-medium mt-0.5">
+                            {MessageTemplateEngine.render(blocksConfig.header.subtitle, activePreviewContext)}
+                          </div>
+                        )}
                       </div>
 
-                      {/* Card Body */}
-                      <div className="p-4 space-y-3 flex-1 overflow-y-auto text-xs text-slate-800">
-                        {/* Summary Block */}
-                        {blocksConfig.showSummary && (
-                          <div className="space-y-1">
-                            <p className="text-[11px] text-slate-600">
-                              📌 <strong>Target Wilayah:</strong> <strong>{normalizedCtx.city}</strong>
-                            </p>
-                            <p className="text-[11px] text-slate-600">
-                              ⏰ <strong>Update:</strong> {normalizedCtx.generated_date} {normalizedCtx.generated_time}
-                            </p>
+                      <div className="p-4 space-y-3.5">
+                        {/* Sub Header Info */}
+                        <div className="grid grid-cols-2 gap-2 text-[11px] pb-2 border-b border-slate-100">
+                          {blocksConfig.header?.showPickupDp && (
+                            <div>
+                              <span className="text-slate-400 font-semibold block">
+                                {blocksConfig.header?.pickupDpLabel || 'Pickup DP'}:
+                              </span>
+                              <span className="font-bold text-slate-800">
+                                {MessageTemplateEngine.render(
+                                  blocksConfig.header?.pickupDpValue || '{{pickup_dp}}',
+                                  activePreviewContext
+                                )}
+                              </span>
+                            </div>
+                          )}
+
+                          {blocksConfig.header?.showTargetCity && (
+                            <div>
+                              <span className="text-slate-400 font-semibold block">
+                                {blocksConfig.header?.targetCityLabel || 'Tujuan'}:
+                              </span>
+                              <span className="font-bold text-slate-800">
+                                {MessageTemplateEngine.render(
+                                  blocksConfig.header?.targetCityValue || '{{target_city}}',
+                                  activePreviewContext
+                                )}
+                              </span>
+                            </div>
+                          )}
+
+                          {blocksConfig.header?.showUpdate && (
+                            <div className="col-span-2 pt-1">
+                              <span className="text-slate-400 font-semibold block">
+                                {blocksConfig.header?.updateLabel || 'Update'}:
+                              </span>
+                              <span className="font-medium text-slate-700">
+                                {MessageTemplateEngine.render(
+                                  blocksConfig.header?.updateValue || '{{generated_at}}',
+                                  activePreviewContext
+                                )}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Last Scan Block */}
+                        {blocksConfig.lastScan?.show && (
+                          <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-[11px] space-y-1">
+                            <div className="font-bold text-slate-800 flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-blue-600" />
+                              {blocksConfig.lastScan.title || 'Last Scan'}
+                            </div>
+                            <div className="text-slate-600 space-y-0.5 pt-0.5">
+                              <div>
+                                • {blocksConfig.lastScan.scanTimeLabel || 'Waktu'}:{' '}
+                                <span className="font-semibold text-slate-800">
+                                  {MessageTemplateEngine.render(
+                                    blocksConfig.lastScan.scanTimeValue || '{{last_scan_time}}',
+                                    activePreviewContext
+                                  )}
+                                </span>
+                              </div>
+                              <div>
+                                • {blocksConfig.lastScan.awbLabel || 'AWB'}:{' '}
+                                <span className="font-semibold text-slate-800">
+                                  {MessageTemplateEngine.render(
+                                    blocksConfig.lastScan.awbValue || '{{last_scan_awb}}',
+                                    activePreviewContext
+                                  )}
+                                </span>
+                              </div>
+                              <div>
+                                • {blocksConfig.lastScan.statusLabel || 'Status'}:{' '}
+                                <span className="font-semibold text-slate-800">
+                                  {MessageTemplateEngine.render(
+                                    blocksConfig.lastScan.statusValue || '{{last_scan_status}}',
+                                    activePreviewContext
+                                  )}
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         )}
 
-                        {/* KPI Grid Block */}
-                        {blocksConfig.showKpiGrid && (
-                          <>
-                            <div className="h-px bg-slate-100 my-2" />
-                            {blocksConfig.kpiStyle === '4_column' ? (
-                              <div className="grid grid-cols-4 gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100 text-center">
-                                <div>
-                                  <div className="text-[10px] text-slate-400">Total</div>
-                                  <div className="font-bold text-xs text-slate-800">
-                                    {normalizedCtx.total_package}
+                        {/* KPI Grid */}
+                        <div className="space-y-2">
+                          <div className="font-bold text-slate-800 text-[11px]">
+                            📊 {blocksConfig.kpiGrid?.title || 'Ringkasan Monitoring'}
+                          </div>
+
+                          <div
+                            className={`grid gap-1.5 ${
+                              blocksConfig.kpiGrid?.layout === '2_column' ? 'grid-cols-2' : 'grid-cols-2'
+                            }`}
+                          >
+                            {(blocksConfig.kpiGrid?.items || []).map((kpi, idx) => {
+                              const renderedVal = MessageTemplateEngine.render(
+                                kpi.valueTemplate,
+                                activePreviewContext
+                              );
+                              return (
+                                <div
+                                  key={kpi.id || idx}
+                                  className="p-2 bg-slate-50/80 rounded border border-slate-200/80"
+                                >
+                                  <div className="text-[10px] text-slate-500 font-medium truncate">{kpi.label}</div>
+                                  <div
+                                    className={`text-xs font-bold mt-0.5 ${
+                                      kpi.color === 'red'
+                                        ? 'text-[#E2231A]'
+                                        : kpi.color === 'green'
+                                        ? 'text-emerald-600'
+                                        : kpi.color === 'blue'
+                                        ? 'text-blue-600'
+                                        : 'text-slate-800'
+                                    }`}
+                                  >
+                                    {renderedVal}
                                   </div>
                                 </div>
-                                <div>
-                                  <div className="text-[10px] text-slate-400">Belum</div>
-                                  <div className="font-bold text-xs text-red-600">
-                                    {normalizedCtx.pending_package}
-                                  </div>
-                                </div>
-                                <div>
-                                  <div className="text-[10px] text-slate-400">Late</div>
-                                  <div className="font-bold text-xs text-red-600">
-                                    {normalizedCtx.over_sla}
-                                  </div>
-                                </div>
-                                <div>
-                                  <div className="text-[10px] text-slate-400">SLA</div>
-                                  <div className="font-bold text-xs text-slate-900">
-                                    {normalizedCtx.progress}%
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-                                <div className="space-y-1">
-                                  <div className="text-[11px]">
-                                    📦 <strong>Total:</strong> {normalizedCtx.total_package}
-                                  </div>
-                                  <div className="text-[11px]">
-                                    ⏳ <strong>Belum:</strong>{' '}
-                                    <span className="text-red-600 font-bold">
-                                      {normalizedCtx.pending_package}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <div className="text-[11px]">
-                                    🚨 <strong>Late:</strong>{' '}
-                                    <span className="text-red-600 font-bold">
-                                      {normalizedCtx.over_sla}
-                                    </span>
-                                  </div>
-                                  <div className="text-[11px]">
-                                    📈 <strong>SLA:</strong>{' '}
-                                    <strong>{normalizedCtx.progress}%</strong>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Kecamatan Tujuan Block */}
+                        {blocksConfig.subdistricts?.show && (
+                          <div className="space-y-1.5 pt-1 border-t border-slate-100">
+                            <div className="font-bold text-slate-800 text-[11px]">
+                              {blocksConfig.subdistricts.title || '📍 Kecamatan Tujuan'}
+                            </div>
+                            <div className="text-[10px] text-slate-600 bg-slate-50 p-2 rounded border border-slate-200 whitespace-pre-line leading-relaxed">
+                              {MessageTemplateEngine.render(
+                                '{{destination_subdistricts}}',
+                                activePreviewContext
+                              )}
+                            </div>
+                          </div>
                         )}
 
-                        {/* Top Kecamatan Block */}
-                        {blocksConfig.showTopKecamatan && (
-                          <>
-                            <div className="h-px bg-slate-100 my-2" />
-                            <div className="space-y-1">
-                              <div className="text-[11px] font-bold text-slate-700">
-                                🔥 Top Kecamatan Tertinggi (Max {blocksConfig.topKecamatanLimit || 5}):
-                              </div>
-                              <div className="font-mono text-[11px] text-slate-600 whitespace-pre-wrap bg-slate-50 p-2 rounded border border-slate-100">
-                                {normalizedCtx.district_list
-                                  .split('\n')
-                                  .slice(0, blocksConfig.topKecamatanLimit || 5)
-                                  .join('\n')}
-                              </div>
+                        {/* Screenshot Mock */}
+                        {blocksConfig.screenshot?.show && (
+                          <div className="border border-dashed border-slate-300 rounded-lg p-4 text-center bg-slate-50 space-y-1">
+                            <ImageIcon className="w-5 h-5 text-slate-400 mx-auto" />
+                            <div className="text-[10px] font-semibold text-slate-600">
+                              [Bukti Screenshot HD Monitoring]
                             </div>
-                          </>
-                        )}
-
-                        {/* HD Proof Image Block */}
-                        {blocksConfig.showImage && (
-                          <>
-                            <div className="h-px bg-slate-100 my-2" />
-                            <div className="h-28 bg-slate-200/80 rounded-lg flex flex-col items-center justify-center text-slate-500 border border-slate-300 border-dashed">
-                              <ImageIcon className="w-6 h-6 mb-1 text-slate-400" />
-                              <span className="text-[11px] font-medium">
-                                Bukti Tabel Monitoring HD ({normalizedCtx.city})
-                              </span>
-                            </div>
-                          </>
+                          </div>
                         )}
 
                         {/* Action Button */}
-                        {blocksConfig.actionButton === 'open_dashboard' && (
-                          <>
-                            <div className="h-px bg-slate-100 my-2" />
+                        {blocksConfig.actionButton?.enabled && (
+                          <div>
                             <button
                               type="button"
-                              className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 shadow-xs"
+                              className={`w-full py-2 rounded-lg text-white font-bold text-xs shadow-sm transition-all ${
+                                blocksConfig.theme === 'red'
+                                  ? 'bg-[#E2231A]'
+                                  : blocksConfig.theme === 'blue'
+                                  ? 'bg-blue-600'
+                                  : 'bg-slate-800'
+                              }`}
                             >
-                              🚀 Buka Dashboard LTMS
-                              <ExternalLink className="w-3 h-3 text-slate-400" />
+                              {blocksConfig.actionButton.label || '🚀 Buka Dashboard LTMS'}
                             </button>
-                          </>
+                          </div>
                         )}
 
-                        {/* Footer Note */}
-                        {blocksConfig.showFooter && (
-                          <div className="pt-2 text-[10px] text-slate-400 border-t border-slate-100">
-                            {blocksConfig.footerText || normalizedCtx.footer}
+                        {/* Footer */}
+                        {blocksConfig.footer?.show && (
+                          <div className="text-[9px] text-slate-400 text-center leading-tight pt-1 border-t border-slate-100 whitespace-pre-line">
+                            {blocksConfig.footer.title && <strong>{blocksConfig.footer.title} • </strong>}
+                            {blocksConfig.footer.description ||
+                              'Long Tail Monitoring System\nGenerated Automatically'}
                           </div>
                         )}
                       </div>
                     </div>
                   </div>
-
-                  <p className="text-[11px] text-slate-400 mt-3 text-center">
-                    Visualisasi kartu Feishu 2.0 yang dikirim langsung ke grup target.
-                  </p>
                 </div>
               </div>
             </motion.div>
@@ -1191,66 +1748,62 @@ export default function CardTemplatesPage() {
         )}
       </AnimatePresence>
 
-      {/* MODAL 3: Version History Modal */}
+      {/* MODAL 3: Version History */}
       <AnimatePresence>
         {versionModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-4"
+              className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-100"
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">
-                    Riwayat Versi Kartu
-                  </h2>
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <h3 className="text-base font-bold text-slate-900">Riwayat Versi Desain Kartu</h3>
                   <p className="text-xs text-slate-500">{selectedTemplateName}</p>
                 </div>
                 <button
                   onClick={() => setVersionModalOpen(false)}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
-              {versionLoading ? (
-                <div className="py-10 text-center text-xs text-slate-500">
-                  Memuat riwayat versi kartu...
-                </div>
-              ) : activeVersions.length === 0 ? (
-                <p className="text-xs text-slate-400 py-6 text-center">
-                  Belum ada riwayat versi sebelumnya.
-                </p>
-              ) : (
-                <div className="space-y-2.5 max-h-[50vh] overflow-y-auto pr-1">
-                  {activeVersions.map((v) => (
+              <div className="p-5 max-h-96 overflow-y-auto space-y-3">
+                {versionLoading ? (
+                  <div className="py-8 text-center text-xs text-slate-500">Memuat riwayat...</div>
+                ) : activeVersions.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-slate-500">Belum ada riwayat versi sebelumnya.</div>
+                ) : (
+                  activeVersions.map((v) => (
                     <div
                       key={v.id}
-                      className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5"
+                      className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs"
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
-                          {v.version}
-                        </span>
-                        <span className="text-[11px] text-slate-400">
-                          {new Date(v.created_at).toLocaleString('id-ID')}
-                        </span>
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 bg-slate-200 font-mono font-bold rounded text-[10px]">
+                            {v.version}
+                          </span>
+                          <span className="text-slate-400 text-[10px]">
+                            {new Date(v.created_at).toLocaleString('id-ID')}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 text-[11px] italic">{v.note || 'Pembaruan desain'}</p>
                       </div>
-                      {v.note && (
-                        <p className="text-[11px] text-slate-600 font-medium">
-                          💬 {v.note}
-                        </p>
-                      )}
-                      <div className="bg-white p-2 rounded border border-slate-100 text-[10px] text-slate-500 font-mono line-clamp-3">
-                        {JSON.stringify(v.blocks_config)}
-                      </div>
+
+                      <button
+                        onClick={() => handleRestoreVersion(v)}
+                        className="px-3 py-1.5 bg-white border border-slate-200 hover:border-[#E2231A] text-slate-700 hover:text-[#E2231A] rounded-lg text-xs font-medium shadow-sm transition-all"
+                      >
+                        Rollback
+                      </button>
                     </div>
-                  ))}
-                </div>
-              )}
+                  ))
+                )}
+              </div>
             </motion.div>
           </div>
         )}

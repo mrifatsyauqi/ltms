@@ -50,10 +50,18 @@ export class FeishuMessageService implements ICommunicationProvider {
             const { CardCompilerService } = await import('../../configuration/card-compiler.service');
             contentObj = CardCompilerService.compile(payload.cardConfig as any, payload.data, uploadedImageKey);
           } else {
-            contentObj = feishuCardService.generateCard(
-              payload.data,
-              uploadedImageKey
-            );
+            try {
+              const { cardTemplateService } = await import('../../configuration/card-template.service');
+              const defaultTpl = await cardTemplateService.getDefault((payload.data?.module as any) || 'monitoring_inc');
+              if (defaultTpl?.blocks_config) {
+                const { CardCompilerService } = await import('../../configuration/card-compiler.service');
+                contentObj = CardCompilerService.compile(defaultTpl.blocks_config as any, payload.data, uploadedImageKey);
+              } else {
+                contentObj = feishuCardService.generateCard(payload.data, uploadedImageKey);
+              }
+            } catch {
+              contentObj = feishuCardService.generateCard(payload.data, uploadedImageKey);
+            }
           }
         } else if (payload.messageType === 'image' && uploadedImageKey) {
           msgType = 'image';

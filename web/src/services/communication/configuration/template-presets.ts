@@ -10,9 +10,30 @@ export type { VariableDefinition };
 export const OFFICIAL_VARIABLES: VariableDefinition[] = [
   // General / Wilayah
   {
+    key: 'pickup_dp',
+    label: 'Pickup DP',
+    description: 'Nama / kode Drop Point asal pickup (cth: BATANG01)',
+    example: 'BATANG01',
+    category: 'general',
+  },
+  {
+    key: 'drop_point',
+    label: 'Drop Point Delivery',
+    description: 'Nama / kode Drop Point tujuan delivery (cth: BATANG01)',
+    example: 'BATANG01',
+    category: 'general',
+  },
+  {
+    key: 'target_city',
+    label: 'Kota Tujuan Delivery',
+    description: 'Nama kota atau kabupaten tujuan pengiriman (cth: KOTA BATANG)',
+    example: 'KOTA BATANG',
+    category: 'general',
+  },
+  {
     key: 'city',
-    label: 'Target Kota / Wilayah',
-    description: 'Nama kota atau wilayah target monitoring (cth: BATANG)',
+    label: 'Target Kota (Alias)',
+    description: 'Alias untuk kota target monitoring',
     example: 'BATANG',
     category: 'general',
   },
@@ -24,13 +45,6 @@ export const OFFICIAL_VARIABLES: VariableDefinition[] = [
     category: 'general',
   },
   {
-    key: 'dp',
-    label: 'Drop Point',
-    description: 'Nama atau kode Drop Point (cth: BATANG01)',
-    example: 'BATANG01',
-    category: 'general',
-  },
-  {
     key: 'user',
     label: 'Operator / Pengirim',
     description: 'Nama pengguna yang membagikan laporan',
@@ -38,19 +52,35 @@ export const OFFICIAL_VARIABLES: VariableDefinition[] = [
     category: 'general',
   },
 
-  // Metrik Paket
+  // Waktu
   {
-    key: 'total_package',
-    label: 'Total Paket',
-    description: 'Jumlah seluruh paket yang dimonitor',
-    example: '14.942',
-    category: 'metrics',
+    key: 'generated_at',
+    label: 'Waktu Generate Lengkap',
+    description: 'Format waktu lengkap (cth: 05 Agustus 2026 08.30 WIB)',
+    example: '05 Agustus 2026 08.30 WIB',
+    category: 'meta',
   },
   {
-    key: 'pending_package',
-    label: 'Belum TTD',
-    description: 'Jumlah paket yang masih berstatus belum selesai/TTD',
-    example: '72',
+    key: 'today',
+    label: 'Tanggal Hari Ini',
+    description: 'Format tanggal singkat (cth: 05 Agu 2026)',
+    example: '05 Agu 2026',
+    category: 'meta',
+  },
+  {
+    key: 'time',
+    label: 'Jam Saat Ini',
+    description: 'Format jam WIB (cth: 08:30 WIB)',
+    example: '08:30 WIB',
+    category: 'meta',
+  },
+
+  // Metrik Monitoring INC
+  {
+    key: 'total_inc',
+    label: 'Total AWB INC',
+    description: 'Total seluruh paket incoming intercity yang dimonitor',
+    example: '14.942',
     category: 'metrics',
   },
   {
@@ -61,68 +91,93 @@ export const OFFICIAL_VARIABLES: VariableDefinition[] = [
     category: 'metrics',
   },
   {
+    key: 'pending_ttd',
+    label: 'Belum TTD',
+    description: 'Jumlah paket yang masih berstatus belum selesai / TTD',
+    example: '72',
+    category: 'metrics',
+  },
+  {
     key: 'over_sla',
-    label: 'Lewat SLA',
+    label: 'AWB Melebihi SLA',
     description: 'Jumlah paket yang telah melampaui batas SLA',
     example: '54',
     category: 'metrics',
   },
   {
-    key: 'progress',
-    label: 'Progress SLA (%)',
+    key: 'sla_percentage',
+    label: 'Persentase SLA (%)',
     description: 'Persentase pencapaian SLA operasional',
     example: '99.1',
     category: 'metrics',
   },
+
+  // Metrik Monitoring Delivery
   {
-    key: 'sla_percentage',
-    label: 'Persentase SLA (%)',
-    description: 'Alias untuk persentase SLA operasional',
-    example: '99.1',
+    key: 'total_arrived',
+    label: 'Total Sampai',
+    description: 'Total paket yang telah sampai di Drop Point',
+    example: '3.420',
     category: 'metrics',
   },
   {
-    key: 'district_list',
-    label: 'Top Kecamatan Tertinggi',
-    description: 'Daftar rincian kecamatan dengan sisa paket tertinggi',
-    example: '1. Batang (18)\n2. Warungasem (14)\n3. Limpung (12)',
+    key: 'total_delivery',
+    label: 'Total AWB Delivery',
+    description: 'Total paket yang masuk dalam proses antaran delivery',
+    example: '3.210',
+    category: 'metrics',
+  },
+  {
+    key: 'delivery_percentage',
+    label: 'Persentase Delivery (%)',
+    description: 'Persentase keberhasilan penyelesaian antaran',
+    example: '98.5',
     category: 'metrics',
   },
 
-  // Waktu & Meta
+  // Last Scan
   {
-    key: 'today',
-    label: 'Tanggal Hari Ini',
-    description: 'Format tanggal hari ini (cth: 05 Agu 2026)',
-    example: '05 Agu 2026',
+    key: 'last_scan_time',
+    label: 'Waktu Last Scan',
+    description: 'Waktu aktivitas scan terakhir tercatat',
+    example: '05 Agustus 2026 08:26 WIB',
     category: 'meta',
   },
   {
-    key: 'time',
-    label: 'Jam Sekarang',
-    description: 'Format jam saat ini (cth: 08:30 WIB)',
-    example: '08:30 WIB',
+    key: 'last_scan_awb',
+    label: 'AWB Last Scan',
+    description: 'Nomor resi / AWB aktivitas scan terakhir',
+    example: 'JT1234567890',
     category: 'meta',
   },
   {
-    key: 'generated_date',
-    label: 'Tanggal Laporan',
-    description: 'Tanggal saat laporan diekspor',
-    example: '05 Agu 2026',
+    key: 'last_scan_status',
+    label: 'Status Last Scan',
+    description: 'Status proses scan terakhir (cth: Delivery)',
+    example: 'Delivery',
     category: 'meta',
   },
+
+  // Detail Kecamatan & Lampiran
   {
-    key: 'generated_time',
-    label: 'Jam Laporan',
-    description: 'Jam saat laporan diekspor',
-    example: '08:30 WIB',
+    key: 'destination_subdistricts',
+    label: 'Kecamatan Tujuan',
+    description: 'Daftar rincian kecamatan tujuan beserta jumlah AWB',
+    example: 'BATANG\n31 AWB\n\nWARUNGASEM\n26 AWB\n\nLIMPUNG\n23 AWB',
+    category: 'metrics',
+  },
+  {
+    key: 'monitoring_image',
+    label: 'Lampiran Screenshot',
+    description: 'Lampiran gambar screenshot tabel monitoring HD',
+    example: '[Image Attachment]',
     category: 'meta',
   },
   {
     key: 'footer',
-    label: 'Footer LTMS',
-    description: 'Teks penutup identitas resmi LTMS',
-    example: 'Logistics Traceability & Monitoring System (LTMS)',
+    label: 'Teks Catatan Kaki (Footer)',
+    description: 'Identitas sistem pada bagian bawah kartu',
+    example: 'LTMS\nLong Tail Monitoring System\nGenerated Automatically',
     category: 'meta',
   },
 ];
@@ -131,8 +186,6 @@ export interface StarterPreset {
   id: string;
   module: TemplateModule;
   name: string;
-  badge: string;
-  iconName: string;
   description: string;
   messageContent: string;
   blocksConfig: VisualCardBlocksConfig;
@@ -142,60 +195,222 @@ export const STARTER_PRESETS: StarterPreset[] = [
   {
     id: 'preset_monitoring_inc',
     module: 'monitoring_inc',
-    name: 'Monitoring INC',
-    badge: 'SLA Incoming',
-    iconName: 'Clock',
-    description: 'Template pemantauan pencapaian SLA Incoming harian per kota/wilayah.',
-    messageContent: `📊 MONITORING INC
-Target Kota: {{city}}
-━━━━━━━━━━━━━━
-📦 Total Paket: {{total_package}}
-⏳ Belum TTD: {{pending_package}}
-✅ Clear TTD: {{clear_ttd}}
-🚨 Lewat SLA: {{over_sla}}
-📈 Progress: {{progress}}%
-━━━━━━━━━━━━━━
-Top Kecamatan:
-{{district_list}}
-━━━━━━━━━━━━━━
-{{footer}}`,
+    name: 'Standar Monitoring INC (Phase 2.6.1)',
+    description: 'Interactive card resmi Monitoring INC dengan 5 Grid KPI, Sub Header, dan daftar Kecamatan Tujuan.',
+    messageContent:
+      '📊 *LTMS | MONITORING INC*\n' +
+      'Intercity Outgoing Monitoring\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '📦 Pickup DP: {{pickup_dp}}\n' +
+      '🎯 Tujuan: {{target_city}}\n' +
+      '⏰ Update: {{generated_at}}\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '📦 Total AWB INC: {{total_inc}}\n' +
+      '✅ Clear TTD: {{clear_ttd}}\n' +
+      '⏳ Belum TTD: {{pending_ttd}}\n' +
+      '🚨 Lewat SLA: {{over_sla}}\n' +
+      '📈 Persentase SLA: {{sla_percentage}}%\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '📍 Kecamatan Tujuan:\n' +
+      '{{destination_subdistricts}}\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '{{footer}}',
     blocksConfig: {
-      title: 'LTMS • Monitoring INC {{city}}',
       theme: 'red',
+      header: {
+        title: 'LTMS | Monitoring INC',
+        subtitle: 'Intercity Outgoing Monitoring',
+        pickupDpLabel: 'Pickup DP',
+        pickupDpValue: '{{pickup_dp}}',
+        targetCityLabel: 'Tujuan',
+        targetCityValue: '{{target_city}}',
+        updateLabel: 'Update',
+        updateValue: '{{generated_at}}',
+        showPickupDp: true,
+        showTargetCity: true,
+        showUpdate: true,
+      },
+      kpiGrid: {
+        title: 'Ringkasan Monitoring INC',
+        layout: 'horizontal_5',
+        items: [
+          { id: '1', label: 'Total AWB INC', valueTemplate: '{{total_inc}}', color: 'default', icon: 'package' },
+          { id: '2', label: 'Clear TTD', valueTemplate: '{{clear_ttd}}', color: 'green', icon: 'check' },
+          { id: '3', label: 'Belum TTD', valueTemplate: '{{pending_ttd}}', color: 'red', icon: 'clock' },
+          { id: '4', label: 'AWB Melebihi SLA', valueTemplate: '{{over_sla}}', color: 'red', icon: 'alert' },
+          { id: '5', label: 'Persentase SLA', valueTemplate: '{{sla_percentage}}%', color: 'default', icon: 'trend' },
+        ],
+      },
+      subdistricts: {
+        title: '📍 Kecamatan Tujuan',
+        maxItems: '5',
+        sortOrder: 'desc',
+        show: true,
+      },
+      screenshot: {
+        show: true,
+        hdQuality: true,
+      },
+      footer: {
+        title: 'LTMS',
+        description: 'Long Tail Monitoring System\nGenerated Automatically',
+        show: true,
+      },
+      actionButton: {
+        label: '🚀 Buka Dashboard LTMS',
+        url: 'https://ltms.jt-express.id',
+        enabled: true,
+      },
+      // Backward compatibility fields
+      title: 'LTMS | Monitoring INC',
       showLogo: true,
       showSummary: true,
       showKpiGrid: true,
-      kpiStyle: '4_column',
+      kpiStyle: 'horizontal_5',
       showTopKecamatan: true,
       topKecamatanLimit: 5,
       showImage: true,
       showFooter: true,
-      footerText: 'Logistics Traceability & Monitoring System (LTMS)',
-      actionButton: 'open_dashboard',
+      footerText: 'LTMS\nLong Tail Monitoring System\nGenerated Automatically',
     },
   },
   {
     id: 'preset_monitoring_delivery',
     module: 'monitoring_delivery',
-    name: 'Monitoring Delivery',
-    badge: 'Delivery & Sprinter',
-    iconName: 'Truck',
-    description: 'Template pemantauan status antaran drop point dan performa sprinter JMS.',
-    messageContent: `🚚 MONITORING DELIVERY
-Cabang: {{branch}} | Drop Point: {{dp}}
-━━━━━━━━━━━━━━
-📦 Total Antaran: {{total_package}}
-⏳ Sisa Antaran: {{pending_package}}
-✅ Selesai Antar: {{clear_ttd}}
-📈 Pencapaian: {{progress}}%
-━━━━━━━━━━━━━━
-Diperbarui: {{today}} {{time}}
-Oleh: {{user}}
-━━━━━━━━━━━━━━
-{{footer}}`,
+    name: 'Standar Monitoring Delivery (Phase 2.6.1)',
+    description: 'Interactive card ringkasan performa delivery Drop Point dilengkapi Last Scan dan 5 KPI Delivery.',
+    messageContent:
+      '🚚 *LTMS | MONITORING DELIVERY*\n' +
+      'Delivery Performance Monitoring\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '🏢 Drop Point: {{drop_point}}\n' +
+      '⏰ Update: {{generated_at}}\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '⏱️ *Last Scan*\n' +
+      '• Waktu: {{last_scan_time}}\n' +
+      '• AWB: {{last_scan_awb}}\n' +
+      '• Status: {{last_scan_status}}\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '📦 Total Sampai: {{total_arrived}}\n' +
+      '🚚 Total Delivery: {{total_delivery}}\n' +
+      '✅ Clear TTD: {{clear_ttd}}\n' +
+      '⏳ Belum TTD: {{pending_ttd}}\n' +
+      '📈 Persentase Delivery: {{delivery_percentage}}%\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '{{footer}}',
     blocksConfig: {
-      title: 'LTMS • Delivery Summary {{dp}}',
       theme: 'blue',
+      header: {
+        title: 'LTMS | Monitoring Delivery',
+        subtitle: 'Delivery Performance Monitoring',
+        targetCityLabel: 'Drop Point',
+        targetCityValue: '{{drop_point}}',
+        updateLabel: 'Update',
+        updateValue: '{{generated_at}}',
+        showPickupDp: false,
+        showTargetCity: true,
+        showUpdate: true,
+      },
+      lastScan: {
+        title: 'Last Scan',
+        scanTimeLabel: 'Waktu Scan',
+        scanTimeValue: '{{last_scan_time}}',
+        awbLabel: 'AWB',
+        awbValue: '{{last_scan_awb}}',
+        statusLabel: 'Status',
+        statusValue: '{{last_scan_status}}',
+        fallbackText: 'Belum ada aktivitas scan hari ini.',
+        show: true,
+      },
+      kpiGrid: {
+        title: 'Ringkasan Delivery',
+        layout: 'horizontal_5',
+        items: [
+          { id: '1', label: 'Total Sampai', valueTemplate: '{{total_arrived}}', color: 'default', icon: 'package' },
+          { id: '2', label: 'Total AWB Delivery', valueTemplate: '{{total_delivery}}', color: 'default', icon: 'truck' },
+          { id: '3', label: 'Clear TTD', valueTemplate: '{{clear_ttd}}', color: 'green', icon: 'check' },
+          { id: '4', label: 'Belum TTD', valueTemplate: '{{pending_ttd}}', color: 'red', icon: 'clock' },
+          { id: '5', label: 'Persentase Delivery', valueTemplate: '{{delivery_percentage}}%', color: 'default', icon: 'trend' },
+        ],
+      },
+      screenshot: {
+        show: true,
+        hdQuality: true,
+      },
+      footer: {
+        title: 'LTMS',
+        description: 'Long Tail Monitoring System\nGenerated Automatically',
+        show: true,
+      },
+      actionButton: {
+        label: '🚀 Buka Dashboard LTMS',
+        url: 'https://ltms.jt-express.id',
+        enabled: true,
+      },
+      // Backward compatibility fields
+      title: 'LTMS | Monitoring Delivery',
+      showLogo: true,
+      showSummary: true,
+      showKpiGrid: true,
+      kpiStyle: 'horizontal_5',
+      showTopKecamatan: false,
+      topKecamatanLimit: 5,
+      showImage: true,
+      showFooter: true,
+      footerText: 'LTMS\nLong Tail Monitoring System\nGenerated Automatically',
+    },
+  },
+  {
+    id: 'preset_longtail_alert',
+    module: 'longtail',
+    name: 'Peringatan Paket Long Tail',
+    description: 'Peringatan operasional khusus paket tertahan (Long Tail SLA breach).',
+    messageContent:
+      '🚨 *PERINGATAN PAKET LONG TAIL*\n' +
+      'Wilayah: {{target_city}} | Cabang: {{branch}}\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      '📦 Total Tertahan: {{pending_ttd}}\n' +
+      '🚨 Lewat SLA: {{over_sla}}\n' +
+      '⏰ Update: {{generated_at}}\n' +
+      '━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+      'Mohon tim operasional segera melakukan investigasi dan update status POD.\n' +
+      '{{footer}}',
+    blocksConfig: {
+      theme: 'red',
+      header: {
+        title: 'LTMS | Alert Paket Long Tail',
+        subtitle: 'Critical Long Tail SLA Watch',
+        targetCityLabel: 'Wilayah Target',
+        targetCityValue: '{{target_city}}',
+        updateLabel: 'Waktu Alert',
+        updateValue: '{{generated_at}}',
+        showPickupDp: false,
+        showTargetCity: true,
+        showUpdate: true,
+      },
+      kpiGrid: {
+        title: 'Status Paket Bermasalah',
+        layout: '2_column',
+        items: [
+          { id: '1', label: 'Total Tertahan', valueTemplate: '{{pending_ttd}}', color: 'red', icon: 'alert' },
+          { id: '2', label: 'Lewat SLA', valueTemplate: '{{over_sla}}', color: 'red', icon: 'clock' },
+        ],
+      },
+      screenshot: {
+        show: true,
+        hdQuality: true,
+      },
+      footer: {
+        title: 'LTMS',
+        description: 'Long Tail Monitoring System\nGenerated Automatically',
+        show: true,
+      },
+      actionButton: {
+        label: '🔍 Investigasi Paket',
+        url: 'https://ltms.jt-express.id/longtail',
+        enabled: true,
+      },
+      title: 'LTMS | Alert Paket Long Tail',
       showLogo: true,
       showSummary: true,
       showKpiGrid: true,
@@ -204,101 +419,78 @@ Oleh: {{user}}
       topKecamatanLimit: 5,
       showImage: true,
       showFooter: true,
-      footerText: 'LTMS Delivery Dispatch System',
-      actionButton: 'open_dashboard',
-    },
-  },
-  {
-    id: 'preset_longtail',
-    module: 'longtail',
-    name: 'Long Tail Alert',
-    badge: 'Aging Paket',
-    iconName: 'MessageSquareText',
-    description: 'Template notifikasi paket tertahan / aging melebihi batas toleransi waktu.',
-    messageContent: `⚠️ PERINGATAN PAKET LONG TAIL
-Wilayah: {{city}} ({{branch}})
-━━━━━━━━━━━━━━
-📦 Total Paket Tertahan: {{pending_package}}
-🚨 Lewat Batas: {{over_sla}}
-📈 Persentase Selesai: {{progress}}%
-━━━━━━━━━━━━━━
-Mohon tim operasional segera melakukan follow-up ke Drop Point terkait.
-━━━━━━━━━━━━━━
-{{footer}}`,
-    blocksConfig: {
-      title: 'LTMS • Long Tail Alert {{city}}',
-      theme: 'dark',
-      showLogo: true,
-      showSummary: true,
-      showKpiGrid: true,
-      kpiStyle: '2_column',
-      showTopKecamatan: true,
-      topKecamatanLimit: 5,
-      showImage: false,
-      showFooter: true,
-      footerText: 'LTMS Alert & Escalation Service',
-      actionButton: 'open_dashboard',
-    },
-  },
-  {
-    id: 'preset_dashboard',
-    module: 'dashboard',
-    name: 'Dashboard Summary',
-    badge: 'KPI Ringkasan',
-    iconName: 'LayoutDashboard',
-    description: 'Template ringkasan KPI operasional eksekutif cabang atau kota.',
-    messageContent: `📈 RINGKASAN KPI OPERASIONAL
-Cabang: {{branch}}
-━━━━━━━━━━━━━━
-📦 Total Volume: {{total_package}}
-✅ Total Clear: {{clear_ttd}}
-⏳ Pending: {{pending_package}}
-🎯 SLA Overall: {{sla_percentage}}%
-━━━━━━━━━━━━━━
-Diperbarui: {{today}} {{time}}
-{{footer}}`,
-    blocksConfig: {
-      title: 'LTMS • Executive KPI Overview',
-      theme: 'green',
-      showLogo: true,
-      showSummary: true,
-      showKpiGrid: true,
-      kpiStyle: '4_column',
-      showTopKecamatan: false,
-      topKecamatanLimit: 5,
-      showImage: false,
-      showFooter: true,
-      footerText: 'Logistics Traceability & Monitoring System (LTMS)',
-      actionButton: 'open_dashboard',
+      footerText: 'LTMS\nLong Tail Monitoring System\nGenerated Automatically',
     },
   },
 ];
 
 export const SAMPLE_DUMMY_CONTEXT: TemplateVariablesContext = {
-  city: 'BATANG',
-  target_kota: 'BATANG',
+  pickup_dp: 'BATANG01',
+  pickupDp: 'BATANG01',
+  drop_point: 'BATANG01',
+  dropPoint: 'BATANG01',
+  dp: 'BATANG01',
+  target_city: 'KOTA BATANG',
+  targetCity: 'KOTA BATANG',
+  city: 'KOTA BATANG',
+  target_kota: 'KOTA BATANG',
   branch: 'SEMARANG',
   cabang: 'SEMARANG',
-  dp: 'BATANG01',
-  drop_point: 'BATANG01',
-  user: 'Admin Batang',
-  generated_by: 'Admin Batang',
+  user: 'M. Rifat Syauqi (Super Admin)',
+  generated_by: 'M. Rifat Syauqi (Super Admin)',
+
+  generated_at: '05 Agustus 2026 08.30 WIB',
+  generatedAt: '05 Agustus 2026 08.30 WIB',
   today: '05 Agu 2026',
   time: '08:30 WIB',
   generated_date: '05 Agu 2026',
   generated_time: '08:30 WIB',
+
+  // Metrik INC
+  total_inc: '14.942',
+  totalInc: '14.942',
   total_package: '14.942',
   total: '14.942',
+  clear_ttd: '14.816',
+  clearTtd: '14.816',
+  clear: '14.816',
+  pending_ttd: '72',
+  pendingTtd: '72',
   pending_package: '72',
   belum: '72',
-  clear_ttd: '14.816',
-  clear: '14.816',
   over_sla: '54',
+  overSla: '54',
   late: '54',
+  sla_percentage: '99.1',
+  slaPercentage: '99.1',
   progress: '99.1',
   percent: '99.1',
-  sla_percentage: '99.1',
-  district_list: '1. Batang (18)\n2. Warungasem (14)\n3. Limpung (12)\n4. Banyuputih (10)\n5. Subah (8)',
-  top_kecamatan: '1. Batang (18)\n2. Warungasem (14)\n3. Limpung (12)\n4. Banyuputih (10)\n5. Subah (8)',
-  footer: 'Logistics Traceability & Monitoring System (LTMS)',
+
+  // Metrik Delivery
+  total_arrived: '3.420',
+  totalArrived: '3.420',
+  total_delivery: '3.210',
+  totalDelivery: '3.210',
+  delivery_percentage: '98.5',
+  deliveryPercentage: '98.5',
+
+  // Last Scan
+  last_scan_time: '05 Agustus 2026 08:26 WIB',
+  lastScanTime: '05 Agustus 2026 08:26 WIB',
+  last_scan_awb: 'JT1234567890',
+  lastScanAwb: 'JT1234567890',
+  last_scan_status: 'Delivery',
+  lastScanStatus: 'Delivery',
+
+  // Detail Kecamatan
+  destination_subdistricts:
+    '1. BATANG (31 AWB)\n2. WARUNGASEM (26 AWB)\n3. LIMPUNG (23 AWB)\n4. BANDAR (19 AWB)\n5. TULIS (17 AWB)',
+  district_list:
+    '1. BATANG (31 AWB)\n2. WARUNGASEM (26 AWB)\n3. LIMPUNG (23 AWB)\n4. BANDAR (19 AWB)\n5. TULIS (17 AWB)',
+  top_kecamatan:
+    '1. BATANG (31 AWB)\n2. WARUNGASEM (26 AWB)\n3. LIMPUNG (23 AWB)\n4. BANDAR (19 AWB)\n5. TULIS (17 AWB)',
+
+  // Image & Footer
+  monitoring_image: 'img_sample_key_123',
+  footer: 'LTMS\nLong Tail Monitoring System\nGenerated Automatically',
 };
