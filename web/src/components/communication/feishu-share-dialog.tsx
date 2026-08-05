@@ -711,13 +711,13 @@ export function FeishuShareDialog({
                               <div className="p-2 bg-slate-50 rounded border border-slate-200 text-[11px] space-y-0.5">
                                 <div className="font-bold text-slate-800">{blocksConfig.lastScan.title || 'Last Scan'}</div>
                                 <div className="text-slate-600 text-[10px]">
-                                  • Waktu: <strong className="text-slate-800">{MessageTemplateEngine.render(blocksConfig.lastScan.scanTimeValue, previewVarContext)}</strong>
+                                  • Waktu: <strong className="text-slate-800">{MessageTemplateEngine.render(blocksConfig.lastScan.scanTimeValue || '{{last_scan_time}}', previewVarContext)}</strong>
                                 </div>
                                 <div className="text-slate-600 text-[10px]">
-                                  • AWB: <strong className="text-slate-800">{MessageTemplateEngine.render(blocksConfig.lastScan.awbValue, previewVarContext)}</strong>
+                                  • AWB: <strong className="text-slate-800">{MessageTemplateEngine.render(blocksConfig.lastScan.awbValue || '{{last_scan_awb}}', previewVarContext)}</strong>
                                 </div>
                                 <div className="text-slate-600 text-[10px]">
-                                  • Status: <strong className="text-slate-800">{MessageTemplateEngine.render(blocksConfig.lastScan.statusValue, previewVarContext)}</strong>
+                                  • Status: <strong className="text-slate-800">{MessageTemplateEngine.render(blocksConfig.lastScan.statusValue || '{{last_scan_status}}', previewVarContext)}</strong>
                                 </div>
                               </div>
                             )}
@@ -743,7 +743,7 @@ export function FeishuShareDialog({
                                             : 'text-slate-900'
                                         }`}
                                       >
-                                        {MessageTemplateEngine.render(kpi.valueTemplate, previewVarContext)}
+                                        {MessageTemplateEngine.render(kpi.valueTemplate || '', previewVarContext)}
                                       </p>
                                     </div>
                                   ))}
