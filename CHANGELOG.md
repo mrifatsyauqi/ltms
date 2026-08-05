@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v2.5.1] - 2026-08-05 (Phase 2.5.1: Communication Center Access Revision & Global Scope Authorization)
+
+### Added
+- **Reusable Communication Authorization & Data Scope Layer (`web/src/services/communication/utils/authorization.ts`)**:
+  - Implementasi class `CommunicationAuthorizationService` dengan metode `resolveUserScope` dan `validateDataScope`.
+  - Memetakan wewenang dan cakupan data pengguna secara terisolasi dan dinamis dari database Supabase (`cabang`, `master_drop_point`, relasi `spv_drop_point_user_id`):
+    - **Super Admin**: Akses global tanpa batas ke seluruh kota dan drop point.
+    - **Admin Cabang**: Akses penuh ke seluruh kota dan drop point dalam lingkup cabang.
+    - **Manager Kota / Asisten Manager Kota**: Terikat pada kota tanggung jawabnya (`allowedKota`) beserta drop point di bawahnya.
+    - **SPV Drop Point**: Terikat pada seluruh Drop Point yang disupervisi (`allowedDropPoints`).
+    - **Admin Drop Point**: Terikat khusus pada Drop Point miliknya sendiri.
+  - Memvalidasi parameter `targetScope`, `targetKota`, `targetDp`, dan metrik laporan di Backend sebelum pengiriman dieksekusi untuk mencegah kebocoran data (*data leakage*) lintas wilayah.
+
+- **Global Multi-Module Communication Contracts & Card Builders (`communication.types.ts` & `card.builder.ts`)**:
+  - Membuka Communication Center sebagai layanan global untuk seluruh modul LTMS:
+    - `monitoring_inc` (Monitoring Incoming SLA)
+    - `monitoring_delivery` (Monitoring Delivery JMS & Sprinter)
+    - `longtail` (Laporan Paket Status Long Tail)
+    - `dashboard` (Ringkasan KPI Dashboard Operasional)
+    - `custom` / `analytics` (Laporan Custom & Analitik)
+  - Penambahan builder method fleksibel pada `FeishuCardBuilder`:
+    - `createDeliveryCard`, `createDashboardCard`, `createLongtailCard`, `createGenericReportCard`.
+  - Dispatching otomatis pada `FeishuCardService.generateCard(data, imageKey)` berdasarkan metadata `module` pemanggil.
+
+- **Global Reusable Frontend Share Dialog (`web/src/components/communication/feishu-share-dialog.tsx`)**:
+  - Komponen modal universal yang siap digunakan oleh modul apa pun di LTMS dengan dukungan dynamic module header, scope badge, live preview card, preview gambar HD, dan preview caption.
+  - `web/src/components/monitoring-inc/feishu-share-dialog.tsx` dialihkan me-re-export modul global untuk arsitektur DRY yang bersih.
+
+- **Automated Scope Authorization Test Suite (`web/src/services/communication/authorization.test.ts`)**:
+  - 13 unit test baru yang mencakup pengujian isolasi scope untuk seluruh role (Super Admin, Admin Cabang, Manager Kota, SPV DP, Admin DP), penolakan pengiriman data lintas cabang/kota/DP, serta pembentukan card dinamis lintas modul.
+
+### Changed & Refactored
+- **Refactoring Endpoint Pengiriman (`POST /api/communication/send`)**:
+  - Menghapus pengecekan role manual (hardcoded) dan menyerahkan sepenuhnya ke layer otorisasi backend `communicationAuthService.authorizeSend`.
+  - Mengembalikan status `403 FORBIDDEN` dengan deskripsi penyebab penolakan yang jelas saat terjadi pelanggaran data scope.
+
+---
+
 ## [v2.5.0] - 2026-08-05 (Phase 2.5: Feishu Open Platform Production E2E Verification & Hardening)
 
 ### Added

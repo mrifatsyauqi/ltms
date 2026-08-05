@@ -271,6 +271,11 @@ Terima kasih.`;
         chatId: selectedGroup.chatId,
         messageType: 'interactive_card',
         data: {
+          module: 'monitoring_inc',
+          targetScope: {
+            type: 'kota',
+            name: targetKota,
+          },
           targetKota,
           total: stats.total,
           belum: stats.belum,

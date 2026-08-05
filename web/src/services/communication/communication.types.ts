@@ -6,6 +6,28 @@ export type CommunicationMessageType =
   | 'text'
   | 'file';
 
+export type CommunicationModule =
+  | 'monitoring_inc'
+  | 'monitoring_delivery'
+  | 'longtail'
+  | 'dashboard'
+  | 'analytics'
+  | 'custom';
+
+export interface TargetScopeInfo {
+  type: 'all' | 'cabang' | 'kota' | 'drop_point';
+  name: string;
+  code?: string;
+}
+
+export interface ReportMetricItem {
+  label: string;
+  value: string | number;
+  subValue?: string;
+  highlight?: boolean;
+  color?: 'default' | 'red' | 'green' | 'blue' | 'yellow' | 'purple';
+}
+
 export interface KecamatanStat {
   nama: string;
   total: number;
@@ -14,26 +36,45 @@ export interface KecamatanStat {
   clear: number;
 }
 
-export interface MonitoringIncSummaryData {
-  targetKota: string;
-  total: number;
-  belum: number;
-  late: number;
-  clear: number;
-  percent: number;
-  topKecamatan: string[];
+export interface GenericReportData {
+  module?: CommunicationModule;
+  title?: string;
+  headerTemplate?:
+    | 'red'
+    | 'blue'
+    | 'turquoise'
+    | 'indigo'
+    | 'orange'
+    | 'green'
+    | 'carmine'
+    | 'violet';
+  targetScope?: TargetScopeInfo;
+  targetKota?: string;
+  targetDp?: string;
+  total?: number;
+  belum?: number;
+  late?: number;
+  clear?: number;
+  percent?: number;
+  metrics?: ReportMetricItem[];
+  topKecamatan?: string[];
   kecamatanStats?: KecamatanStat[];
+  details?: Array<{ label: string; value: string }>;
+  notes?: string;
   generateTime?: string;
   imageBase64?: string; // base64 Data URL atau raw base64 string
   imageKey?: string;
   caption?: string;
 }
 
+/** Alias untuk kompatibilitas backward Monitoring INC */
+export type MonitoringIncSummaryData = GenericReportData;
+
 export interface SendMessagePayload {
   channel: CommunicationChannel;
   chatId: string;
   messageType: CommunicationMessageType;
-  data?: MonitoringIncSummaryData;
+  data?: GenericReportData;
   textContent?: string;
   senderEmail?: string;
 }

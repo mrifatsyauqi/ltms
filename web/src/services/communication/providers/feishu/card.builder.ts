@@ -1,11 +1,25 @@
 import type {
   FeishuInteractiveCard,
+  GenericReportData,
   MonitoringIncSummaryData,
+  ReportMetricItem,
 } from '../../communication.types';
 
 export interface CardHeaderConfig {
   title: string;
-  template?: 'red' | 'blue' | 'wathet' | 'turquoise' | 'green' | 'yellow' | 'orange' | 'carmine' | 'violet' | 'purple' | 'indigo' | 'grey';
+  template?:
+    | 'red'
+    | 'blue'
+    | 'wathet'
+    | 'turquoise'
+    | 'green'
+    | 'yellow'
+    | 'orange'
+    | 'carmine'
+    | 'violet'
+    | 'purple'
+    | 'indigo'
+    | 'grey';
 }
 
 export interface CardField {
@@ -63,17 +77,21 @@ export class FeishuCardBuilder {
   }
 
   /**
-   * Tambah Baris Informasi Target Kota & Waktu Generate
+   * Tambah Baris Informasi Target Scope & Waktu Generate
    */
-  public addHeaderInfo(targetKota: string, timeStr?: string): this {
-    const formattedTime = timeStr || new Intl.DateTimeFormat('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(new Date());
+  public addHeaderInfo(targetName?: string, timeStr?: string, scopeLabel = 'Target'): this {
+    const formattedTime =
+      timeStr ||
+      new Intl.DateTimeFormat('id-ID', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(new Date());
+
+    const scopeText = targetName ? `📍 **${targetName.toUpperCase()}**` : '🏢 **Seluruh Cabang**';
 
     this.card.elements.push({
       tag: 'div',
@@ -82,7 +100,7 @@ export class FeishuCardBuilder {
           is_short: true,
           text: {
             tag: 'lark_md',
-            content: `**Target Kota:**\n📍 **${targetKota.toUpperCase()}**`,
+            content: `**${scopeLabel}:**\n${scopeText}`,
           },
         },
         {
@@ -101,10 +119,10 @@ export class FeishuCardBuilder {
    * Tambah Grid KPI 4 Kartu (Total Resi, Belum TTD, Lewat SLA, Progress %)
    */
   public addKpiGrid(data: {
-    total: number | string;
-    belum: number | string;
-    late: number | string;
-    percent: number | string;
+    total?: number | string;
+    belum?: number | string;
+    late?: number | string;
+    percent?: number | string;
   }): this {
     const formattedTotal = Number(data.total || 0).toLocaleString('id-ID');
     const formattedBelum = Number(data.belum || 0).toLocaleString('id-ID');
@@ -148,28 +166,62 @@ export class FeishuCardBuilder {
   }
 
   /**
-   * Tambah Distribusi Top Kecamatan
+   * Tambah Dynamic Metrics Grid dari array ReportMetricItem
    */
-  public addTopKecamatan(kecamatanList?: string[]): this {
-    const formattedList = kecamatanList && kecamatanList.length > 0
-      ? kecamatanList.map((k) => `• ${k}`).join('\n')
-      : '• Sesuai data terlampir';
+  public addDynamicMetrics(metrics: ReportMetricItem[]): this {
+    if (!metrics || metrics.length === 0) return this;
+
+    const fields: CardField[] = metrics.map((m) => {
+      let valStr = String(m.value);
+      if (m.color === 'red') valStr = `<font color='red'>**${valStr}**</font>`;
+      else if (m.color === 'green') valStr = `<font color='green'>**${valStr}**</font>`;
+      else if (m.color === 'yellow' || m.color === 'orange')
+        valStr = `<font color='orange'>**${valStr}**</font>`;
+      else valStr = `**${valStr}**`;
+
+      const sub = m.subValue ? ` _(${m.subValue})_` : '';
+
+      return {
+        is_short: true,
+        text: {
+          tag: 'lark_md',
+          content: `**${m.label}:**\n${valStr}${sub}`,
+        },
+      };
+    });
+
+    this.card.elements.push({
+      tag: 'div',
+      fields,
+    });
+    return this;
+  }
+
+  /**
+   * Tambah Distribusi Top Item / Kecamatan
+   */
+  public addTopList(items?: string[], title = 'Top Wilayah'): this {
+    if (!items || items.length === 0) return this;
+
+    const formattedList = items.map((k) => `• ${k}`).join('\n');
 
     this.card.elements.push({
       tag: 'div',
       text: {
         tag: 'lark_md',
-        content: `**🏙️ Top Kecamatan:**\n${formattedList}`,
+        content: `**🏙️ ${title}:**\n${formattedList}`,
       },
     });
     return this;
   }
 
   /**
-   * Tambah Instruksi Tindak Lanjut
+   * Tambah Instruksi Tindak Lanjut / Catatan
    */
   public addInstructionNote(text?: string): this {
-    const content = text || 'Mohon segera dilakukan tindak lanjut terhadap seluruh paket yang masih belum TTD, khususnya paket yang telah melewati batas SLA.';
+    const content =
+      text ||
+      'Mohon segera dilakukan tindak lanjut terhadap seluruh paket yang masih belum TTD, khususnya paket yang telah melewati batas SLA.';
     this.card.elements.push({
       tag: 'note',
       elements: [
@@ -193,7 +245,7 @@ export class FeishuCardBuilder {
       img_key: imageKey,
       alt: {
         tag: 'plain_text',
-        content: altText || 'Laporan Monitoring INC',
+        content: altText || 'Laporan LTMS Enterprise',
       },
       mode: 'fit_horizontal',
     });
@@ -239,10 +291,11 @@ export class FeishuCardBuilder {
     data: MonitoringIncSummaryData,
     imageKey?: string
   ): FeishuInteractiveCard {
+    const target = data.targetKota || data.targetScope?.name || 'Cabang';
     const builder = new FeishuCardBuilder();
     return builder
-      .setHeader(`LTMS • Monitoring INC ${data.targetKota.toUpperCase()}`, 'red')
-      .addHeaderInfo(data.targetKota, data.generateTime)
+      .setHeader(`LTMS • Monitoring INC ${target.toUpperCase()}`, 'red')
+      .addHeaderInfo(target, data.generateTime, 'Target Kota')
       .addDivider()
       .addKpiGrid({
         total: data.total,
@@ -251,9 +304,144 @@ export class FeishuCardBuilder {
         percent: data.percent,
       })
       .addDivider()
-      .addTopKecamatan(data.topKecamatan)
+      .addTopList(data.topKecamatan, 'Top Kecamatan')
       .addInstructionNote()
-      .addImage(imageKey, `Monitoring INC ${data.targetKota}`)
+      .addImage(imageKey, `Monitoring INC ${target}`)
+      .addFooter()
+      .build();
+  }
+
+  /**
+   * Static Factory untuk Monitoring Delivery
+   */
+  public static createDeliveryCard(
+    data: GenericReportData,
+    imageKey?: string
+  ): FeishuInteractiveCard {
+    const target = data.targetDp || data.targetKota || data.targetScope?.name || 'Cabang';
+    const builder = new FeishuCardBuilder();
+    const b = builder
+      .setHeader(`LTMS • Monitoring Delivery ${target.toUpperCase()}`, 'blue')
+      .addHeaderInfo(target, data.generateTime, 'Cakupan DP / Wilayah')
+      .addDivider();
+
+    if (data.metrics && data.metrics.length > 0) {
+      b.addDynamicMetrics(data.metrics);
+    } else {
+      b.addKpiGrid({
+        total: data.total,
+        belum: data.belum,
+        late: data.late,
+        percent: data.percent,
+      });
+    }
+
+    return b
+      .addInstructionNote(data.notes || 'Laporan Pengiriman Delivery Sprinter JMS.')
+      .addImage(imageKey, `Monitoring Delivery ${target}`)
+      .addFooter()
+      .build();
+  }
+
+  /**
+   * Static Factory untuk Dashboard Summary
+   */
+  public static createDashboardCard(
+    data: GenericReportData,
+    imageKey?: string
+  ): FeishuInteractiveCard {
+    const target = data.targetScope?.name || data.targetKota || 'Cabang';
+    const builder = new FeishuCardBuilder();
+    const b = builder
+      .setHeader(`LTMS • Ringkasan Dashboard ${target.toUpperCase()}`, 'indigo')
+      .addHeaderInfo(target, data.generateTime, 'Cakupan Scope')
+      .addDivider();
+
+    if (data.metrics && data.metrics.length > 0) {
+      b.addDynamicMetrics(data.metrics);
+    } else {
+      b.addKpiGrid({
+        total: data.total,
+        belum: data.belum,
+        late: data.late,
+        percent: data.percent,
+      });
+    }
+
+    return b
+      .addInstructionNote(data.notes || 'Ringkasan performa operasional harian LTMS.')
+      .addImage(imageKey, `Ringkasan Dashboard ${target}`)
+      .addFooter()
+      .build();
+  }
+
+  /**
+   * Static Factory untuk Long Tail Report
+   */
+  public static createLongtailCard(
+    data: GenericReportData,
+    imageKey?: string
+  ): FeishuInteractiveCard {
+    const target = data.targetDp || data.targetKota || data.targetScope?.name || 'Cabang';
+    const builder = new FeishuCardBuilder();
+    const b = builder
+      .setHeader(`LTMS • Laporan Long Tail ${target.toUpperCase()}`, 'orange')
+      .addHeaderInfo(target, data.generateTime, 'Cakupan Data')
+      .addDivider();
+
+    if (data.metrics && data.metrics.length > 0) {
+      b.addDynamicMetrics(data.metrics);
+    } else {
+      b.addKpiGrid({
+        total: data.total,
+        belum: data.belum,
+        late: data.late,
+        percent: data.percent,
+      });
+    }
+
+    return b
+      .addInstructionNote(data.notes || 'Laporan paket status Long Tail yang memerlukan penanganan.')
+      .addImage(imageKey, `Laporan Long Tail ${target}`)
+      .addFooter()
+      .build();
+  }
+
+  /**
+   * Static Factory untuk Generic / Multi-Module Report
+   */
+  public static createGenericReportCard(
+    data: GenericReportData,
+    imageKey?: string
+  ): FeishuInteractiveCard {
+    const title = data.title || `LTMS • Laporan ${data.module?.toUpperCase() || 'OPERASIONAL'}`;
+    const template = data.headerTemplate || 'red';
+    const target = data.targetDp || data.targetKota || data.targetScope?.name || 'Cabang';
+
+    const builder = new FeishuCardBuilder();
+    const b = builder
+      .setHeader(title, template)
+      .addHeaderInfo(target, data.generateTime, 'Cakupan')
+      .addDivider();
+
+    if (data.metrics && data.metrics.length > 0) {
+      b.addDynamicMetrics(data.metrics);
+    } else if (data.total !== undefined || data.belum !== undefined) {
+      b.addKpiGrid({
+        total: data.total,
+        belum: data.belum,
+        late: data.late,
+        percent: data.percent,
+      });
+    }
+
+    if (data.topKecamatan && data.topKecamatan.length > 0) {
+      b.addTopList(data.topKecamatan, 'Top Wilayah');
+    }
+
+    return b
+      .addInstructionNote(data.notes)
+      .addImage(imageKey, title)
       .addFooter()
       .build();
   }

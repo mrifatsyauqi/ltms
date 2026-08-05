@@ -46,7 +46,7 @@ export class FeishuMessageService implements ICommunicationProvider {
 
         if (payload.messageType === 'interactive_card' && payload.data) {
           msgType = 'interactive';
-          contentObj = feishuCardService.generateMonitoringIncCard(
+          contentObj = feishuCardService.generateCard(
             payload.data,
             uploadedImageKey
           );
