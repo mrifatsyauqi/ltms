@@ -28,6 +28,14 @@ export class FeishuChatService {
     }));
   }
 
+  public async getActiveGroups(): Promise<FeishuGroup[]> {
+    return this.getGroups();
+  }
+
+  public async syncGroups(): Promise<FeishuGroup[]> {
+    return this.syncChats();
+  }
+
   /**
    * Menyinkronkan seluruh daftar Group dari Feishu Open Platform ke database Supabase
    * Menggunakan pagination loop lengkap (page_token) sesuai dokumentasi resmi IM v1.

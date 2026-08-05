@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   PanelsTopLeft,
@@ -30,87 +30,33 @@ import {
   Trash2,
   Settings,
   LayoutGrid,
+  Send,
+  AtSign,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import type { CardTemplateRecord, CardTemplateVersionRecord } from '@/lib/data/supabase/communication-config';
 import type { StarterPreset } from '@/services/communication/configuration/template-presets';
+import { STARTER_PRESETS, OFFICIAL_VARIABLES } from '@/services/communication/configuration/template-presets';
 import type {
   VisualCardBlocksConfig,
   CardTheme,
-  KpiGridStyle,
   CardKpiItem,
 } from '@/services/communication/configuration/template.types';
-import { MessageTemplateEngine } from '@/services/communication/configuration/message-template.engine';
+import { FeishuCardPreview } from '@/components/communication/feishu-card-preview';
+import type { MentionMappingRecord } from '@/lib/data/supabase/mention-mapping';
 
 const THEMES: Array<{ id: CardTheme; name: string; bgClass: string; hex: string }> = [
-  { id: 'red', name: 'J&T Red', bgClass: 'bg-[#E2231A]', hex: '#E2231A' },
+  { id: 'red', name: 'J&T Red (Utama)', bgClass: 'bg-[#E2231A]', hex: '#E2231A' },
+  { id: 'dark', name: 'Dark Slate (Delivery)', bgClass: 'bg-slate-800', hex: '#1E293B' },
   { id: 'blue', name: 'Royal Blue', bgClass: 'bg-blue-600', hex: '#2563EB' },
-  { id: 'dark', name: 'Dark Slate', bgClass: 'bg-slate-800', hex: '#1E293B' },
   { id: 'green', name: 'Emerald Green', bgClass: 'bg-emerald-600', hex: '#059669' },
 ];
 
-const DEFAULT_INC_CONFIG: VisualCardBlocksConfig = {
-  theme: 'red',
-  header: {
-    title: 'LTMS | Monitoring INC',
-    subtitle: 'Intercity Outgoing Monitoring',
-    pickupDpLabel: 'Pickup DP',
-    pickupDpValue: '{{pickup_dp}}',
-    targetCityLabel: 'Tujuan',
-    targetCityValue: '{{target_city}}',
-    updateLabel: 'Update',
-    updateValue: '{{generated_at}}',
-    showPickupDp: true,
-    showTargetCity: true,
-    showUpdate: true,
-  },
-  kpiGrid: {
-    title: 'Ringkasan Monitoring INC',
-    layout: 'horizontal_5',
-    items: [
-      { id: '1', label: 'Total AWB INC', valueTemplate: '{{total_inc}}', color: 'default', icon: 'package' },
-      { id: '2', label: 'Clear TTD', valueTemplate: '{{clear_ttd}}', color: 'green', icon: 'check' },
-      { id: '3', label: 'Belum TTD', valueTemplate: '{{pending_ttd}}', color: 'red', icon: 'clock' },
-      { id: '4', label: 'AWB Melebihi SLA', valueTemplate: '{{over_sla}}', color: 'red', icon: 'alert' },
-      { id: '5', label: 'Persentase SLA', valueTemplate: '{{sla_percentage}}%', color: 'default', icon: 'trend' },
-    ],
-  },
-  subdistricts: {
-    title: '📍 Kecamatan Tujuan',
-    maxItems: '5',
-    sortOrder: 'desc',
-    show: true,
-  },
-  screenshot: {
-    show: true,
-    hdQuality: true,
-  },
-  footer: {
-    title: 'LTMS',
-    description: 'Long Tail Monitoring System\nGenerated Automatically',
-    show: true,
-  },
-  actionButton: {
-    label: '🚀 Buka Dashboard LTMS',
-    url: 'https://ltms.jt-express.id',
-    enabled: true,
-  },
-  // Compatibility fields
-  title: 'LTMS | Monitoring INC',
-  showLogo: true,
-  showSummary: true,
-  showKpiGrid: true,
-  kpiStyle: 'horizontal_5',
-  showTopKecamatan: true,
-  topKecamatanLimit: 5,
-  showImage: true,
-  showFooter: true,
-  footerText: 'LTMS\nLong Tail Monitoring System\nGenerated Automatically',
-};
-
 export default function CardTemplatesPage() {
   const [templates, setTemplates] = useState<CardTemplateRecord[]>([]);
-  const [presets, setPresets] = useState<StarterPreset[]>([]);
-  const [dummyContext, setDummyContext] = useState<Record<string, any>>({});
+  const [mentions, setMentions] = useState<MentionMappingRecord[]>([]);
+  const [groups, setGroups] = useState<Array<{ chat_id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -119,1695 +65,1199 @@ export default function CardTemplatesPage() {
   const [selectedStatus, setSelectedStatus] = useState<'active' | 'archived'>('active');
 
   // Modals
-  const [presetModalOpen, setPresetModalOpen] = useState(false);
-  const [builderOpen, setBuilderOpen] = useState(false);
-  const [versionModalOpen, setVersionModalOpen] = useState(false);
-  const [activeVersions, setActiveVersions] = useState<CardTemplateVersionRecord[]>([]);
-  const [versionLoading, setVersionLoading] = useState(false);
-  const [selectedTemplateName, setSelectedTemplateName] = useState('');
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isVersionsOpen, setIsVersionsOpen] = useState(false);
+  const [isTestSendOpen, setIsTestSendOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<CardTemplateRecord | null>(null);
+  const [versions, setVersions] = useState<CardTemplateVersionRecord[]>([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
 
-  // Builder Form State
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [moduleVal, setModuleVal] = useState('monitoring_inc');
-  const [templateName, setTemplateName] = useState('');
-  const [isDefault, setIsDefault] = useState(false);
-  const [versionNote, setVersionNote] = useState('');
-  const [blocksConfig, setBlocksConfig] = useState<VisualCardBlocksConfig>(DEFAULT_INC_CONFIG);
-  const [activeSection, setActiveSection] = useState<'header' | 'lastScan' | 'kpi' | 'subdistricts' | 'media' | 'footer' | 'action'>('header');
+  // Form State
+  const [formData, setFormData] = useState<{
+    name: string;
+    description: string;
+    module: string;
+    blocks_config: VisualCardBlocksConfig;
+    change_summary: string;
+  }>({
+    name: '',
+    description: '',
+    module: 'monitoring_inc',
+    blocks_config: STARTER_PRESETS[0].blocksConfig,
+    change_summary: 'Initial update',
+  });
 
-  const [saving, setSaving] = useState(false);
-  const [previewMode, setPreviewMode] = useState<'dummy' | 'real'>('dummy');
+  // Accordion Sections in Builder
+  const [openSections, setOpenSections] = useState({
+    header: true,
+    lastScan: true,
+    kpiGrid: true,
+    assignment: true,
+    screenshot: true,
+    actionButton: true,
+    footer: true,
+  });
 
-  // Load Presets & Templates
-  useEffect(() => {
-    async function initData() {
-      try {
-        setLoading(true);
-        const [presetRes, tplRes] = await Promise.all([
-          fetch('/api/communication/templates/presets').then((r) => r.json()),
-          fetch('/api/communication/templates/card').then((r) => r.json()),
-        ]);
+  // Test Send State
+  const [testChatId, setTestChatId] = useState('');
+  const [sendingTest, setSendingTest] = useState(false);
 
-        if (presetRes.ok) {
-          setPresets(presetRes.presets || []);
-          setDummyContext(presetRes.dummyContext || {});
-        }
-        if (tplRes.ok) {
-          setTemplates(tplRes.data || []);
-        }
-      } catch (err) {
-        console.error('Failed to load card templates:', err);
-      } finally {
-        setLoading(false);
-      }
+  // Notification Toast
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [tplRes, mentionRes, groupRes] = await Promise.all([
+        fetch('/api/communication/card-templates?include_archived=true'),
+        fetch('/api/communication/mentions'),
+        fetch('/api/communication/groups'),
+      ]);
+
+      const tplJson = await tplRes.json();
+      if (tplJson.success) setTemplates(tplJson.data || []);
+
+      const mentionJson = await mentionRes.json();
+      if (mentionJson.success) setMentions(mentionJson.data || []);
+
+      const groupJson = await groupRes.json();
+      if (groupJson.success) setGroups(groupJson.data || []);
+    } catch {
+      showToast('Gagal memuat data template', 'error');
+    } finally {
+      setLoading(false);
     }
-    initData();
+  };
+
+  useEffect(() => {
+    fetchData();
   }, []);
 
-  const refreshTemplates = async () => {
-    try {
-      const res = await fetch(`/api/communication/templates/card?status=${selectedStatus}`);
-      const json = await res.json();
-      if (json.ok) setTemplates(json.data || []);
-    } catch (err) {
-      console.error(err);
+  const filteredTemplates = templates.filter((t) => {
+    const isArchived = t.status === 'archived';
+    const name = (t as any).template_name || (t as any).name || '';
+    const description = (t as any).version_note || (t as any).description || '';
+
+    if (selectedStatus === 'active' && isArchived) return false;
+    if (selectedStatus === 'archived' && !isArchived) return false;
+    if (selectedModule !== 'all' && t.module !== selectedModule) return false;
+    if (search.trim()) {
+      const s = search.toLowerCase();
+      return (
+        name.toLowerCase().includes(s) ||
+        description.toLowerCase().includes(s) ||
+        t.module.toLowerCase().includes(s)
+      );
     }
+    return true;
+  });
+
+  const handleOpenCreate = (preset?: StarterPreset) => {
+    const p = preset || STARTER_PRESETS[0];
+    setEditingTemplate(null);
+    setFormData({
+      name: p.name,
+      description: p.description,
+      module: p.module,
+      blocks_config: JSON.parse(JSON.stringify(p.blocksConfig)),
+      change_summary: 'Template dibuat dari preset ' + p.name,
+    });
+    setIsEditorOpen(true);
   };
 
-  useEffect(() => {
-    refreshTemplates();
-  }, [selectedStatus]);
-
-  // Normalize blocks config if loaded from legacy
-  const normalizeConfig = (raw: any): VisualCardBlocksConfig => {
-    if (!raw) return DEFAULT_INC_CONFIG;
-    return {
-      theme: raw.theme || 'red',
-      header: raw.header || {
-        title: raw.title || 'LTMS | Monitoring INC',
-        subtitle: raw.subtitle || 'Intercity Outgoing Monitoring',
-        pickupDpLabel: 'Pickup DP',
-        pickupDpValue: '{{pickup_dp}}',
-        targetCityLabel: 'Tujuan',
-        targetCityValue: '{{target_city}}',
-        updateLabel: 'Update',
-        updateValue: '{{generated_at}}',
-        showPickupDp: raw.showSummary ?? true,
-        showTargetCity: raw.showSummary ?? true,
-        showUpdate: raw.showSummary ?? true,
-      },
-      lastScan: raw.lastScan || {
-        title: 'Last Scan',
-        scanTimeLabel: 'Waktu Scan',
-        scanTimeValue: '{{last_scan_time}}',
-        awbLabel: 'AWB',
-        awbValue: '{{last_scan_awb}}',
-        statusLabel: 'Status',
-        statusValue: '{{last_scan_status}}',
-        fallbackText: 'Belum ada aktivitas scan hari ini.',
-        show: false,
-      },
-      kpiGrid: raw.kpiGrid || {
-        title: 'Ringkasan Monitoring INC',
-        layout: (raw.kpiStyle as any) || 'horizontal_5',
-        items: [
-          { id: '1', label: 'Total AWB INC', valueTemplate: '{{total_inc}}', color: 'default', icon: 'package' },
-          { id: '2', label: 'Clear TTD', valueTemplate: '{{clear_ttd}}', color: 'green', icon: 'check' },
-          { id: '3', label: 'Belum TTD', valueTemplate: '{{pending_ttd}}', color: 'red', icon: 'clock' },
-          { id: '4', label: 'AWB Melebihi SLA', valueTemplate: '{{over_sla}}', color: 'red', icon: 'alert' },
-          { id: '5', label: 'Persentase SLA', valueTemplate: '{{sla_percentage}}%', color: 'default', icon: 'trend' },
-        ],
-      },
-      subdistricts: raw.subdistricts || {
-        title: '📍 Kecamatan Tujuan',
-        maxItems: raw.topKecamatanLimit ? String(raw.topKecamatanLimit) : '5',
-        sortOrder: 'desc',
-        show: raw.showTopKecamatan ?? true,
-      },
-      screenshot: raw.screenshot || {
-        show: raw.showImage ?? true,
-        hdQuality: true,
-      },
-      footer: raw.footer || {
-        title: 'LTMS',
-        description: raw.footerText || 'Long Tail Monitoring System\nGenerated Automatically',
-        show: raw.showFooter ?? true,
-      },
-      actionButton: raw.actionButton?.label
-        ? raw.actionButton
-        : {
-            label: '🚀 Buka Dashboard LTMS',
-            url: 'https://ltms.jt-express.id',
-            enabled: raw.actionButton !== 'none',
-          },
-      title: raw.title || 'LTMS | Monitoring Report',
-      showLogo: true,
-      showSummary: raw.showSummary ?? true,
-      showKpiGrid: raw.showKpiGrid ?? true,
-      kpiStyle: raw.kpiStyle || 'horizontal_5',
-      showTopKecamatan: raw.showTopKecamatan ?? true,
-      topKecamatanLimit: raw.topKecamatanLimit || 5,
-      showImage: raw.showImage ?? true,
-      showFooter: raw.showFooter ?? true,
-    };
+  const handleOpenEdit = (t: CardTemplateRecord) => {
+    setEditingTemplate(t);
+    setFormData({
+      name: (t as any).template_name || (t as any).name || '',
+      description: (t as any).version_note || (t as any).description || '',
+      module: t.module,
+      blocks_config: JSON.parse(JSON.stringify(t.blocks_config)),
+      change_summary: '',
+    });
+    setIsEditorOpen(true);
   };
 
-  // Open Builder from Preset
-  const handleSelectPreset = (preset: StarterPreset | null) => {
-    setPresetModalOpen(false);
-    setEditingId(null);
-    if (preset) {
-      setModuleVal(preset.module);
-      setTemplateName(`Kartu ${preset.name}`);
-      setBlocksConfig(normalizeConfig(preset.blocksConfig));
-      setIsDefault(false);
-      setVersionNote('Template awal dari preset');
-    } else {
-      setModuleVal('monitoring_inc');
-      setTemplateName('Kartu Interaktif Baru');
-      setBlocksConfig(DEFAULT_INC_CONFIG);
-      setIsDefault(false);
-      setVersionNote('Initial version');
-    }
-    setBuilderOpen(true);
-  };
-
-  // Open Edit Builder
-  const handleOpenEdit = (tpl: CardTemplateRecord) => {
-    setEditingId(tpl.id);
-    setModuleVal(tpl.module);
-    setTemplateName(tpl.template_name);
-    setBlocksConfig(normalizeConfig(tpl.blocks_config));
-    setIsDefault(tpl.is_default);
-    setVersionNote('');
-    setBuilderOpen(true);
-  };
-
-  // Save Card Template
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!templateName.trim()) return;
+    if (!formData.name.trim()) {
+      showToast('Nama template wajib diisi', 'error');
+      return;
+    }
 
     try {
-      setSaving(true);
-      const url = '/api/communication/templates/card';
-      const method = editingId ? 'PUT' : 'POST';
-      const body = {
-        id: editingId,
-        module: moduleVal,
-        template_name: templateName,
-        blocks_config: blocksConfig,
-        is_default: isDefault,
-        version_note: versionNote || (editingId ? 'Pembaruan desain kartu' : 'Inisialisasi kartu'),
-      };
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || 'Gagal menyimpan template kartu');
+      if (editingTemplate) {
+        const res = await fetch(`/api/communication/card-templates/${editingTemplate.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        });
+        const json = await res.json();
+        if (json.success) {
+          showToast('Template berhasil diperbarui');
+          setIsEditorOpen(false);
+          fetchData();
+        } else {
+          showToast(json.error || 'Gagal menyimpan', 'error');
+        }
+      } else {
+        const res = await fetch('/api/communication/card-templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        });
+        const json = await res.json();
+        if (json.success) {
+          showToast('Template baru berhasil dibuat');
+          setIsEditorOpen(false);
+          fetchData();
+        } else {
+          showToast(json.error || 'Gagal membuat template', 'error');
+        }
       }
-
-      setBuilderOpen(false);
-      await refreshTemplates();
     } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setSaving(false);
+      showToast(err.message || 'Gagal menyimpan', 'error');
     }
   };
 
-  // Archive / Restore
-  const handleToggleArchive = async (tpl: CardTemplateRecord) => {
-    const nextStatus = tpl.status === 'active' ? 'archived' : 'active';
-    const confirmMsg =
-      nextStatus === 'archived'
-        ? `Arsipkan template "${tpl.template_name}"? Template tidak akan muncul di dialog pengiriman.`
-        : `Pulihkan template "${tpl.template_name}" kembali ke status aktif?`;
-
-    if (!confirm(confirmMsg)) return;
-
+  const handleToggleDefault = async (t: CardTemplateRecord) => {
+    const tName = (t as any).template_name || (t as any).name || '';
     try {
-      const res = await fetch('/api/communication/templates/card', {
+      const res = await fetch(`/api/communication/card-templates/${t.id}/set-default`, {
+        method: 'POST',
+      });
+      const json = await res.json();
+      if (json.success) {
+        showToast(`Template "${tName}" dijadikan template default ${t.module}`);
+        fetchData();
+      } else {
+        showToast(json.error || 'Gagal mengatur default', 'error');
+      }
+    } catch {
+      showToast('Gagal mengatur default', 'error');
+    }
+  };
+
+  const handleArchive = async (t: CardTemplateRecord) => {
+    const isArchived = t.status === 'archived';
+    try {
+      const res = await fetch(`/api/communication/card-templates/${t.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: tpl.id,
-          status: nextStatus,
-          version_note: nextStatus === 'archived' ? 'Arsipkan template' : 'Pulihkan template',
-        }),
+        body: JSON.stringify({ status: isArchived ? 'active' : 'archived' }),
       });
       const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json.error);
-      await refreshTemplates();
-    } catch (err: any) {
-      alert(err.message);
+      if (json.success) {
+        showToast(isArchived ? 'Template dipulihkan' : 'Template diarsipkan');
+        fetchData();
+      }
+    } catch {
+      showToast('Gagal mengubah status arsip', 'error');
     }
   };
 
-  // Duplicate
-  const handleDuplicate = async (tpl: CardTemplateRecord) => {
+  const handleOpenVersions = async (t: CardTemplateRecord) => {
+    setEditingTemplate(t);
+    setLoadingVersions(true);
+    setIsVersionsOpen(true);
     try {
-      const res = await fetch('/api/communication/templates/card', {
+      const res = await fetch(`/api/communication/card-templates/${t.id}/versions`);
+      const json = await res.json();
+      if (json.success) setVersions(json.data || []);
+    } catch {
+      showToast('Gagal memuat riwayat versi', 'error');
+    } finally {
+      setLoadingVersions(false);
+    }
+  };
+
+  const handleRollbackVersion = async (v: CardTemplateVersionRecord) => {
+    const ver = (v as any).version_number || v.version || '1.0';
+    if (!confirm(`Kembalikan template ke versi v${ver}?`)) return;
+    try {
+      const res = await fetch(
+        `/api/communication/card-templates/${editingTemplate?.id}/rollback/${v.id}`,
+        { method: 'POST' }
+      );
+      const json = await res.json();
+      if (json.success) {
+        showToast(`Berhasil rollback ke v${ver}`);
+        setIsVersionsOpen(false);
+        fetchData();
+      }
+    } catch {
+      showToast('Gagal rollback versi', 'error');
+    }
+  };
+
+  const handleSendTestCard = async () => {
+    if (!testChatId) {
+      showToast('Pilih group Feishu penerima', 'error');
+      return;
+    }
+    setSendingTest(true);
+    try {
+      const res = await fetch('/api/communication/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          module: tpl.module,
-          template_name: `${tpl.template_name} (Salinan)`,
-          blocks_config: tpl.blocks_config,
-          is_default: false,
-          version_note: `Duplikasi dari ${tpl.template_name}`,
+          channel: 'feishu',
+          chatId: testChatId,
+          messageType: 'interactive_card',
+          cardConfig: formData.blocks_config,
+          data: {
+            module: formData.module,
+            pickup_dp: 'BATANG01',
+            target_city: 'KOTA BATANG',
+            drop_point: 'BATANG01',
+            total_inc: '14.942',
+            clear_ttd: '14.816',
+            pending_ttd: '72',
+            over_sla: '54',
+            sla_percentage: '99.1',
+            total_delivery: '3.240',
+            delivered: '3.198',
+            pending_delivery: '42',
+            delivery_sla: '98.0',
+            last_scan_time: '08:21 WIB',
+            last_scan_awb: 'JT1234567890',
+            last_scan_status: 'Delivery',
+            generated_at: new Date().toLocaleString('id-ID'),
+            subdistricts: [
+              { name: 'BATANG', count: '10 AWB', picName: 'Agus Supriyanto' },
+              { name: 'WARUNGASEM', count: '8 AWB', picName: 'Dimas Prasetyo' },
+              { name: 'LIMPUNG', count: '6 AWB', picName: 'Rian Hidayat' },
+              { name: 'BANDAR', count: '5 AWB', picName: 'Arif Munandar' },
+            ],
+            kurirList: [
+              { name: 'Andi Setiawan', count: '12 Paket' },
+              { name: 'Rudi Hermawan', count: '8 Paket' },
+            ],
+          },
         }),
       });
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json.error);
-      await refreshTemplates();
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
 
-  // Open Version History
-  const handleOpenVersions = async (tpl: CardTemplateRecord) => {
-    setSelectedTemplateName(tpl.template_name);
-    setVersionModalOpen(true);
-    setVersionLoading(true);
-    try {
-      const res = await fetch(`/api/communication/templates/card/versions?id=${tpl.id}`);
       const json = await res.json();
-      if (json.ok) {
-        setActiveVersions(json.data || []);
+      if (json.success) {
+        showToast('Kartu berhasil dikirim ke group Feishu!');
+        setIsTestSendOpen(false);
+      } else {
+        showToast(json.error || 'Gagal mengirim kartu', 'error');
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setVersionLoading(false);
-    }
-  };
-
-  // Restore Version
-  const handleRestoreVersion = async (v: CardTemplateVersionRecord) => {
-    if (!confirm(`Pulihkan versi ${v.version}? Desain saat ini akan digantikan oleh versi ini.`)) return;
-
-    try {
-      setBlocksConfig(normalizeConfig(v.blocks_config));
-      setVersionNote(`Rollback ke versi ${v.version}`);
-      setVersionModalOpen(false);
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || 'Gagal mengirim test card', 'error');
+    } finally {
+      setSendingTest(false);
     }
   };
 
-  // KPI items helper
-  const handleAddKpiItem = () => {
-    const nextId = String(Date.now());
-    const newItems = [
-      ...(blocksConfig.kpiGrid?.items || []),
-      { id: nextId, label: 'Metrik Baru', valueTemplate: '{{total_inc}}', color: 'default' as const, icon: 'package' },
-    ];
-    setBlocksConfig({
-      ...blocksConfig,
-      kpiGrid: {
-        ...blocksConfig.kpiGrid,
-        items: newItems,
+  // Helper Form Modifiers
+  const updateHeader = (fields: Partial<VisualCardBlocksConfig['header']>) => {
+    setFormData((prev) => ({
+      ...prev,
+      blocks_config: {
+        ...prev.blocks_config,
+        header: {
+          ...prev.blocks_config.header,
+          ...fields,
+        },
       },
+    }));
+  };
+
+  const updateKpiItem = (index: number, fields: Partial<CardKpiItem>) => {
+    setFormData((prev) => {
+      const items = [...(prev.blocks_config.kpiGrid?.items || [])];
+      items[index] = { ...items[index], ...fields };
+      return {
+        ...prev,
+        blocks_config: {
+          ...prev.blocks_config,
+          kpiGrid: {
+            ...prev.blocks_config.kpiGrid,
+            items,
+          },
+        },
+      };
     });
   };
 
-  const handleRemoveKpiItem = (idx: number) => {
-    const updated = [...(blocksConfig.kpiGrid?.items || [])];
-    updated.splice(idx, 1);
-    setBlocksConfig({
-      ...blocksConfig,
-      kpiGrid: {
-        ...blocksConfig.kpiGrid,
-        items: updated,
-      },
+  const addKpiItem = () => {
+    setFormData((prev) => {
+      const items = [...(prev.blocks_config.kpiGrid?.items || [])];
+      items.push({
+        id: String(Date.now()),
+        label: 'Indikator Baru',
+        valueTemplate: '0',
+        color: 'default',
+      });
+      return {
+        ...prev,
+        blocks_config: {
+          ...prev.blocks_config,
+          kpiGrid: {
+            ...prev.blocks_config.kpiGrid,
+            items,
+          },
+        },
+      };
     });
   };
 
-  const handleUpdateKpiItem = (idx: number, field: keyof CardKpiItem, val: any) => {
-    const updated = [...(blocksConfig.kpiGrid?.items || [])];
-    updated[idx] = { ...updated[idx], [field]: val };
-    setBlocksConfig({
-      ...blocksConfig,
-      kpiGrid: {
-        ...blocksConfig.kpiGrid,
-        items: updated,
-      },
+  const removeKpiItem = (index: number) => {
+    setFormData((prev) => {
+      const items = [...(prev.blocks_config.kpiGrid?.items || [])];
+      items.splice(index, 1);
+      return {
+        ...prev,
+        blocks_config: {
+          ...prev.blocks_config,
+          kpiGrid: {
+            ...prev.blocks_config.kpiGrid,
+            items,
+          },
+        },
+      };
     });
   };
-
-  // Active Context for Live Preview
-  const activePreviewContext = previewMode === 'dummy' ? dummyContext : {};
-
-  // Filter templates
-  const filteredTemplates = templates.filter((tpl) => {
-    const matchSearch =
-      tpl.template_name.toLowerCase().includes(search.toLowerCase()) ||
-      tpl.module.toLowerCase().includes(search.toLowerCase());
-    const matchModule = selectedModule === 'all' || tpl.module === selectedModule;
-    return matchSearch && matchModule;
-  });
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-6 md:p-8 space-y-6">
-      {/* Header Halaman */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#E2231A] tracking-wider uppercase">
-            <PanelsTopLeft className="w-4 h-4" />
-            Communication Center
+    <div className="space-y-6">
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 text-sm font-semibold transition-all ${
+            toast.type === 'success' ? 'bg-slate-900 text-white' : 'bg-red-600 text-white'
+          }`}
+        >
+          {toast.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 text-white" />
+          )}
+          <span>{toast.message}</span>
+        </div>
+      )}
+
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-red-50 rounded-xl text-[#E2231A] border border-red-100">
+              <PanelsTopLeft className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+                Card Templates (Interactive Card Builder)
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-500 font-medium">
+                Desain kartu pengingat & penugasan operasional Feishu dengan Single Source of Truth compiler.
+              </p>
+            </div>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Card Templates (Visual Builder)</h1>
-          <p className="text-sm text-slate-500">
-            Desain tata letak Feishu Interactive Card dengan Content Builder modular tanpa coding JSON.
-          </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <button
-            onClick={() => setPresetModalOpen(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#E2231A] hover:bg-[#c91d15] text-white rounded-xl font-medium text-sm transition-all shadow-sm hover:shadow active:scale-[0.98]"
+            type="button"
+            onClick={() => handleOpenCreate()}
+            className="px-4 py-2 text-xs font-bold text-white bg-[#E2231A] rounded-xl hover:bg-[#B81912] flex items-center gap-1.5 transition-colors shadow-sm shadow-red-200"
           >
             <Plus className="w-4 h-4" />
-            Buat Desain Kartu
+            <span>Buat Template Baru</span>
           </button>
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* Module Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-200/60 rounded-xl overflow-x-auto w-full md:w-auto">
-          {[
-            { id: 'all', label: 'Semua Modul' },
-            { id: 'monitoring_inc', label: 'Monitoring INC' },
-            { id: 'monitoring_delivery', label: 'Delivery' },
-            { id: 'longtail', label: 'Long Tail' },
-            { id: 'dashboard', label: 'Dashboard' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setSelectedModule(tab.id)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                selectedModule === tab.id
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+      {/* Starter Presets Banner */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {STARTER_PRESETS.map((preset) => (
+          <div
+            key={preset.id}
+            className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-red-300 transition-all flex flex-col justify-between group"
+          >
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-red-50 text-[#E2231A] border border-red-100">
+                  {preset.badge}
+                </span>
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 group-hover:text-[#E2231A] transition-colors">
+                {preset.name}
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">
+                {preset.description}
+              </p>
+            </div>
+            <div className="pt-4 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => handleOpenCreate(preset)}
+                className="text-xs font-bold text-[#E2231A] hover:underline flex items-center gap-1"
+              >
+                <span>Gunakan Preset</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter & Search Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100/80 rounded-xl w-full md:w-auto overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setSelectedModule('all')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+              selectedModule === 'all'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Semua Modul
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedModule('monitoring_inc')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+              selectedModule === 'monitoring_inc'
+                ? 'bg-white text-red-600 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Monitoring INC
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedModule('monitoring_delivery')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+              selectedModule === 'monitoring_delivery'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Monitoring Delivery
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedModule('longtail')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+              selectedModule === 'longtail'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Long Tail
+          </button>
         </div>
 
-        {/* Status Filter & Search */}
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="flex items-center bg-slate-200/60 p-1 rounded-xl text-xs font-medium">
-            <button
-              onClick={() => setSelectedStatus('active')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                selectedStatus === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
-              }`}
-            >
-              Aktif
-            </button>
-            <button
-              onClick={() => setSelectedStatus('archived')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                selectedStatus === 'archived' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'
-              }`}
-            >
-              Diarsipkan
-            </button>
-          </div>
-
+        <div className="flex items-center gap-2.5 w-full md:w-auto">
           <div className="relative flex-1 md:w-64">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Cari template kartu..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#E2231A]/20 focus:border-[#E2231A]"
+              placeholder="Cari nama template..."
+              className="w-full pl-9 pr-3.5 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
             />
           </div>
+          <button
+            type="button"
+            onClick={fetchData}
+            disabled={loading}
+            className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-50 border border-slate-200 rounded-xl"
+            title="Refresh"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </div>
 
-      {/* Grid Templates */}
-      {loading ? (
-        <div className="py-20 text-center space-y-3">
-          <RefreshCw className="w-8 h-8 text-slate-400 animate-spin mx-auto" />
-          <p className="text-sm text-slate-500">Memuat konfigurasi template kartu...</p>
-        </div>
-      ) : filteredTemplates.length === 0 ? (
-        <div className="py-20 text-center bg-white rounded-2xl border border-dashed border-slate-200 space-y-4">
-          <Layers className="w-12 h-12 text-slate-300 mx-auto" />
-          <div className="space-y-1">
-            <h3 className="text-base font-semibold text-slate-800">Belum ada template kartu</h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              Mulai buat desain Feishu Interactive Card dengan Visual Builder atau pilih preset standar.
+      {/* Templates Grid List */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {loading ? (
+          <div className="col-span-full p-12 text-center text-slate-400">
+            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-slate-300" />
+            <p className="text-xs">Memuat template kartu...</p>
+          </div>
+        ) : filteredTemplates.length === 0 ? (
+          <div className="col-span-full p-12 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
+            <PanelsTopLeft className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+            <p className="text-sm font-semibold text-slate-700">Tidak ada template yang cocok</p>
+            <p className="text-xs text-slate-400 mt-1">
+              Gunakan salah satu preset resmi di atas untuk membuat template pertama Anda.
             </p>
           </div>
-          <button
-            onClick={() => setPresetModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#E2231A] text-white rounded-xl text-xs font-medium hover:bg-[#c91d15] transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Buat Dari Preset
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredTemplates.map((tpl) => {
-            const config = normalizeConfig(tpl.blocks_config);
-            const themeObj = THEMES.find((t) => t.id === config.theme) || THEMES[0];
-
-            return (
-              <motion.div
-                key={tpl.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all flex flex-col justify-between overflow-hidden"
-              >
-                <div>
-                  {/* Top Bar Banner Theme */}
-                  <div className={`h-2.5 w-full ${themeObj.bgClass}`} />
-
-                  <div className="p-5 space-y-4">
-                    {/* Header Info */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-semibold rounded text-[10px] tracking-wide uppercase">
-                          {tpl.module.replace('_', ' ')}
-                        </span>
-                        <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-mono">
-                          {tpl.version}
-                        </span>
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-50 border border-slate-200">
-                          <span className={`w-2 h-2 rounded-full ${themeObj.bgClass}`} />
-                          {themeObj.name}
-                        </span>
-                        {tpl.is_default && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded text-[10px] font-medium">
-                            <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                            Default
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Title */}
-                    <div>
-                      <h3 className="text-base font-bold text-slate-900 line-clamp-1">{tpl.template_name}</h3>
-                      {config.header?.subtitle && (
-                        <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">{config.header.subtitle}</p>
-                      )}
-                    </div>
-
-                    {/* Feature Badges */}
-                    <div className="flex flex-wrap gap-1.5 text-[11px] text-slate-600">
-                      {config.header?.showPickupDp && (
-                        <span className="px-2 py-0.5 bg-slate-100 rounded">Pickup DP</span>
-                      )}
-                      {config.lastScan?.show && (
-                        <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded">
-                          Last Scan
-                        </span>
-                      )}
-                      {config.kpiGrid && (
-                        <span className="px-2 py-0.5 bg-slate-100 rounded">
-                          {config.kpiGrid.items?.length || 5} KPI ({config.kpiGrid.layout})
-                        </span>
-                      )}
-                      {config.subdistricts?.show && (
-                        <span className="px-2 py-0.5 bg-slate-100 rounded">
-                          Kecamatan ({config.subdistricts.maxItems})
-                        </span>
-                      )}
-                      {config.screenshot?.show && (
-                        <span className="px-2 py-0.5 bg-slate-100 rounded">Lampiran HD</span>
-                      )}
-                      {config.actionButton?.enabled && (
-                        <span className="px-2 py-0.5 bg-slate-100 rounded">Tombol Dashboard</span>
-                      )}
-                    </div>
-
-                    {/* Version note */}
-                    {tpl.version_note && (
-                      <div className="text-[11px] text-slate-400 italic line-clamp-1 border-t border-slate-100 pt-2">
-                        💬 {tpl.version_note}
-                      </div>
+        ) : (
+          filteredTemplates.map((t) => (
+            <div
+              key={t.id}
+              className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 hover:border-red-300 transition-all flex flex-col justify-between"
+            >
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 uppercase">
+                      {t.module}
+                    </span>
+                    {t.is_default && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                        <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                        Default
+                      </span>
                     )}
                   </div>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    v{(t as any).version || (t as any).current_version || '1.0'}
+                  </span>
                 </div>
 
-                {/* Card Actions Footer */}
-                <div className="px-5 py-3 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleOpenVersions(tpl)}
-                      title="Riwayat Versi"
-                      className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition-all text-xs flex items-center gap-1 font-medium"
-                    >
-                      <History className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Riwayat</span>
-                    </button>
-                    <button
-                      onClick={() => handleDuplicate(tpl)}
-                      title="Duplikat Template"
-                      className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition-all"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleToggleArchive(tpl)}
-                      title={tpl.status === 'active' ? 'Arsipkan' : 'Pulihkan'}
-                      className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition-all"
-                    >
-                      {tpl.status === 'active' ? (
-                        <Archive className="w-3.5 h-3.5" />
-                      ) : (
-                        <RotateCcw className="w-3.5 h-3.5 text-emerald-600" />
-                      )}
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={() => handleOpenEdit(tpl)}
-                    className="px-3.5 py-1.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-800 hover:text-slate-900 rounded-lg font-medium text-xs shadow-sm transition-all flex items-center gap-1.5"
-                  >
-                    Buka Builder
-                  </button>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* MODAL 1: Preset Picker */}
-      <AnimatePresence>
-        {presetModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden border border-slate-100"
-            >
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                <div className="space-y-1">
-                  <h3 className="text-lg font-bold text-slate-900">Pilih Preset Template Kartu</h3>
-                  <p className="text-xs text-slate-500">
-                    Gunakan template standar rekomendasi operasional atau mulai dengan template kosong.
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    {(t as any).template_name || (t as any).name}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
+                    {(t as any).version_note || (t as any).description}
                   </p>
                 </div>
+
+                <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-[11px] text-slate-600 flex items-center justify-between">
+                  <span>Tema Header:</span>
+                  <span className="font-bold capitalize">{t.blocks_config?.theme || 'Red'}</span>
+                </div>
+              </div>
+
+              <div className="pt-4 mt-2 border-t border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenVersions(t)}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg text-xs"
+                    title="Riwayat Versi"
+                  >
+                    <History className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleDefault(t)}
+                    className={`p-1.5 rounded-lg text-xs transition-colors ${
+                      t.is_default
+                        ? 'text-amber-500 bg-amber-50'
+                        : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
+                    }`}
+                    title={t.is_default ? 'Template Default Aktif' : 'Set Sebagai Default'}
+                  >
+                    <Star className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleArchive(t)}
+                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-xs"
+                    title={t.status === 'archived' ? 'Pulihkan' : 'Arsipkan'}
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
                 <button
-                  onClick={() => setPresetModalOpen(false)}
-                  className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"
+                  type="button"
+                  onClick={() => handleOpenEdit(t)}
+                  className="px-3 py-1.5 text-xs font-bold text-slate-800 bg-slate-100 hover:bg-[#E2231A] hover:text-white rounded-xl transition-colors"
+                >
+                  Edit Desain & Konten
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Visual Content Card Builder Modal (Full-featured Split Screen) */}
+      {isEditorOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl h-[92vh] flex flex-col overflow-hidden border border-slate-200">
+            {/* Modal Header */}
+            <div className="p-4 sm:px-6 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-50 rounded-xl text-[#E2231A] border border-red-100">
+                  <PanelsTopLeft className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900">
+                    {editingTemplate ? `Edit Template: ${formData.name}` : 'Card Content Builder'}
+                  </h2>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Atur konten, warna, indikator KPI, dan konfigurasi mention secara visual.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsTestSendOpen(true)}
+                  className="px-3.5 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 flex items-center gap-1.5 shadow-sm"
+                >
+                  <Send className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Kirim Uji Coba</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditorOpen(false)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
+            </div>
 
-              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto">
-                {presets.map((preset) => (
-                  <div
-                    key={preset.id}
-                    onClick={() => handleSelectPreset(preset)}
-                    className="p-4 rounded-2xl border border-slate-200 hover:border-[#E2231A] hover:bg-[#E2231A]/[0.02] cursor-pointer transition-all space-y-3 group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-semibold uppercase">
-                        {preset.module.replace('_', ' ')}
-                      </span>
-                      <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-[#E2231A] group-hover:translate-x-0.5 transition-all" />
+            {/* Split Screen Body */}
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+              {/* Left Column: Form & Configuration Accordions (7 cols) */}
+              <div className="lg:col-span-7 overflow-y-auto p-4 sm:p-6 space-y-4 border-r border-slate-200 text-xs">
+                {/* 1. General & Theme */}
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                  <span className="font-bold text-slate-800 text-sm block">Informasi Umum & Tema</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="font-semibold text-slate-700">Nama Template</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 font-medium"
+                      />
                     </div>
                     <div className="space-y-1">
-                      <h4 className="text-sm font-bold text-slate-900 group-hover:text-[#E2231A] transition-colors">
-                        {preset.name}
-                      </h4>
-                      <p className="text-xs text-slate-500 leading-relaxed">{preset.description}</p>
+                      <label className="font-semibold text-slate-700">Modul</label>
+                      <select
+                        value={formData.module}
+                        onChange={(e) => setFormData({ ...formData, module: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 font-medium"
+                      >
+                        <option value="monitoring_inc">Monitoring INC</option>
+                        <option value="monitoring_delivery">Monitoring Delivery</option>
+                        <option value="longtail">Long Tail Alert</option>
+                        <option value="dashboard">Ringkasan Dashboard</option>
+                      </select>
                     </div>
                   </div>
-                ))}
 
-                {/* Custom Blank */}
-                <div
-                  onClick={() => handleSelectPreset(null)}
-                  className="p-4 rounded-2xl border border-dashed border-slate-300 hover:border-slate-400 hover:bg-slate-50 cursor-pointer transition-all flex flex-col items-center justify-center text-center space-y-2"
-                >
-                  <Sparkles className="w-6 h-6 text-slate-400" />
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-800">Desain Dari Awal</h4>
-                    <p className="text-xs text-slate-500">Mulai dengan template kosong modular</p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* MODAL 2: Full Content Builder (Drawer Mode) */}
-      <AnimatePresence>
-        {builderOpen && (
-          <div className="fixed inset-0 z-50 flex bg-slate-900/50 backdrop-blur-sm justify-end">
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="bg-white w-full max-w-5xl h-full shadow-2xl flex flex-col overflow-hidden"
-            >
-              {/* Builder Header */}
-              <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#E2231A]/10 text-[#E2231A] flex items-center justify-center font-bold">
-                    <PanelsTopLeft className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-base font-bold text-slate-900">
-                      {editingId ? 'Edit Content Card Builder' : 'Content Card Builder Baru'}
-                    </h2>
-                    <p className="text-xs text-slate-500">
-                      Ubah seluruh isi, label, judul, metrik KPI, dan urutan kartu tanpa coding JSON.
-                    </p>
+                  {/* Theme Selector */}
+                  <div className="space-y-1.5">
+                    <label className="font-semibold text-slate-700 block">Warna Header Card</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {THEMES.map((th) => (
+                        <button
+                          key={th.id}
+                          type="button"
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              blocks_config: { ...prev.blocks_config, theme: th.id },
+                            }))
+                          }
+                          className={`p-2 rounded-xl border flex items-center gap-2 font-semibold text-[11px] transition-all ${
+                            formData.blocks_config.theme === th.id
+                              ? 'border-red-500 bg-red-50 text-[#E2231A]'
+                              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div className={`w-3.5 h-3.5 rounded-full ${th.bgClass}`} />
+                          <span className="truncate">{th.name}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setBuilderOpen(false)}
-                    className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl transition-all"
+                {/* 2. Header & Sub-Header Section */}
+                <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
+                  <div
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => setOpenSections({ ...openSections, header: !openSections.header })}
                   >
-                    Batal
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving || !templateName.trim()}
-                    className="px-5 py-2 bg-[#E2231A] hover:bg-[#c91d15] disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-all shadow-sm flex items-center gap-1.5"
-                  >
-                    {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                    Simpan Template
-                  </button>
-                </div>
-              </div>
+                    <span className="font-bold text-slate-800 text-sm">Header & Informasi Operasional</span>
+                    {openSections.header ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </div>
 
-              {/* Builder Body (2 Columns: Controls vs Live Feishu Mockup) */}
-              <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
-                {/* Left: Configuration Sections (7 cols) */}
-                <div className="lg:col-span-7 border-r border-slate-200 overflow-y-auto p-6 space-y-6">
-                  {/* General Config */}
-                  <div className="bg-slate-50/70 p-4 rounded-2xl border border-slate-200 space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Template</label>
+                  {openSections.header && (
+                    <div className="space-y-3 pt-2">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Judul Utama (Title)</label>
+                          <input
+                            type="text"
+                            value={formData.blocks_config.header?.title || ''}
+                            onChange={(e) => updateHeader({ title: e.target.value })}
+                            placeholder="📦 LTMS • Monitoring INC"
+                            className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none font-bold"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Sub-Judul (Subtitle)</label>
+                          <input
+                            type="text"
+                            value={formData.blocks_config.header?.subtitle || ''}
+                            onChange={(e) => updateHeader({ subtitle: e.target.value })}
+                            placeholder="Intercity Outgoing Reminder"
+                            className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none font-medium"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Sub Header Information toggles & labels */}
+                      <div className="p-3 bg-slate-50 rounded-xl space-y-2.5">
+                        <span className="font-bold text-slate-700 block">Kolom Informasi Header</span>
+                        <div className="grid grid-cols-3 gap-2 text-[11px]">
+                          <div className="space-y-1">
+                            <label className="text-slate-600 block">Label Kolom 1</label>
+                            <input
+                              type="text"
+                              value={formData.blocks_config.header?.pickupDpLabel || 'Pickup DP'}
+                              onChange={(e) => updateHeader({ pickupDpLabel: e.target.value })}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-slate-600 block">Label Kolom 2</label>
+                            <input
+                              type="text"
+                              value={formData.blocks_config.header?.targetCityLabel || 'Kota Tujuan'}
+                              onChange={(e) => updateHeader({ targetCityLabel: e.target.value })}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-slate-600 block">Label Kolom 3</label>
+                            <input
+                              type="text"
+                              value={formData.blocks_config.header?.updateLabel || 'Generate'}
+                              onChange={(e) => updateHeader({ updateLabel: e.target.value })}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Ringkasan KPI Grid Section */}
+                <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
+                  <div
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => setOpenSections({ ...openSections, kpiGrid: !openSections.kpiGrid })}
+                  >
+                    <span className="font-bold text-slate-800 text-sm">Grid Indikator KPI</span>
+                    {openSections.kpiGrid ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </div>
+
+                  {openSections.kpiGrid && (
+                    <div className="space-y-3 pt-2">
+                      <div className="flex items-center justify-between">
                         <input
                           type="text"
-                          value={templateName}
-                          onChange={(e) => setTemplateName(e.target.value)}
-                          placeholder="cth: Standar Monitoring INC Batang"
-                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#E2231A]/20 focus:border-[#E2231A]"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">Modul Terkait</label>
-                        <select
-                          value={moduleVal}
-                          onChange={(e) => setModuleVal(e.target.value)}
-                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#E2231A]/20 focus:border-[#E2231A]"
-                        >
-                          <option value="monitoring_inc">Monitoring INC</option>
-                          <option value="monitoring_delivery">Monitoring Delivery</option>
-                          <option value="longtail">Long Tail Alert</option>
-                          <option value="dashboard">Dashboard Report</option>
-                          <option value="custom">Custom Modul</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Color Theme Selector */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-2">Tema Banner Kartu</label>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {THEMES.map((theme) => (
-                          <button
-                            type="button"
-                            key={theme.id}
-                            onClick={() => setBlocksConfig({ ...blocksConfig, theme: theme.id })}
-                            className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs font-medium transition-all ${
-                              blocksConfig.theme === theme.id
-                                ? 'border-[#E2231A] bg-[#E2231A]/5 shadow-sm font-semibold'
-                                : 'border-slate-200 bg-white hover:bg-slate-50'
-                            }`}
-                          >
-                            <span className={`w-3.5 h-3.5 rounded-full ${theme.bgClass}`} />
-                            <span className="truncate">{theme.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
-                      <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={isDefault}
-                          onChange={(e) => setIsDefault(e.target.checked)}
-                          className="rounded text-[#E2231A] focus:ring-[#E2231A]"
-                        />
-                        Jadikan Default untuk Modul {moduleVal}
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Section Tabs */}
-                  <div className="flex items-center gap-1 border-b border-slate-200 pb-2 overflow-x-auto text-xs font-medium">
-                    {[
-                      { id: 'header', label: '🏷️ Header & Info' },
-                      { id: 'lastScan', label: '⏱️ Last Scan' },
-                      { id: 'kpi', label: '📊 Ringkasan KPI' },
-                      { id: 'subdistricts', label: '📍 Kecamatan' },
-                      { id: 'media', label: '🖼️ Screenshot' },
-                      { id: 'action', label: '🚀 Tombol' },
-                      { id: 'footer', label: '📝 Footer' },
-                    ].map((sec) => (
-                      <button
-                        key={sec.id}
-                        type="button"
-                        onClick={() => setActiveSection(sec.id as any)}
-                        className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
-                          activeSection === sec.id
-                            ? 'bg-slate-900 text-white font-semibold shadow-sm'
-                            : 'text-slate-600 hover:bg-slate-100'
-                        }`}
-                      >
-                        {sec.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* SECTION 1: Header & Info */}
-                  {activeSection === 'header' && (
-                    <div className="space-y-4">
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">
-                            Judul Utama (Mendukung Variabel)
-                          </label>
-                          <input
-                            type="text"
-                            value={blocksConfig.header?.title || ''}
-                            onChange={(e) =>
-                              setBlocksConfig({
-                                ...blocksConfig,
-                                header: { ...blocksConfig.header, title: e.target.value },
-                                title: e.target.value,
-                              })
-                            }
-                            placeholder="cth: LTMS | Monitoring INC"
-                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#E2231A]/20 focus:border-[#E2231A]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">
-                            Sub Judul (Header Subtitle)
-                          </label>
-                          <input
-                            type="text"
-                            value={blocksConfig.header?.subtitle || ''}
-                            onChange={(e) =>
-                              setBlocksConfig({
-                                ...blocksConfig,
-                                header: { ...blocksConfig.header, subtitle: e.target.value },
-                              })
-                            }
-                            placeholder="cth: Intercity Outgoing Monitoring"
-                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-[#E2231A]/20 focus:border-[#E2231A]"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Header Info Fields */}
-                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                        <h4 className="text-xs font-bold text-slate-800">Informasi Sub Header</h4>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <div className="flex items-center justify-between mb-1">
-                              <label className="text-[11px] font-semibold text-slate-700">Pickup DP</label>
-                              <input
-                                type="checkbox"
-                                checked={blocksConfig.header?.showPickupDp ?? true}
-                                onChange={(e) =>
-                                  setBlocksConfig({
-                                    ...blocksConfig,
-                                    header: { ...blocksConfig.header, showPickupDp: e.target.checked },
-                                  })
-                                }
-                                className="rounded text-[#E2231A]"
-                              />
-                            </div>
-                            <input
-                              type="text"
-                              value={blocksConfig.header?.pickupDpLabel || 'Pickup DP'}
-                              onChange={(e) =>
-                                setBlocksConfig({
-                                  ...blocksConfig,
-                                  header: { ...blocksConfig.header, pickupDpLabel: e.target.value },
-                                })
-                              }
-                              placeholder="Label: Pickup DP"
-                              className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                            />
-                          </div>
-
-                          <div>
-                            <div className="flex items-center justify-between mb-1">
-                              <label className="text-[11px] font-semibold text-slate-700">Kota Tujuan / Drop Point</label>
-                              <input
-                                type="checkbox"
-                                checked={blocksConfig.header?.showTargetCity ?? true}
-                                onChange={(e) =>
-                                  setBlocksConfig({
-                                    ...blocksConfig,
-                                    header: { ...blocksConfig.header, showTargetCity: e.target.checked },
-                                  })
-                                }
-                                className="rounded text-[#E2231A]"
-                              />
-                            </div>
-                            <input
-                              type="text"
-                              value={blocksConfig.header?.targetCityLabel || 'Tujuan'}
-                              onChange={(e) =>
-                                setBlocksConfig({
-                                  ...blocksConfig,
-                                  header: { ...blocksConfig.header, targetCityLabel: e.target.value },
-                                })
-                              }
-                              placeholder="Label: Tujuan / Drop Point"
-                              className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                            />
-                          </div>
-
-                          <div className="sm:col-span-2">
-                            <div className="flex items-center justify-between mb-1">
-                              <label className="text-[11px] font-semibold text-slate-700">Waktu Generate</label>
-                              <input
-                                type="checkbox"
-                                checked={blocksConfig.header?.showUpdate ?? true}
-                                onChange={(e) =>
-                                  setBlocksConfig({
-                                    ...blocksConfig,
-                                    header: { ...blocksConfig.header, showUpdate: e.target.checked },
-                                  })
-                                }
-                                className="rounded text-[#E2231A]"
-                              />
-                            </div>
-                            <input
-                              type="text"
-                              value={blocksConfig.header?.updateLabel || 'Update'}
-                              onChange={(e) =>
-                                setBlocksConfig({
-                                  ...blocksConfig,
-                                  header: { ...blocksConfig.header, updateLabel: e.target.value },
-                                })
-                              }
-                              placeholder="Label: Update / Waktu Generate"
-                              className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* SECTION 2: Last Scan (Delivery) */}
-                  {activeSection === 'lastScan' && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-900">Aktifkan Blok Last Scan</h4>
-                          <p className="text-[11px] text-slate-500">
-                            Menampilkan informasi aktivitas scan terakhir (Waktu, No AWB, dan Status).
-                          </p>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={blocksConfig.lastScan?.show ?? false}
+                          value={formData.blocks_config.kpiGrid?.title || ''}
                           onChange={(e) =>
-                            setBlocksConfig({
-                              ...blocksConfig,
-                              lastScan: {
-                                ...(blocksConfig.lastScan || {
-                                  title: 'Last Scan',
-                                  scanTimeLabel: 'Waktu Scan',
-                                  scanTimeValue: '{{last_scan_time}}',
-                                  awbLabel: 'AWB',
-                                  awbValue: '{{last_scan_awb}}',
-                                  statusLabel: 'Status',
-                                  statusValue: '{{last_scan_status}}',
-                                  fallbackText: 'Belum ada aktivitas scan hari ini.',
-                                  show: true,
-                                }),
-                                show: e.target.checked,
+                            setFormData((prev) => ({
+                              ...prev,
+                              blocks_config: {
+                                ...prev.blocks_config,
+                                kpiGrid: { ...prev.blocks_config.kpiGrid, title: e.target.value },
                               },
-                            })
+                            }))
                           }
-                          className="rounded text-[#E2231A] w-4 h-4"
+                          placeholder="📊 Ringkasan Monitoring"
+                          className="px-3 py-1.5 rounded-xl border border-slate-200 font-bold w-64"
                         />
-                      </div>
-
-                      {blocksConfig.lastScan?.show && (
-                        <div className="space-y-3 p-4 bg-white rounded-2xl border border-slate-200">
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">Judul Blok</label>
-                            <input
-                              type="text"
-                              value={blocksConfig.lastScan?.title || 'Last Scan'}
-                              onChange={(e) =>
-                                setBlocksConfig({
-                                  ...blocksConfig,
-                                  lastScan: { ...blocksConfig.lastScan!, title: e.target.value },
-                                })
-                              }
-                              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-3 gap-2">
-                            <div>
-                              <label className="block text-[11px] font-medium text-slate-600 mb-1">Label Waktu</label>
-                              <input
-                                type="text"
-                                value={blocksConfig.lastScan?.scanTimeLabel || 'Waktu Scan'}
-                                onChange={(e) =>
-                                  setBlocksConfig({
-                                    ...blocksConfig,
-                                    lastScan: { ...blocksConfig.lastScan!, scanTimeLabel: e.target.value },
-                                  })
-                                }
-                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[11px] font-medium text-slate-600 mb-1">Label AWB</label>
-                              <input
-                                type="text"
-                                value={blocksConfig.lastScan?.awbLabel || 'AWB'}
-                                onChange={(e) =>
-                                  setBlocksConfig({
-                                    ...blocksConfig,
-                                    lastScan: { ...blocksConfig.lastScan!, awbLabel: e.target.value },
-                                  })
-                                }
-                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[11px] font-medium text-slate-600 mb-1">Label Status</label>
-                              <input
-                                type="text"
-                                value={blocksConfig.lastScan?.statusLabel || 'Status'}
-                                onChange={(e) =>
-                                  setBlocksConfig({
-                                    ...blocksConfig,
-                                    lastScan: { ...blocksConfig.lastScan!, statusLabel: e.target.value },
-                                  })
-                                }
-                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-                              />
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                              Teks Fallback Jika Belum Ada Scan
-                            </label>
-                            <input
-                              type="text"
-                              value={blocksConfig.lastScan?.fallbackText || 'Belum ada aktivitas scan hari ini.'}
-                              onChange={(e) =>
-                                setBlocksConfig({
-                                  ...blocksConfig,
-                                  lastScan: { ...blocksConfig.lastScan!, fallbackText: e.target.value },
-                                })
-                              }
-                              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* SECTION 3: Ringkasan Grid KPI */}
-                  {activeSection === 'kpi' && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Judul Grid KPI</label>
-                          <input
-                            type="text"
-                            value={blocksConfig.kpiGrid?.title || 'Ringkasan Monitoring INC'}
-                            onChange={(e) =>
-                              setBlocksConfig({
-                                ...blocksConfig,
-                                kpiGrid: { ...blocksConfig.kpiGrid, title: e.target.value },
-                              })
-                            }
-                            placeholder="cth: Ringkasan Monitoring INC"
-                            className="w-72 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">Tata Letak (Layout)</label>
-                          <select
-                            value={blocksConfig.kpiGrid?.layout || 'horizontal_5'}
-                            onChange={(e) =>
-                              setBlocksConfig({
-                                ...blocksConfig,
-                                kpiGrid: { ...blocksConfig.kpiGrid, layout: e.target.value as any },
-                                kpiStyle: e.target.value as any,
-                              })
-                            }
-                            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                          >
-                            <option value="horizontal_5">5 Kolom / Horizontal Grid</option>
-                            <option value="4_column">4 Kolom Grid</option>
-                            <option value="2_column">2 Kolom Ringkas</option>
-                          </select>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={addKpiItem}
+                          className="px-3 py-1.5 bg-red-50 text-[#E2231A] font-bold rounded-xl flex items-center gap-1 hover:bg-red-100"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Tambah KPI</span>
+                        </button>
                       </div>
 
                       {/* KPI Items List */}
                       <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-800">Daftar Indikator KPI</span>
-                          <button
-                            type="button"
-                            onClick={handleAddKpiItem}
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#E2231A] hover:underline"
+                        {(formData.blocks_config.kpiGrid?.items || []).map((item, idx) => (
+                          <div
+                            key={item.id || idx}
+                            className="p-3 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-12 gap-2 items-center"
                           >
-                            <Plus className="w-3.5 h-3.5" />
-                            Tambah KPI
-                          </button>
-                        </div>
-
-                        <div className="space-y-2">
-                          {(blocksConfig.kpiGrid?.items || []).map((item, idx) => (
-                            <div
-                              key={item.id || idx}
-                              className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center gap-2 text-xs"
-                            >
-                              <div className="flex-1 grid grid-cols-2 gap-2 w-full">
-                                <input
-                                  type="text"
-                                  value={item.label}
-                                  onChange={(e) => handleUpdateKpiItem(idx, 'label', e.target.value)}
-                                  placeholder="Label KPI"
-                                  className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-medium"
-                                />
-                                <input
-                                  type="text"
-                                  value={item.valueTemplate}
-                                  onChange={(e) => handleUpdateKpiItem(idx, 'valueTemplate', e.target.value)}
-                                  placeholder="Variabel cth: {{total_inc}}"
-                                  className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-700"
-                                />
-                              </div>
-
-                              <div className="flex items-center gap-2 w-full sm:w-auto justify-between">
-                                <select
-                                  value={item.color || 'default'}
-                                  onChange={(e) => handleUpdateKpiItem(idx, 'color', e.target.value)}
-                                  className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-medium"
-                                >
-                                  <option value="default">Default</option>
-                                  <option value="red">Merah (Alert)</option>
-                                  <option value="green">Hijau (Success)</option>
-                                  <option value="blue">Biru (Info)</option>
-                                </select>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveKpiItem(idx)}
-                                  className="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-slate-200 transition-colors"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
+                            <div className="col-span-4 space-y-1">
+                              <input
+                                type="text"
+                                value={item.label}
+                                onChange={(e) => updateKpiItem(idx, { label: e.target.value })}
+                                placeholder="Nama Metrik"
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-medium"
+                              />
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* SECTION 4: 📍 Kecamatan Tujuan */}
-                  {activeSection === 'subdistricts' && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-900">Aktifkan Blok Kecamatan Tujuan</h4>
-                          <p className="text-[11px] text-slate-500">
-                            Menampilkan daftar kecamatan tujuan pengiriman beserta jumlah sisa AWB.
-                          </p>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={blocksConfig.subdistricts?.show ?? true}
-                          onChange={(e) =>
-                            setBlocksConfig({
-                              ...blocksConfig,
-                              subdistricts: {
-                                ...(blocksConfig.subdistricts || {
-                                  title: '📍 Kecamatan Tujuan',
-                                  maxItems: '5',
-                                  sortOrder: 'desc',
-                                  show: true,
-                                }),
-                                show: e.target.checked,
-                              },
-                              showTopKecamatan: e.target.checked,
-                            })
-                          }
-                          className="rounded text-[#E2231A] w-4 h-4"
-                        />
-                      </div>
-
-                      {blocksConfig.subdistricts?.show && (
-                        <div className="space-y-3 p-4 bg-white rounded-2xl border border-slate-200">
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">Judul Blok</label>
-                            <input
-                              type="text"
-                              value={blocksConfig.subdistricts?.title || '📍 Kecamatan Tujuan'}
-                              onChange={(e) =>
-                                setBlocksConfig({
-                                  ...blocksConfig,
-                                  subdistricts: { ...blocksConfig.subdistricts!, title: e.target.value },
-                                })
-                              }
-                              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-[11px] font-medium text-slate-600 mb-1">Jumlah Data</label>
+                            <div className="col-span-4 space-y-1">
+                              <input
+                                type="text"
+                                value={item.valueTemplate}
+                                onChange={(e) => updateKpiItem(idx, { valueTemplate: e.target.value })}
+                                placeholder="{{total_inc}}"
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-mono"
+                              />
+                            </div>
+                            <div className="col-span-3 space-y-1">
                               <select
-                                value={blocksConfig.subdistricts?.maxItems || '5'}
-                                onChange={(e) =>
-                                  setBlocksConfig({
-                                    ...blocksConfig,
-                                    subdistricts: { ...blocksConfig.subdistricts!, maxItems: e.target.value as any },
-                                  })
-                                }
-                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                                value={item.color || 'default'}
+                                onChange={(e) => updateKpiItem(idx, { color: e.target.value as any })}
+                                className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-white font-medium"
                               >
-                                <option value="5">Top 5 Kecamatan</option>
-                                <option value="10">Top 10 Kecamatan</option>
-                                <option value="all">Semua Kecamatan</option>
+                                <option value="default">Default</option>
+                                <option value="red">Merah (Alert)</option>
+                                <option value="green">Hijau (Sukses)</option>
                               </select>
                             </div>
-
-                            <div>
-                              <label className="block text-[11px] font-medium text-slate-600 mb-1">Urutan (Sorting)</label>
-                              <select
-                                value={blocksConfig.subdistricts?.sortOrder || 'desc'}
-                                onChange={(e) =>
-                                  setBlocksConfig({
-                                    ...blocksConfig,
-                                    subdistricts: { ...blocksConfig.subdistricts!, sortOrder: e.target.value as any },
-                                  })
-                                }
-                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                            <div className="col-span-1 text-right">
+                              <button
+                                type="button"
+                                onClick={() => removeKpiItem(idx)}
+                                className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg"
                               >
-                                <option value="desc">Terbanyak ke Terkecil (Descending)</option>
-                                <option value="asc">Terkecil ke Terbanyak (Ascending)</option>
-                              </select>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* SECTION 5: Screenshot Media */}
-                  {activeSection === 'media' && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-900">Lampirkan Screenshot Tabel HD</h4>
-                          <p className="text-[11px] text-slate-500">
-                            Menyisipkan bukti visual screenshot monitoring otomatis di bawah ringkasan.
-                          </p>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={blocksConfig.screenshot?.show ?? true}
-                          onChange={(e) =>
-                            setBlocksConfig({
-                              ...blocksConfig,
-                              screenshot: { ...blocksConfig.screenshot, show: e.target.checked },
-                              showImage: e.target.checked,
-                            })
-                          }
-                          className="rounded text-[#E2231A] w-4 h-4"
-                        />
+                        ))}
                       </div>
                     </div>
                   )}
-
-                  {/* SECTION 6: Action Button */}
-                  {activeSection === 'action' && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-900">Tombol Aksi Dashboard</h4>
-                          <p className="text-[11px] text-slate-500">
-                            Tombol interaktif di Feishu untuk membuka halaman monitoring LTMS terkait.
-                          </p>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={blocksConfig.actionButton?.enabled ?? true}
-                          onChange={(e) =>
-                            setBlocksConfig({
-                              ...blocksConfig,
-                              actionButton: { ...blocksConfig.actionButton, enabled: e.target.checked },
-                            })
-                          }
-                          className="rounded text-[#E2231A] w-4 h-4"
-                        />
-                      </div>
-
-                      {blocksConfig.actionButton?.enabled && (
-                        <div className="space-y-3 p-4 bg-white rounded-2xl border border-slate-200">
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">Label Tombol</label>
-                            <input
-                              type="text"
-                              value={blocksConfig.actionButton?.label || '🚀 Buka Dashboard LTMS'}
-                              onChange={(e) =>
-                                setBlocksConfig({
-                                  ...blocksConfig,
-                                  actionButton: { ...blocksConfig.actionButton, label: e.target.value },
-                                })
-                              }
-                              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">Target URL</label>
-                            <input
-                              type="text"
-                              value={blocksConfig.actionButton?.url || 'https://ltms.jt-express.id'}
-                              onChange={(e) =>
-                                setBlocksConfig({
-                                  ...blocksConfig,
-                                  actionButton: { ...blocksConfig.actionButton, url: e.target.value },
-                                })
-                              }
-                              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* SECTION 7: Footer */}
-                  {activeSection === 'footer' && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-900">Catatan Kaki (Footer)</h4>
-                          <p className="text-[11px] text-slate-500">
-                            Identitas sistem otomatis pada bagian bawah kartu.
-                          </p>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={blocksConfig.footer?.show ?? true}
-                          onChange={(e) =>
-                            setBlocksConfig({
-                              ...blocksConfig,
-                              footer: { ...blocksConfig.footer, show: e.target.checked },
-                              showFooter: e.target.checked,
-                            })
-                          }
-                          className="rounded text-[#E2231A] w-4 h-4"
-                        />
-                      </div>
-
-                      {blocksConfig.footer?.show && (
-                        <div className="space-y-3 p-4 bg-white rounded-2xl border border-slate-200">
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">Judul Footer</label>
-                            <input
-                              type="text"
-                              value={blocksConfig.footer?.title || 'LTMS'}
-                              onChange={(e) =>
-                                setBlocksConfig({
-                                  ...blocksConfig,
-                                  footer: { ...blocksConfig.footer, title: e.target.value },
-                                })
-                              }
-                              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">Deskripsi Footer</label>
-                            <textarea
-                              rows={2}
-                              value={
-                                blocksConfig.footer?.description ||
-                                'Long Tail Monitoring System\nGenerated Automatically'
-                              }
-                              onChange={(e) =>
-                                setBlocksConfig({
-                                  ...blocksConfig,
-                                  footer: { ...blocksConfig.footer, description: e.target.value },
-                                  footerText: e.target.value,
-                                })
-                              }
-                              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Version Note */}
-                  <div className="pt-2">
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Catatan Perubahan Versi (Opsional)
-                    </label>
-                    <input
-                      type="text"
-                      value={versionNote}
-                      onChange={(e) => setVersionNote(e.target.value)}
-                      placeholder="cth: Mengubah indikator KPI dan label tujuan"
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs"
-                    />
-                  </div>
                 </div>
 
-                {/* Right: Real-time Live Preview Feishu Card (5 cols) */}
-                <div className="lg:col-span-5 bg-slate-100/70 p-6 flex flex-col items-center justify-start overflow-y-auto">
-                  <div className="w-full max-w-sm space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1 text-xs font-bold text-slate-800">
-                        <Eye className="w-4 h-4 text-slate-500" />
-                        Live Feishu Preview
-                      </div>
-                      <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-slate-200 text-[10px] font-medium">
-                        <button
-                          type="button"
-                          onClick={() => setPreviewMode('dummy')}
-                          className={`px-2 py-0.5 rounded ${
-                            previewMode === 'dummy' ? 'bg-[#E2231A] text-white font-semibold' : 'text-slate-600'
-                          }`}
-                        >
-                          Data Dummy
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPreviewMode('real')}
-                          className={`px-2 py-0.5 rounded ${
-                            previewMode === 'real' ? 'bg-[#E2231A] text-white font-semibold' : 'text-slate-600'
-                          }`}
-                        >
-                          Data Riil
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* MOCK FEISHU CARD CONTAINER */}
-                    <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden text-xs">
-                      {/* Feishu Header Banner */}
-                      <div
-                        className={`p-3.5 text-white ${
-                          THEMES.find((t) => t.id === blocksConfig.theme)?.bgClass || 'bg-[#E2231A]'
-                        }`}
-                      >
-                        <div className="font-bold text-sm leading-tight">
-                          {MessageTemplateEngine.render(
-                            blocksConfig.header?.title || blocksConfig.title || 'LTMS | Monitoring Report',
-                            activePreviewContext
-                          )}
-                        </div>
-                        {blocksConfig.header?.subtitle && (
-                          <div className="text-[11px] text-white/80 font-medium mt-0.5">
-                            {MessageTemplateEngine.render(blocksConfig.header.subtitle, activePreviewContext)}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="p-4 space-y-3.5">
-                        {/* Sub Header Info */}
-                        <div className="grid grid-cols-2 gap-2 text-[11px] pb-2 border-b border-slate-100">
-                          {blocksConfig.header?.showPickupDp && (
-                            <div>
-                              <span className="text-slate-400 font-semibold block">
-                                {blocksConfig.header?.pickupDpLabel || 'Pickup DP'}:
-                              </span>
-                              <span className="font-bold text-slate-800">
-                                {MessageTemplateEngine.render(
-                                  blocksConfig.header?.pickupDpValue || '{{pickup_dp}}',
-                                  activePreviewContext
-                                )}
-                              </span>
-                            </div>
-                          )}
-
-                          {blocksConfig.header?.showTargetCity && (
-                            <div>
-                              <span className="text-slate-400 font-semibold block">
-                                {blocksConfig.header?.targetCityLabel || 'Tujuan'}:
-                              </span>
-                              <span className="font-bold text-slate-800">
-                                {MessageTemplateEngine.render(
-                                  blocksConfig.header?.targetCityValue || '{{target_city}}',
-                                  activePreviewContext
-                                )}
-                              </span>
-                            </div>
-                          )}
-
-                          {blocksConfig.header?.showUpdate && (
-                            <div className="col-span-2 pt-1">
-                              <span className="text-slate-400 font-semibold block">
-                                {blocksConfig.header?.updateLabel || 'Update'}:
-                              </span>
-                              <span className="font-medium text-slate-700">
-                                {MessageTemplateEngine.render(
-                                  blocksConfig.header?.updateValue || '{{generated_at}}',
-                                  activePreviewContext
-                                )}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Last Scan Block */}
-                        {blocksConfig.lastScan?.show && (
-                          <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-[11px] space-y-1">
-                            <div className="font-bold text-slate-800 flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-blue-600" />
-                              {blocksConfig.lastScan.title || 'Last Scan'}
-                            </div>
-                            <div className="text-slate-600 space-y-0.5 pt-0.5">
-                              <div>
-                                • {blocksConfig.lastScan.scanTimeLabel || 'Waktu'}:{' '}
-                                <span className="font-semibold text-slate-800">
-                                  {MessageTemplateEngine.render(
-                                    blocksConfig.lastScan.scanTimeValue || '{{last_scan_time}}',
-                                    activePreviewContext
-                                  )}
-                                </span>
-                              </div>
-                              <div>
-                                • {blocksConfig.lastScan.awbLabel || 'AWB'}:{' '}
-                                <span className="font-semibold text-slate-800">
-                                  {MessageTemplateEngine.render(
-                                    blocksConfig.lastScan.awbValue || '{{last_scan_awb}}',
-                                    activePreviewContext
-                                  )}
-                                </span>
-                              </div>
-                              <div>
-                                • {blocksConfig.lastScan.statusLabel || 'Status'}:{' '}
-                                <span className="font-semibold text-slate-800">
-                                  {MessageTemplateEngine.render(
-                                    blocksConfig.lastScan.statusValue || '{{last_scan_status}}',
-                                    activePreviewContext
-                                  )}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* KPI Grid */}
-                        <div className="space-y-2">
-                          <div className="font-bold text-slate-800 text-[11px]">
-                            📊 {blocksConfig.kpiGrid?.title || 'Ringkasan Monitoring'}
-                          </div>
-
-                          <div
-                            className={`grid gap-1.5 ${
-                              blocksConfig.kpiGrid?.layout === '2_column' ? 'grid-cols-2' : 'grid-cols-2'
-                            }`}
-                          >
-                            {(blocksConfig.kpiGrid?.items || []).map((kpi, idx) => {
-                              const renderedVal = MessageTemplateEngine.render(
-                                kpi.valueTemplate,
-                                activePreviewContext
-                              );
-                              return (
-                                <div
-                                  key={kpi.id || idx}
-                                  className="p-2 bg-slate-50/80 rounded border border-slate-200/80"
-                                >
-                                  <div className="text-[10px] text-slate-500 font-medium truncate">{kpi.label}</div>
-                                  <div
-                                    className={`text-xs font-bold mt-0.5 ${
-                                      kpi.color === 'red'
-                                        ? 'text-[#E2231A]'
-                                        : kpi.color === 'green'
-                                        ? 'text-emerald-600'
-                                        : kpi.color === 'blue'
-                                        ? 'text-blue-600'
-                                        : 'text-slate-800'
-                                    }`}
-                                  >
-                                    {renderedVal}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* Kecamatan Tujuan Block */}
-                        {blocksConfig.subdistricts?.show && (
-                          <div className="space-y-1.5 pt-1 border-t border-slate-100">
-                            <div className="font-bold text-slate-800 text-[11px]">
-                              {blocksConfig.subdistricts.title || '📍 Kecamatan Tujuan'}
-                            </div>
-                            <div className="text-[10px] text-slate-600 bg-slate-50 p-2 rounded border border-slate-200 whitespace-pre-line leading-relaxed">
-                              {MessageTemplateEngine.render(
-                                '{{destination_subdistricts}}',
-                                activePreviewContext
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Screenshot Mock */}
-                        {blocksConfig.screenshot?.show && (
-                          <div className="border border-dashed border-slate-300 rounded-lg p-4 text-center bg-slate-50 space-y-1">
-                            <ImageIcon className="w-5 h-5 text-slate-400 mx-auto" />
-                            <div className="text-[10px] font-semibold text-slate-600">
-                              [Bukti Screenshot HD Monitoring]
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Action Button */}
-                        {blocksConfig.actionButton?.enabled && (
-                          <div>
-                            <button
-                              type="button"
-                              className={`w-full py-2 rounded-lg text-white font-bold text-xs shadow-sm transition-all ${
-                                blocksConfig.theme === 'red'
-                                  ? 'bg-[#E2231A]'
-                                  : blocksConfig.theme === 'blue'
-                                  ? 'bg-blue-600'
-                                  : 'bg-slate-800'
-                              }`}
-                            >
-                              {blocksConfig.actionButton.label || '🚀 Buka Dashboard LTMS'}
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Footer */}
-                        {blocksConfig.footer?.show && (
-                          <div className="text-[9px] text-slate-400 text-center leading-tight pt-1 border-t border-slate-100 whitespace-pre-line">
-                            {blocksConfig.footer.title && <strong>{blocksConfig.footer.title} • </strong>}
-                            {blocksConfig.footer.description ||
-                              'Long Tail Monitoring System\nGenerated Automatically'}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                {/* 4. Operational Assignment Section */}
+                <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
+                  <div
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => setOpenSections({ ...openSections, assignment: !openSections.assignment })}
+                  >
+                    <span className="font-bold text-slate-800 text-sm">
+                      Penugasan Operasional & Mention PIC
+                    </span>
+                    {openSections.assignment ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </div>
+
+                  {openSections.assignment && (
+                    <div className="space-y-3 pt-2">
+                      <div className="p-3 bg-red-50/60 rounded-xl border border-red-100 text-slate-700 leading-relaxed text-[11px]">
+                        Bagian ini akan merender daftar wilayah / kurir secara dinamis dengan tag mention{' '}
+                        <code className="font-mono font-bold text-red-600">&lt;at id="..."&gt;Nama PIC&lt;/at&gt;</code>{' '}
+                        berdasarkan database Mention Mapping.
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Judul Blok Penugasan</label>
+                          <input
+                            type="text"
+                            value={
+                              formData.blocks_config.subdistricts?.title ||
+                              formData.blocks_config.kurirFollowUp?.title ||
+                              '📍 Kecamatan Tujuan'
+                            }
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                blocks_config: {
+                                  ...prev.blocks_config,
+                                  subdistricts: {
+                                    ...prev.blocks_config.subdistricts!,
+                                    title: e.target.value,
+                                  },
+                                },
+                              }))
+                            }
+                            className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="font-semibold text-slate-700">Batas Maksimal Baris</label>
+                          <select
+                            value={formData.blocks_config.subdistricts?.maxItems || '10'}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                blocks_config: {
+                                  ...prev.blocks_config,
+                                  subdistricts: {
+                                    ...prev.blocks_config.subdistricts!,
+                                    maxItems: e.target.value as any,
+                                  },
+                                },
+                              }))
+                            }
+                            className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium"
+                          >
+                            <option value="5">5 Item</option>
+                            <option value="10">10 Item</option>
+                            <option value="15">15 Item</option>
+                            <option value="all">Tampilkan Semua</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 5. Action Button & Footer Note */}
+                <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
+                  <div
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => setOpenSections({ ...openSections, actionButton: !openSections.actionButton })}
+                  >
+                    <span className="font-bold text-slate-800 text-sm">Tombol CTA & Catatan Kaki</span>
+                    {openSections.actionButton ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </div>
+
+                  {openSections.actionButton && (
+                    <div className="space-y-3 pt-2">
+                      <div className="space-y-1">
+                        <label className="font-semibold text-slate-700">Teks Tombol Aksi</label>
+                        <input
+                          type="text"
+                          value={formData.blocks_config.actionButton?.label || '🚀 Buka LTMS Dashboard'}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              blocks_config: {
+                                ...prev.blocks_config,
+                                actionButton: {
+                                  ...prev.blocks_config.actionButton,
+                                  label: e.target.value,
+                                  enabled: true,
+                                },
+                              },
+                            }))
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="font-semibold text-slate-700">Teks Footer Note</label>
+                        <input
+                          type="text"
+                          value={formData.blocks_config.footer?.title || 'Generated Automatically by LTMS'}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              blocks_config: {
+                                ...prev.blocks_config,
+                                footer: { ...prev.blocks_config.footer, title: e.target.value, show: true },
+                              },
+                            }))
+                          }
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Change Summary */}
+                <div className="space-y-1 pt-2">
+                  <label className="font-semibold text-slate-700">Ringkasan Perubahan Versi</label>
+                  <input
+                    type="text"
+                    value={formData.change_summary}
+                    onChange={(e) => setFormData({ ...formData, change_summary: e.target.value })}
+                    placeholder="Contoh: Mengubah penataan warna KPI dan mention PIC"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium"
+                  />
                 </div>
               </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
-      {/* MODAL 3: Version History */}
-      <AnimatePresence>
-        {versionModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-100"
-            >
-              <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <h3 className="text-base font-bold text-slate-900">Riwayat Versi Desain Kartu</h3>
-                  <p className="text-xs text-slate-500">{selectedTemplateName}</p>
+              {/* Right Column: Live Pixel-Identical Preview (5 cols) */}
+              <div className="lg:col-span-5 bg-slate-100 p-4 sm:p-6 overflow-y-auto flex flex-col items-center justify-start space-y-4">
+                <div className="w-full flex items-center justify-between text-xs font-bold text-slate-600 px-1">
+                  <span>📱 Live Feishu Interactive Card Preview</span>
+                  <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    Single Source Compiler
+                  </span>
                 </div>
-                <button
-                  onClick={() => setVersionModalOpen(false)}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"
+
+                <div className="w-full max-w-sm sticky top-0">
+                  <FeishuCardPreview
+                    blocksConfig={formData.blocks_config}
+                    variables={{
+                      pickup_dp: 'BATANG01',
+                      target_city: 'KOTA BATANG',
+                      drop_point: 'BATANG01',
+                      total_inc: '14.942',
+                      clear_ttd: '14.816',
+                      pending_ttd: '72',
+                      over_sla: '54',
+                      sla_percentage: '99.1',
+                      total_delivery: '3.240',
+                      delivered: '3.198',
+                      pending_delivery: '42',
+                      delivery_sla: '98.0',
+                      last_scan_time: '08:21 WIB',
+                      last_scan_awb: 'JT1234567890',
+                      last_scan_status: 'Delivery',
+                      generated_at: new Date().toLocaleString('id-ID'),
+                      subdistricts: [
+                        { name: 'BATANG', count: '10 AWB', picName: 'Agus' },
+                        { name: 'WARUNGASEM', count: '8 AWB', picName: 'Dimas' },
+                        { name: 'LIMPUNG', count: '6 AWB', picName: 'Rian' },
+                        { name: 'BANDAR', count: '5 AWB', picName: 'Arif' },
+                      ],
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 sm:px-6 border-t border-slate-200 flex items-center justify-end gap-2.5 bg-white">
+              <button
+                type="button"
+                onClick={() => setIsEditorOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                className="px-6 py-2 text-xs font-bold text-white bg-[#E2231A] hover:bg-[#B81912] rounded-xl transition-colors shadow-sm shadow-red-200"
+              >
+                {editingTemplate ? 'Simpan Perubahan' : 'Buat Template'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Test Send Modal */}
+      {isTestSendOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Send className="w-4 h-4 text-blue-600" />
+                <h3 className="text-sm font-bold text-slate-900">Uji Coba Pengiriman Kartu</h3>
+              </div>
+              <button onClick={() => setIsTestSendOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <p className="text-slate-600">
+                Pilih group Feishu untuk mengirim kartu penugasan saat ini sebagai simulasi pesan real-time.
+              </p>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-slate-700 block">Pilih Group Feishu</label>
+                <select
+                  value={testChatId}
+                  onChange={(e) => setTestChatId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium"
                 >
-                  <X className="w-4 h-4" />
+                  <option value="">-- Pilih Group --</option>
+                  {groups.map((g) => (
+                    <option key={g.chat_id} value={g.chat_id}>
+                      {g.name} ({g.chat_id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsTestSendOpen(false)}
+                  className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  disabled={sendingTest || !testChatId}
+                  onClick={handleSendTestCard}
+                  className="px-5 py-2 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {sendingTest ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  <span>Kirim Sekarang</span>
                 </button>
               </div>
-
-              <div className="p-5 max-h-96 overflow-y-auto space-y-3">
-                {versionLoading ? (
-                  <div className="py-8 text-center text-xs text-slate-500">Memuat riwayat...</div>
-                ) : activeVersions.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-slate-500">Belum ada riwayat versi sebelumnya.</div>
-                ) : (
-                  activeVersions.map((v) => (
-                    <div
-                      key={v.id}
-                      className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 bg-slate-200 font-mono font-bold rounded text-[10px]">
-                            {v.version}
-                          </span>
-                          <span className="text-slate-400 text-[10px]">
-                            {new Date(v.created_at).toLocaleString('id-ID')}
-                          </span>
-                        </div>
-                        <p className="text-slate-600 text-[11px] italic">{v.note || 'Pembaruan desain'}</p>
-                      </div>
-
-                      <button
-                        onClick={() => handleRestoreVersion(v)}
-                        className="px-3 py-1.5 bg-white border border-slate-200 hover:border-[#E2231A] text-slate-700 hover:text-[#E2231A] rounded-lg text-xs font-medium shadow-sm transition-all"
-                      >
-                        Rollback
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </motion.div>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
+
+      {/* Version History Modal */}
+      {isVersionsOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-5 space-y-4 border border-slate-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <History className="w-4 h-4 text-slate-700" />
+                <h3 className="text-sm font-bold text-slate-900">
+                  Riwayat Versi: {(editingTemplate as any)?.template_name || (editingTemplate as any)?.name}
+                </h3>
+              </div>
+              <button onClick={() => setIsVersionsOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 max-h-80 overflow-y-auto text-xs">
+              {loadingVersions ? (
+                <div className="p-8 text-center text-slate-400">
+                  <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-1 text-slate-300" />
+                  <span>Memuat versi...</span>
+                </div>
+              ) : versions.length === 0 ? (
+                <div className="p-6 text-center text-slate-400">Belum ada riwayat versi</div>
+              ) : (
+                versions.map((v) => (
+                  <div
+                    key={v.id}
+                    className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-slate-900">
+                          v{(v as any).version_number || v.version || '1.0'}
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                          {new Date(v.created_at).toLocaleString('id-ID')}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 mt-0.5">{v.note || (v as any).change_summary || 'Pembaruan template'}</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRollbackVersion(v)}
+                      className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold border border-slate-200 rounded-lg text-[11px]"
+                    >
+                      Rollback
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

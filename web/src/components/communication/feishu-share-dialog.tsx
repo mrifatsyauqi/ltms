@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -14,11 +14,11 @@ import {
   Sparkles,
   Send,
   Building2,
-  FileText,
   ImageIcon,
   LayoutTemplate,
   History,
   Clock,
+  AtSign,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type {
@@ -26,8 +26,10 @@ import type {
   ReportMetricItem,
 } from '@/services/communication/communication.types';
 import { FeishuHistoryDialog } from './feishu-history-dialog';
-import { MessageTemplateEngine } from '@/services/communication/configuration/message-template.engine';
+import { FeishuCardPreview } from './feishu-card-preview';
+import { STARTER_PRESETS } from '@/services/communication/configuration/template-presets';
 import type { VisualCardBlocksConfig } from '@/services/communication/configuration/template.types';
+import type { MentionMappingRecord } from '@/lib/data/supabase/mention-mapping';
 
 export type FeishuShareStage =
   | 'idle'
@@ -46,6 +48,8 @@ export interface ShareSummaryData {
   clear?: number;
   percent?: number;
   topKecamatan?: string[];
+  subdistricts?: Array<{ name: string; count: number | string; picName?: string; openId?: string }>;
+  kurirList?: Array<{ name: string; count: number | string; picName?: string; openId?: string }>;
   metrics?: ReportMetricItem[];
   notes?: string;
 }
@@ -62,9 +66,9 @@ export interface FeishuShareDialogProps {
   imagePreviewUrl?: string | null;
   onExecuteSend: (
     selectedGroup: FeishuGroup,
-    updateStage: (stage: FeishuShareStage, progress: number) => void
+    updateStage: (stage: FeishuShareStage, progress: number) => void,
+    selectedCardTemplateId?: string
   ) => Promise<void>;
-  /** Backward compatibility */
   targetKota?: string;
 }
 
@@ -88,8 +92,8 @@ const STAGE_CONFIG: Record<
     progress: 35,
   },
   generating_caption: {
-    label: 'Generating Caption...',
-    description: 'Menyusun caption ringkasan laporan otomatis',
+    label: 'Generating Card Elements...',
+    description: 'Mengompilasi Interactive Card dengan Single Source Engine',
     progress: 55,
   },
   uploading_image: {
@@ -98,8 +102,8 @@ const STAGE_CONFIG: Record<
     progress: 75,
   },
   sending_message: {
-    label: 'Sending Interactive Card...',
-    description: 'Mengirimkan Interactive Card ke Group tujuan',
+    label: 'Sending Interactive Assignment Card...',
+    description: 'Mengirimkan Interactive Card dan Mentions ke Group tujuan',
     progress: 90,
   },
   completed: {
@@ -134,25 +138,7 @@ const normalizeFeishuGroup = (g: any): FeishuGroup => {
   } as FeishuGroup;
 };
 
-const SAMPLE_FALLBACK_GROUPS: FeishuGroup[] = [
-  normalizeFeishuGroup({
-    chat_id: 'oc_test_ltms_ujicoba',
-    group_name: 'Uji Coba LTMS',
-    member_count: 8,
-  }),
-  normalizeFeishuGroup({
-    chat_id: 'oc_batang_all',
-    group_name: 'BATANG',
-    member_count: 42,
-  }),
-  normalizeFeishuGroup({
-    chat_id: 'oc_batang_barat',
-    group_name: 'BATANG BARAT',
-    member_count: 18,
-  }),
-];
-
-type ActiveTab = 'group' | 'preview_card' | 'preview_image' | 'preview_caption';
+type ActiveTab = 'group' | 'preview_card' | 'preview_image';
 
 export function FeishuShareDialog({
   isOpen,
@@ -163,15 +149,13 @@ export function FeishuShareDialog({
   targetKota,
   generateTime,
   summaryData,
-  captionPreview,
   imagePreviewUrl,
   onExecuteSend,
 }: FeishuShareDialogProps) {
   const [groups, setGroups] = useState<FeishuGroup[]>([]);
-  const [messageTemplates, setMessageTemplates] = useState<any[]>([]);
   const [cardTemplates, setCardTemplates] = useState<any[]>([]);
-  const [selectedMessageTemplateId, setSelectedMessageTemplateId] = useState<string>('');
   const [selectedCardTemplateId, setSelectedCardTemplateId] = useState<string>('');
+  const [mentions, setMentions] = useState<MentionMappingRecord[]>([]);
 
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -203,13 +187,13 @@ export function FeishuShareDialog({
   const fetchGroupsAndTemplates = async () => {
     setIsLoadingGroups(true);
     try {
-      const [grpRes, msgRes, cardRes] = await Promise.all([
+      const [grpRes, cardRes, mentionRes] = await Promise.all([
         fetch('/api/communication/groups').then((r) => r.json()),
-        fetch('/api/communication/templates/message?status=active').then((r) => r.json()),
-        fetch('/api/communication/templates/card?status=active').then((r) => r.json()),
+        fetch('/api/communication/card-templates?status=active').then((r) => r.json()),
+        fetch('/api/communication/mentions').then((r) => r.json()),
       ]);
 
-      if (grpRes.ok && Array.isArray(grpRes.data) && grpRes.data.length > 0) {
+      if (grpRes.success && Array.isArray(grpRes.data) && grpRes.data.length > 0) {
         const normalized = grpRes.data.map(normalizeFeishuGroup);
         setGroups(normalized);
         const defaultGrp = normalized.find((g: any) => g.is_default || g.isDefault);
@@ -218,26 +202,20 @@ export function FeishuShareDialog({
         } else if (normalized[0]) {
           setSelectedChatId(normalized[0].chatId || (normalized[0] as any).chat_id);
         }
-      } else {
-        setGroups(SAMPLE_FALLBACK_GROUPS);
-        setSelectedChatId(SAMPLE_FALLBACK_GROUPS[0].chatId);
       }
 
-      if (msgRes.ok && Array.isArray(msgRes.data)) {
-        setMessageTemplates(msgRes.data);
-        const defMsg = msgRes.data.find((t: any) => t.is_default) || msgRes.data[0];
-        if (defMsg) setSelectedMessageTemplateId(defMsg.id);
-      }
-
-      if (cardRes.ok && Array.isArray(cardRes.data)) {
+      if (cardRes.success && Array.isArray(cardRes.data)) {
         setCardTemplates(cardRes.data);
-        const defCard = cardRes.data.find((t: any) => t.is_default) || cardRes.data[0];
+        const modKey = moduleName.toLowerCase().includes('delivery') ? 'monitoring_delivery' : 'monitoring_inc';
+        const defCard = cardRes.data.find((t: any) => t.module === modKey && t.is_default) || cardRes.data[0];
         if (defCard) setSelectedCardTemplateId(defCard.id);
       }
+
+      if (mentionRes.success && Array.isArray(mentionRes.data)) {
+        setMentions(mentionRes.data);
+      }
     } catch (err) {
-      console.warn('Gagal memuat konfigurasi komunikasi:', err);
-      setGroups(SAMPLE_FALLBACK_GROUPS);
-      setSelectedChatId(SAMPLE_FALLBACK_GROUPS[0].chatId);
+      console.warn('Gagal memuat konfigurasi:', err);
     } finally {
       setIsLoadingGroups(false);
     }
@@ -246,11 +224,9 @@ export function FeishuShareDialog({
   const handleSyncGroups = async () => {
     setIsSyncing(true);
     try {
-      const res = await fetch('/api/communication/feishu/groups/sync', {
-        method: 'POST',
-      });
+      const res = await fetch('/api/communication/groups/sync', { method: 'POST' });
       const json = await res.json();
-      if (json.ok && Array.isArray(json.data) && json.data.length > 0) {
+      if (json.success && Array.isArray(json.data)) {
         const normalized = json.data.map(normalizeFeishuGroup);
         setGroups(normalized);
         const now = new Date();
@@ -258,679 +234,376 @@ export function FeishuShareDialog({
           new Intl.DateTimeFormat('id-ID', {
             hour: '2-digit',
             minute: '2-digit',
-            hour12: false,
+            second: '2-digit',
           }).format(now) + ' WIB'
         );
-        toast.success(`✔ Berhasil menyinkronkan ${json.data.length} Group Feishu!`);
-      } else {
-        toast.info(
-          json.error ||
-            'Sinkronisasi selesai (Gunakan data grup yang tersedia atau konfigurasikan Feishu Bot).'
-        );
+        toast.success(`Berhasil sinkronisasi ${normalized.length} group`);
       }
-    } catch (err: any) {
-      toast.error(err?.message || 'Gagal menyinkronkan group dari Feishu API.');
+    } catch {
+      toast.error('Gagal sinkronisasi group');
     } finally {
       setIsSyncing(false);
     }
   };
 
-  const filteredGroups = groups.filter((g: any) => {
-    const name = g.groupName || g.group_name || '';
-    return name.toLowerCase().includes((searchQuery || '').toLowerCase());
-  });
+  const filteredGroups = useMemo(() => {
+    if (!searchQuery.trim()) return groups;
+    const q = searchQuery.toLowerCase();
+    return groups.filter(
+      (g) =>
+        g.groupName.toLowerCase().includes(q) ||
+        (g.chatId && g.chatId.toLowerCase().includes(q))
+    );
+  }, [groups, searchQuery]);
 
-  const selectedGroup = groups.find(
-    (g: any) => (g.chatId || g.chat_id) === selectedChatId
-  );
-
-  const isSending = stage !== 'idle' && stage !== 'completed' && stage !== 'error';
+  const selectedGroup = groups.find((g) => g.chatId === selectedChatId);
 
   const handleStartSend = async () => {
-    if (!selectedGroup || isSending) return;
+    if (!selectedGroup) {
+      toast.error('Pilih group Feishu tujuan terlebih dahulu');
+      return;
+    }
 
+    setStage('preparing_data');
+    setProgress(15);
     setErrorMessage(null);
-    try {
-      await onExecuteSend(selectedGroup, (newStage, newProgress) => {
-        setStage(newStage);
-        setProgress(newProgress);
-      });
 
+    try {
+      await onExecuteSend(
+        selectedGroup,
+        (newStage, newProgress) => {
+          setStage(newStage);
+          setProgress(newProgress);
+        },
+        selectedCardTemplateId
+      );
       setStage('completed');
       setProgress(100);
-
-      const displayGroupName = selectedGroup.groupName || (selectedGroup as any).group_name || 'Group Feishu';
-      toast.success(`✓ Laporan berhasil dikirim ke ${displayGroupName}`, {
-        description: 'Interactive Card & Report Image telah terkirim.',
-        position: 'bottom-right',
-      });
-
-      setTimeout(() => {
-        onClose();
-      }, 1200);
+      toast.success('Interactive Card berhasil dikirim!');
     } catch (err: any) {
-      console.error('Send error:', err);
       setStage('error');
-      setErrorMessage(err?.message || 'Gagal mengirim pesan ke Group Feishu.');
-      toast.error('Gagal mengirim ke Feishu: ' + (err?.message || 'Unknown error'));
+      setErrorMessage(err.message || 'Gagal mengirim Interactive Card ke Feishu');
+      toast.error(err.message || 'Gagal mengirim laporan');
     }
   };
 
+  // Compile Active Blocks Config for Live Preview
+  const activeBlocksConfig: VisualCardBlocksConfig = useMemo(() => {
+    const selectedTpl = cardTemplates.find((t) => t.id === selectedCardTemplateId);
+    if (selectedTpl?.blocks_config) return selectedTpl.blocks_config;
+
+    const modKey = moduleName.toLowerCase().includes('delivery') ? 'monitoring_delivery' : 'monitoring_inc';
+    const preset = STARTER_PRESETS.find((p) => p.module === modKey) || STARTER_PRESETS[0];
+    return preset.blocksConfig;
+  }, [cardTemplates, selectedCardTemplateId, moduleName]);
+
+  // Context Variables
+  const previewVarContext = useMemo(() => {
+    return {
+      pickup_dp: effectiveScopeName,
+      drop_point: effectiveScopeName,
+      target_city: effectiveScopeName,
+      city: effectiveScopeName,
+      target_kota: effectiveScopeName,
+      generated_at: generateTime || new Date().toLocaleString('id-ID'),
+      today: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }),
+      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB',
+      total_inc: summaryData?.total?.toLocaleString('id-ID') || '0',
+      total_package: summaryData?.total?.toLocaleString('id-ID') || '0',
+      total_arrived: summaryData?.total?.toLocaleString('id-ID') || '0',
+      total_delivery: summaryData?.total?.toLocaleString('id-ID') || '0',
+      clear_ttd: summaryData?.clear?.toLocaleString('id-ID') || '0',
+      delivered: summaryData?.clear?.toLocaleString('id-ID') || '0',
+      pending_ttd: summaryData?.belum?.toLocaleString('id-ID') || '0',
+      pending_delivery: summaryData?.belum?.toLocaleString('id-ID') || '0',
+      over_sla: summaryData?.late?.toLocaleString('id-ID') || '0',
+      sla_percentage: summaryData?.percent !== undefined ? String(summaryData.percent) : '0',
+      delivery_sla: summaryData?.percent !== undefined ? String(summaryData.percent) : '0',
+      last_scan_time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB',
+      last_scan_awb: 'JT1234567890',
+      last_scan_status: 'Delivery',
+      destination_subdistricts: summaryData?.topKecamatan?.join('\n') || 'Belum ada data',
+      subdistricts: summaryData?.subdistricts || summaryData?.topKecamatan?.map((k) => ({ name: k, count: 'Perlu Follow Up' })),
+      kurirList: summaryData?.kurirList,
+    };
+  }, [effectiveScopeName, generateTime, summaryData]);
+
   if (!isOpen) return null;
+
+  const isProcessing = stage !== 'idle' && stage !== 'completed' && stage !== 'error';
 
   return (
     <>
-      <FeishuHistoryDialog
-        open={isHistoryOpen}
-        onOpenChange={setIsHistoryOpen}
-      />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+        <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
+          {/* Header */}
+          <div className="p-4 sm:px-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-50 rounded-xl text-[#E2231A] border border-red-100">
+                <Share2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 tracking-tight">
+                  Bagikan {moduleName} ke Feishu
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  Kirim Interactive Assignment Card operasional real-time ke Group Feishu.
+                </p>
+              </div>
+            </div>
 
-      <AnimatePresence>
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={isSending ? undefined : onClose}
-            className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs"
-          />
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
-            className="relative z-10 w-full max-w-xl overflow-hidden rounded-[10px] border border-slate-200 bg-white p-5 shadow-2xl"
-          >
-            {!isSending && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsHistoryOpen(true)}
+                className="px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl border border-slate-200 flex items-center gap-1"
+              >
+                <History className="w-3.5 h-3.5 text-slate-400" />
+                <span>Riwayat</span>
+              </button>
               <button
                 type="button"
                 onClick={onClose}
-                className="absolute top-4 right-4 rounded-[6px] p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer"
+                disabled={isProcessing}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-xl"
               >
-                <X className="size-4" />
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Navigation Tabs */}
+          <div className="px-4 sm:px-6 pt-3 flex items-center gap-2 border-b border-slate-100 text-xs">
+            <button
+              type="button"
+              onClick={() => setActiveTab('group')}
+              className={`px-3 py-2 font-bold rounded-xl transition-all ${
+                activeTab === 'group'
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              1. Pilih Group & Desain
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('preview_card')}
+              className={`px-3 py-2 font-bold rounded-xl flex items-center gap-1.5 transition-all ${
+                activeTab === 'preview_card'
+                  ? 'bg-[#E2231A] text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <LayoutTemplate className="w-3.5 h-3.5" />
+              <span>2. Live Preview Card</span>
+            </button>
+            {imagePreviewUrl && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('preview_image')}
+                className={`px-3 py-2 font-bold rounded-xl flex items-center gap-1.5 transition-all ${
+                  activeTab === 'preview_image'
+                    ? 'bg-[#E2231A] text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>3. Preview Screenshot</span>
               </button>
             )}
+          </div>
 
-            {isSending ? (
-              <div className="py-6 text-center space-y-5">
-                <div className="relative mx-auto flex size-16 items-center justify-center rounded-full bg-red-50 text-[#E2231A] ring-8 ring-red-50/50">
-                  <Loader2 className="size-8 animate-spin" />
-                  <div className="absolute -bottom-1 -right-1 rounded-full bg-slate-900 p-1 text-white shadow-xs">
-                    <Sparkles className="size-3" />
-                  </div>
+          {/* Body Content */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+            {/* Progress Overlay */}
+            {isProcessing ? (
+              <div className="p-8 text-center space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-red-50 text-[#E2231A] flex items-center justify-center mx-auto animate-pulse">
+                  <Loader2 className="w-6 h-6 animate-spin" />
                 </div>
-
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">
-                    {STAGE_CONFIG[stage]?.label || 'Memproses Pengiriman...'}
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {STAGE_CONFIG[stage]?.description}
-                  </p>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-slate-900">{STAGE_CONFIG[stage].label}</h4>
+                  <p className="text-xs text-slate-500">{STAGE_CONFIG[stage].description}</p>
                 </div>
-
-                <div className="space-y-2">
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <motion.div
-                      className="h-full bg-[#E2231A] rounded-full"
-                      initial={{ width: '0%' }}
-                      animate={{ width: `${progress}%` }}
-                      transition={{ ease: 'easeOut', duration: 0.3 }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
-                    <span>Feishu Delivery Pipeline</span>
-                    <span className="font-bold text-slate-700">{progress}%</span>
-                  </div>
+                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden max-w-sm mx-auto">
+                  <div
+                    className="bg-[#E2231A] h-full transition-all duration-300 rounded-full"
+                    style={{ width: `${progress}%` }}
+                  />
                 </div>
               </div>
-            ) : stage === 'completed' ? (
-              <div className="py-6 text-center space-y-4">
-                <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 ring-8 ring-emerald-50/50">
-                  <CheckCircle2 className="size-8" />
+            ) : activeTab === 'group' ? (
+              <div className="space-y-4">
+                {/* Scope & Template Selector */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200/80">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                      Cakupan Operasional
+                    </span>
+                    <div className="flex items-center gap-1.5 font-extrabold text-slate-900 text-sm">
+                      <Building2 className="w-4 h-4 text-[#E2231A]" />
+                      <span>{effectiveScopeName}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                      Desain Interactive Card
+                    </span>
+                    <select
+                      value={selectedCardTemplateId}
+                      onChange={(e) => setSelectedCardTemplateId(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                    >
+                      {cardTemplates.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} {t.is_default ? '★ (Default)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">
-                    Laporan Berhasil Dikirim!
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Interactive Card & Report Image telah terkirim ke{' '}
-                    <strong className="text-slate-800">
-                      {selectedGroup?.groupName || (selectedGroup as any)?.group_name || 'Group Feishu'}
-                    </strong>.
-                  </p>
+
+                {/* Group Search & Sync */}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Cari group Feishu..."
+                      className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 font-medium"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSyncGroups}
+                    disabled={isSyncing}
+                    className="px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span>{isSyncing ? 'Sinkron...' : 'Sinkronkan'}</span>
+                  </button>
+                </div>
+
+                {/* Group Radio List */}
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {isLoadingGroups ? (
+                    <div className="p-8 text-center text-slate-400">
+                      <Loader2 className="w-5 h-5 animate-spin mx-auto mb-1" />
+                      <span>Memuat group...</span>
+                    </div>
+                  ) : filteredGroups.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 border border-dashed border-slate-200 rounded-2xl">
+                      Tidak ada group yang cocok
+                    </div>
+                  ) : (
+                    filteredGroups.map((g) => {
+                      const isSelected = selectedChatId === g.chatId;
+                      return (
+                        <label
+                          key={g.chatId}
+                          onClick={() => setSelectedChatId(g.chatId)}
+                          className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
+                            isSelected
+                              ? 'border-red-500 bg-red-50/50 shadow-sm ring-1 ring-red-500'
+                              : 'border-slate-200 bg-white hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="radio"
+                              name="feishu_group_select"
+                              checked={isSelected}
+                              onChange={() => setSelectedChatId(g.chatId)}
+                              className="w-4 h-4 text-red-600 focus:ring-red-500"
+                            />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900 text-xs">{g.groupName}</span>
+                                {g.isDefault && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800">
+                                    Default
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] font-mono text-slate-400 block">{g.chatId}</span>
+                            </div>
+                          </div>
+
+                          {(g.memberCount ?? 0) > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
+                              <Users className="w-3 h-3 text-slate-400" />
+                              <span>{g.memberCount}</span>
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            ) : activeTab === 'preview_card' ? (
+              <div className="bg-slate-100 p-4 rounded-2xl flex justify-center">
+                <div className="w-full max-w-sm">
+                  <FeishuCardPreview
+                    blocksConfig={activeBlocksConfig}
+                    variables={previewVarContext}
+                    imagePreviewUrl={imagePreviewUrl}
+                  />
                 </div>
               </div>
             ) : (
-              <div className="space-y-3.5">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-9 items-center justify-center rounded-[8px] bg-red-50 text-[#E2231A] border border-red-100">
-                      <Share2 className="size-4.5" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900 tracking-tight">
-                        Bagikan {moduleName} ke Feishu
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        Pusat komunikasi resmi pengiriman laporan LTMS Enterprise
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsHistoryOpen(true)}
-                    className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-[#E2231A] transition-colors p-1.5 rounded-[6px] hover:bg-slate-50 border border-slate-200/80 mr-6 cursor-pointer"
-                  >
-                    <History className="size-3.5" />
-                    <span>Riwayat</span>
-                  </button>
-                </div>
-
-                {/* Tabs */}
-                <div className="flex items-center gap-1 border-b border-slate-200/80 pb-1 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('group')}
-                    className={`px-3 py-1.5 rounded-[6px] font-medium transition-all cursor-pointer ${
-                      activeTab === 'group'
-                        ? 'bg-slate-900 text-white font-semibold shadow-2xs'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    1. Pilih Group Tujuan
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('preview_card')}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] font-medium transition-all cursor-pointer ${
-                      activeTab === 'preview_card'
-                        ? 'bg-[#E2231A] text-white font-semibold shadow-2xs'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <LayoutTemplate className="size-3.5" />
-                    Preview Card
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('preview_image')}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] font-medium transition-all cursor-pointer ${
-                      activeTab === 'preview_image'
-                        ? 'bg-[#E2231A] text-white font-semibold shadow-2xs'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <ImageIcon className="size-3.5" />
-                    Preview Gambar
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('preview_caption')}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] font-medium transition-all cursor-pointer ${
-                      activeTab === 'preview_caption'
-                        ? 'bg-[#E2231A] text-white font-semibold shadow-2xs'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <FileText className="size-3.5" />
-                    Preview Caption
-                  </button>
-                </div>
-
-                {/* TAB 1: GROUP SELECTION */}
-                {activeTab === 'group' && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between bg-slate-50 rounded-[6px] p-2.5 border border-slate-200/80 text-xs">
-                      <div className="flex items-center gap-2 text-slate-700">
-                        <Building2 className="size-4 text-[#E2231A]" />
-                        <span>Cakupan Data:</span>
-                        <strong className="text-slate-900 font-bold uppercase">
-                          {effectiveScopeName}
-                        </strong>
-                      </div>
-                      {lastSyncTime && (
-                        <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                          <Clock className="size-3 text-slate-400" />
-                          Terakhir sinkron: {lastSyncTime}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Template Selectors */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-2.5 bg-slate-50 rounded-[6px] border border-slate-200/80">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                          Template Pesan (Caption)
-                        </label>
-                        <select
-                          value={selectedMessageTemplateId}
-                          onChange={(e) => setSelectedMessageTemplateId(e.target.value)}
-                          className="w-full px-2.5 py-1 bg-white border border-slate-200 rounded-[5px] text-xs font-medium text-slate-800 focus:outline-none focus:border-[#E2231A]"
-                        >
-                          {messageTemplates.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.template_name} {t.is_default ? '★ (Default)' : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                          Desain Kartu (Card Template)
-                        </label>
-                        <select
-                          value={selectedCardTemplateId}
-                          onChange={(e) => setSelectedCardTemplateId(e.target.value)}
-                          className="w-full px-2.5 py-1 bg-white border border-slate-200 rounded-[5px] text-xs font-medium text-slate-800 focus:outline-none focus:border-[#E2231A]"
-                        >
-                          {cardTemplates.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.template_name} {t.is_default ? '★ (Default)' : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-slate-400" />
-                        <input
-                          type="text"
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder="Cari group Feishu..."
-                          className="w-full pl-8 pr-3 py-1.5 rounded-[6px] border border-slate-200 text-xs focus:border-[#E2231A] focus:ring-1 focus:ring-[#E2231A] focus:outline-none"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleSyncGroups}
-                        disabled={isSyncing}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs font-semibold shadow-2xs transition-all cursor-pointer disabled:opacity-50"
-                        title="Sinkronkan daftar Group dari Feishu API"
-                      >
-                        <RefreshCw
-                          className={`size-3 text-slate-500 ${isSyncing ? 'animate-spin' : ''}`}
-                        />
-                        <span>{isSyncing ? 'Sinkron...' : 'Sinkronkan Ulang'}</span>
-                      </button>
-                    </div>
-
-                    {errorMessage && (
-                      <div className="p-3 bg-rose-50 border border-rose-200 rounded-[6px] flex items-start gap-2 text-xs text-rose-800">
-                        <AlertCircle className="size-4 text-rose-600 shrink-0 mt-0.5" />
-                        <div>
-                          <strong className="font-bold">Pengiriman Gagal:</strong>
-                          <p className="mt-0.5">{errorMessage}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="space-y-1.5 max-h-[170px] overflow-y-auto pr-1">
-                      {isLoadingGroups ? (
-                        <div className="py-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                          <Loader2 className="size-4 animate-spin text-[#E2231A]" />
-                          <span>Memuat daftar group Feishu...</span>
-                        </div>
-                      ) : filteredGroups.length === 0 ? (
-                        <div className="py-8 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-[6px]">
-                          Tidak ada group Feishu yang cocok dengan pencarian.
-                        </div>
-                      ) : (
-                        filteredGroups.map((group: any) => {
-                          const cId = group.chat_id || group.chatId;
-                          const gName = group.group_name || group.groupName;
-                          const isSelected = selectedChatId === cId;
-                          return (
-                            <label
-                              key={cId}
-                              onClick={() => setSelectedChatId(cId)}
-                              className={`flex items-center justify-between p-2.5 rounded-[6px] border transition-all cursor-pointer ${
-                                isSelected
-                                  ? 'border-[#E2231A] bg-red-50/40 shadow-2xs ring-1 ring-[#E2231A]'
-                                  : 'border-slate-200 bg-white hover:bg-slate-50/80'
-                              }`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <input
-                                  type="radio"
-                                  name="feishu_group"
-                                  checked={isSelected}
-                                  onChange={() => setSelectedChatId(cId)}
-                                  className="size-3.5 text-[#E2231A] focus:ring-[#E2231A] accent-[#E2231A]"
-                                />
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <p className="text-xs font-bold text-slate-900 leading-tight">
-                                      {gName}
-                                    </p>
-                                    {group.is_default && (
-                                      <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
-                                        Default
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                                    ID: {cId}
-                                  </p>
-                                </div>
-                              </div>
-
-                              {group.member_count || group.memberCount ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
-                                  <Users className="size-3 text-slate-400" />
-                                  {group.member_count || group.memberCount}
-                                </span>
-                              ) : null}
-                            </label>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* TAB 2: PREVIEW CARD */}
-                {/* TAB 2: PREVIEW CARD */}
-                {activeTab === 'preview_card' && (() => {
-                  const currentCardTpl = cardTemplates.find((t) => t.id === selectedCardTemplateId);
-                  const blocksConfig: VisualCardBlocksConfig | undefined = currentCardTpl?.blocks_config;
-                  const headerBg =
-                    blocksConfig?.theme === 'dark'
-                      ? 'bg-slate-800'
-                      : blocksConfig?.theme === 'blue'
-                      ? 'bg-blue-600'
-                      : blocksConfig?.theme === 'green'
-                      ? 'bg-emerald-600'
-                      : 'bg-[#E2231A]';
-
-                  const previewVarContext = {
-                    pickup_dp: effectiveScopeName,
-                    drop_point: effectiveScopeName,
-                    target_city: effectiveScopeName,
-                    city: effectiveScopeName,
-                    target_kota: effectiveScopeName,
-                    generated_at: generateTime || '05 Agustus 2026 08.30 WIB',
-                    today: '05 Agu 2026',
-                    time: '08:30 WIB',
-                    total_inc: summaryData?.total?.toLocaleString('id-ID') || '0',
-                    total_package: summaryData?.total?.toLocaleString('id-ID') || '0',
-                    total_arrived: summaryData?.total?.toLocaleString('id-ID') || '0',
-                    total_delivery: summaryData?.total?.toLocaleString('id-ID') || '0',
-                    clear_ttd: summaryData?.clear?.toLocaleString('id-ID') || '0',
-                    pending_ttd: summaryData?.belum?.toLocaleString('id-ID') || '0',
-                    pending_package: summaryData?.belum?.toLocaleString('id-ID') || '0',
-                    over_sla: summaryData?.late?.toLocaleString('id-ID') || '0',
-                    sla_percentage: summaryData?.percent !== undefined ? String(summaryData.percent) : '0',
-                    delivery_percentage: summaryData?.percent !== undefined ? String(summaryData.percent) : '0',
-                    progress: summaryData?.percent !== undefined ? String(summaryData.percent) : '0',
-                    last_scan_time: '05 Agustus 2026 08:26 WIB',
-                    last_scan_awb: 'JT1234567890',
-                    last_scan_status: 'Delivery',
-                    destination_subdistricts: summaryData?.topKecamatan?.join('\n') || 'Belum ada data',
-                    district_list: summaryData?.topKecamatan?.join('\n') || '',
-                    footer: blocksConfig?.footer?.description || 'LTMS\nLong Tail Monitoring System\nGenerated Automatically',
-                  };
-
-                  return (
-                    <div className="space-y-3">
-                      <div className="p-1 rounded-[8px] bg-slate-100/70 border border-slate-200">
-                        <div className="bg-white rounded-[6px] border border-slate-200/90 shadow-sm overflow-hidden text-xs">
-                          {/* Banner Header */}
-                          <div className={`${headerBg} text-white p-3 font-semibold text-xs flex items-center justify-between`}>
-                            <div>
-                              <div className="font-bold text-xs">
-                                {MessageTemplateEngine.render(
-                                  blocksConfig?.header?.title || blocksConfig?.title || `LTMS | ${moduleName.toUpperCase()}`,
-                                  previewVarContext
-                                )}
-                              </div>
-                              {blocksConfig?.header?.subtitle && (
-                                <div className="text-[10px] text-white/80 font-normal mt-0.5">
-                                  {MessageTemplateEngine.render(blocksConfig.header.subtitle, previewVarContext)}
-                                </div>
-                              )}
-                            </div>
-                            <span className="text-[9px] bg-white/20 px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold">
-                              Feishu Card
-                            </span>
-                          </div>
-
-                          <div className="p-3.5 space-y-3">
-                            {/* Header Info */}
-                            <div className="grid grid-cols-2 gap-2 text-[11px] pb-2 border-b border-slate-100">
-                              {blocksConfig?.header?.showPickupDp && (
-                                <div>
-                                  <p className="text-slate-400 font-semibold">{blocksConfig.header.pickupDpLabel || 'Pickup DP'}:</p>
-                                  <p className="font-bold text-slate-800">
-                                    {MessageTemplateEngine.render(blocksConfig.header.pickupDpValue || '{{pickup_dp}}', previewVarContext)}
-                                  </p>
-                                </div>
-                              )}
-                              {blocksConfig?.header?.showTargetCity && (
-                                <div>
-                                  <p className="text-slate-400 font-semibold">{blocksConfig.header.targetCityLabel || 'Tujuan'}:</p>
-                                  <p className="font-bold text-slate-800">
-                                    {MessageTemplateEngine.render(blocksConfig.header.targetCityValue || '{{target_city}}', previewVarContext)}
-                                  </p>
-                                </div>
-                              )}
-                              {blocksConfig?.header?.showUpdate && (
-                                <div className="col-span-2 pt-0.5">
-                                  <p className="text-slate-400 font-semibold">{blocksConfig.header.updateLabel || 'Update'}:</p>
-                                  <p className="font-medium text-slate-700">
-                                    {MessageTemplateEngine.render(blocksConfig.header.updateValue || '{{generated_at}}', previewVarContext)}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Last Scan Block */}
-                            {blocksConfig?.lastScan?.show && (
-                              <div className="p-2 bg-slate-50 rounded border border-slate-200 text-[11px] space-y-0.5">
-                                <div className="font-bold text-slate-800">{blocksConfig.lastScan.title || 'Last Scan'}</div>
-                                <div className="text-slate-600 text-[10px]">
-                                  • Waktu: <strong className="text-slate-800">{MessageTemplateEngine.render(blocksConfig.lastScan.scanTimeValue || '{{last_scan_time}}', previewVarContext)}</strong>
-                                </div>
-                                <div className="text-slate-600 text-[10px]">
-                                  • AWB: <strong className="text-slate-800">{MessageTemplateEngine.render(blocksConfig.lastScan.awbValue || '{{last_scan_awb}}', previewVarContext)}</strong>
-                                </div>
-                                <div className="text-slate-600 text-[10px]">
-                                  • Status: <strong className="text-slate-800">{MessageTemplateEngine.render(blocksConfig.lastScan.statusValue || '{{last_scan_status}}', previewVarContext)}</strong>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* KPI Grid */}
-                            {blocksConfig?.kpiGrid ? (
-                              <div className="space-y-1">
-                                <div className="text-[11px] font-bold text-slate-800">
-                                  📊 {blocksConfig.kpiGrid.title || 'Ringkasan Monitoring'}
-                                </div>
-                                <div className="grid grid-cols-2 gap-1.5 text-xs">
-                                  {(blocksConfig.kpiGrid.items || []).map((kpi, idx) => (
-                                    <div key={idx} className="p-2 rounded bg-slate-50 border border-slate-100">
-                                      <p className="text-[10px] text-slate-500 font-medium truncate">{kpi.label}</p>
-                                      <p
-                                        className={`text-xs font-bold font-mono mt-0.5 ${
-                                          kpi.color === 'red'
-                                            ? 'text-[#E2231A]'
-                                            : kpi.color === 'green'
-                                            ? 'text-emerald-600'
-                                            : kpi.color === 'blue'
-                                            ? 'text-blue-600'
-                                            : 'text-slate-900'
-                                        }`}
-                                      >
-                                        {MessageTemplateEngine.render(kpi.valueTemplate || '', previewVarContext)}
-                                      </p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : summaryData?.metrics && summaryData.metrics.length > 0 ? (
-                              <div className="grid grid-cols-2 gap-2 text-xs">
-                                {summaryData.metrics.map((m, idx) => (
-                                  <div key={idx} className="p-2 rounded-[6px] bg-slate-50 border border-slate-100">
-                                    <p className="text-[10px] text-slate-500 font-medium">{m.label}</p>
-                                    <p className="text-sm font-bold text-slate-900 font-mono">{String(m.value)}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
-
-                            {/* Kecamatan List */}
-                            {blocksConfig?.subdistricts?.show && (
-                              <div className="pt-1 border-t border-slate-100 text-[10px] space-y-1">
-                                <div className="font-bold text-slate-800">{blocksConfig.subdistricts.title || '📍 Kecamatan Tujuan'}</div>
-                                <div className="p-2 bg-slate-50 rounded border border-slate-200 text-slate-600 whitespace-pre-line leading-relaxed">
-                                  {summaryData?.topKecamatan?.join('\n') || 'BATANG (31 AWB)\nWARUNGASEM (26 AWB)\nLIMPUNG (23 AWB)'}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Action Button */}
-                            {blocksConfig?.actionButton?.enabled && (
-                              <div className="pt-1">
-                                <div className="w-full py-1.5 bg-[#E2231A] text-white text-center rounded font-bold text-[11px] shadow-xs">
-                                  {blocksConfig.actionButton.label || '🚀 Buka Dashboard LTMS'}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Footer */}
-                            <div className="pt-2 border-t border-slate-100 text-[9px] text-slate-400 text-center leading-tight whitespace-pre-line">
-                              {blocksConfig?.footer?.description || blocksConfig?.footerText || 'Logistics Traceability & Monitoring System (LTMS)'}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* TAB 3: PREVIEW GAMBAR */}
-                {activeTab === 'preview_image' && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-slate-500">
-                      Visual laporan HD (1200×900) yang akan dilampirkan ke dalam Card:
-                    </p>
-                    <div className="p-2 rounded-[8px] bg-slate-100 border border-slate-200 max-h-[220px] overflow-y-auto flex items-center justify-center">
-                      {imagePreviewUrl ? (
-                        <img
-                          src={imagePreviewUrl}
-                          alt="Preview Laporan"
-                          className="max-h-[190px] w-auto rounded-[4px] shadow-sm object-contain"
-                        />
-                      ) : (
-                        <div className="py-10 text-center text-slate-400 text-xs flex flex-col items-center gap-1.5">
-                          <ImageIcon className="size-8 stroke-[1.2] text-slate-300" />
-                          <span>Gambar laporan otomatis dirender saat pengiriman.</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* TAB 4: PREVIEW CAPTION */}
-                {activeTab === 'preview_caption' && (() => {
-                  const currentMsgTpl = messageTemplates.find((t) => t.id === selectedMessageTemplateId);
-                  const previewVarContext = {
-                    pickup_dp: effectiveScopeName,
-                    drop_point: effectiveScopeName,
-                    target_city: effectiveScopeName,
-                    city: effectiveScopeName,
-                    target_kota: effectiveScopeName,
-                    generated_at: generateTime || '05 Agustus 2026 08.30 WIB',
-                    today: '05 Agu 2026',
-                    time: '08:30 WIB',
-                    total_inc: summaryData?.total?.toLocaleString('id-ID') || '0',
-                    total_package: summaryData?.total?.toLocaleString('id-ID') || '0',
-                    total_arrived: summaryData?.total?.toLocaleString('id-ID') || '0',
-                    total_delivery: summaryData?.total?.toLocaleString('id-ID') || '0',
-                    clear_ttd: summaryData?.clear?.toLocaleString('id-ID') || '0',
-                    pending_ttd: summaryData?.belum?.toLocaleString('id-ID') || '0',
-                    pending_package: summaryData?.belum?.toLocaleString('id-ID') || '0',
-                    over_sla: summaryData?.late?.toLocaleString('id-ID') || '0',
-                    sla_percentage: summaryData?.percent !== undefined ? String(summaryData.percent) : '0',
-                    delivery_percentage: summaryData?.percent !== undefined ? String(summaryData.percent) : '0',
-                    progress: summaryData?.percent !== undefined ? String(summaryData.percent) : '0',
-                    last_scan_time: '05 Agustus 2026 08:26 WIB',
-                    last_scan_awb: 'JT1234567890',
-                    last_scan_status: 'Delivery',
-                    destination_subdistricts: summaryData?.topKecamatan?.join('\n') || 'Belum ada data',
-                    district_list: summaryData?.topKecamatan?.join('\n') || '',
-                    footer: 'LTMS\nLong Tail Monitoring System\nGenerated Automatically',
-                  };
-
-                  const renderedText = currentMsgTpl
-                    ? MessageTemplateEngine.render(currentMsgTpl.content, previewVarContext)
-                    : captionPreview ||
-                      `📊 ${moduleName.toUpperCase()}\nCakupan: ${effectiveScopeName}\nTotal Resi: ${
-                        summaryData?.total || 0
-                      }`;
-
-                  return (
-                    <div className="space-y-2">
-                      <p className="text-xs text-slate-500">
-                        Teks ringkasan yang disertakan dalam pengiriman:
-                      </p>
-                      <pre className="p-3 bg-slate-50 border border-slate-200 rounded-[6px] text-[11px] font-mono text-slate-700 whitespace-pre-wrap max-h-[200px] overflow-y-auto">
-                        {renderedText}
-                      </pre>
-                    </div>
-                  );
-                })()}
-
-                {/* Action Footer */}
-                <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                  <div className="text-[11px] text-slate-500">
-                    {selectedGroup ? (
-                      <span>
-                        Tujuan:{' '}
-                        <strong className="text-slate-800">
-                          {selectedGroup.groupName || (selectedGroup as any).group_name || 'Group Feishu'}
-                        </strong>
-                      </span>
-                    ) : (
-                      <span className="text-amber-600">Pilih group tujuan</span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={onClose}
-                      className="px-3.5 py-1.5 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
-                    >
-                      Batal
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleStartSend}
-                      disabled={!selectedGroup || isSending}
-                      className="inline-flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-[6px] bg-[#E2231A] hover:bg-[#C91C15] active:scale-[0.98] text-white text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Send className="size-3.5" />
-                      Kirim ke Feishu
-                    </button>
-                  </div>
-                </div>
+              <div className="p-2 bg-slate-950 rounded-2xl overflow-hidden flex justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imagePreviewUrl || ''}
+                  alt="Preview Attachment"
+                  className="max-h-80 w-auto object-contain rounded-lg"
+                />
               </div>
             )}
-          </motion.div>
+          </div>
+
+          {/* Footer Actions */}
+          <div className="p-4 sm:px-6 border-t border-slate-100 flex items-center justify-between bg-slate-50/70">
+            <div className="text-xs text-slate-500 font-medium">
+              Tujuan:{' '}
+              <strong className="text-slate-900">
+                {selectedGroup ? selectedGroup.groupName : 'Belum dipilih'}
+              </strong>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isProcessing}
+                className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleStartSend}
+                disabled={isProcessing || !selectedGroup}
+                className="px-6 py-2 font-bold text-white bg-[#E2231A] hover:bg-[#B81912] rounded-xl transition-colors shadow-sm shadow-red-200 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <Send className="w-4 h-4" />
+                <span>Kirim ke Feishu</span>
+              </button>
+            </div>
+          </div>
         </div>
-      </AnimatePresence>
+      </div>
+
+      {/* History Dialog */}
+      <FeishuHistoryDialog
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        moduleName={moduleName}
+      />
     </>
   );
 }

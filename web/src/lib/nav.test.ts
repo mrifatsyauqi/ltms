@@ -161,7 +161,8 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
         item.label === 'Profile' ||
         item.label === 'Message Templates' ||
         item.label === 'Card Templates' ||
-        item.label === 'Groups'
+        item.label === 'Groups' ||
+        item.label === 'Mention Mapping'
       ) {
         assert.equal(item.menuKey, undefined, 'Communication Center & Profile sengaja SELALU tampil, tak pernah masuk matrix');
         continue;

@@ -4,33 +4,44 @@ import type {
   TemplateVariablesContext,
 } from './template.types';
 import { MessageTemplateEngine } from './message-template.engine';
+import type { MentionMappingRecord } from '@/lib/data/supabase/mention-mapping';
 
 export class CardCompilerService {
   /**
    * Pemetaan tema visual ke warna header resmi Feishu Card
    */
-  private static themeToFeishuColor(theme: CardTheme = 'red'): string {
+  private static themeToFeishuColor(theme: any = 'red'): string {
     switch (theme) {
       case 'red':
-        return 'red';
+      case 'blue':
+      case 'wathet':
+      case 'turquoise':
+      case 'green':
+      case 'yellow':
+      case 'orange':
+      case 'carmine':
+      case 'violet':
+      case 'purple':
+      case 'indigo':
+      case 'grey':
+        return theme;
       case 'dark':
         return 'grey';
-      case 'blue':
-        return 'blue';
-      case 'green':
-        return 'green';
       default:
         return 'red';
     }
   }
 
   /**
-   * Mengompilasi konfigurasi visual blok menjadi struktur JSON Feishu Interactive Card 2.0
+   * SINGLE SOURCE OF TRUTH:
+   * Mengompilasi konfigurasi visual blok menjadi struktur JSON Feishu Interactive Card 2.0 resmi
+   * Digunakan seragam untuk Card Builder Preview, Share Dialog Preview, dan Feishu API Send.
    */
-  public static compile(
+  public static compileCard(
     config: VisualCardBlocksConfig,
     variables: TemplateVariablesContext | Record<string, any> = {},
     imageKey?: string | null,
+    mentionMap?: Map<string, MentionMappingRecord[]> | Record<string, any>,
     appBaseUrl = 'https://ltms.jt-express.id'
   ): Record<string, any> {
     const ctx = MessageTemplateEngine.normalizeContext(variables);
@@ -42,43 +53,47 @@ export class CardCompilerService {
     const rawSubtitle = config.header?.subtitle || '';
     const compiledSubtitle = rawSubtitle ? MessageTemplateEngine.render(rawSubtitle, ctx) : '';
 
-    // 2. Header Info Fields (Sub Header Info)
-    const showPickup = config.header?.showPickupDp ?? (config.showSummary || true);
-    const showTarget = config.header?.showTargetCity ?? (config.showSummary || true);
-    const showUpdate = config.header?.showUpdate ?? (config.showSummary || true);
+    // 2. Sub Header Operational Information Fields
+    const showPickup = config.header?.showPickupDp ?? true;
+    const showTarget = config.header?.showTargetCity ?? true;
+    const showUpdate = config.header?.showUpdate ?? true;
 
     const headerFields: any[] = [];
 
-    if (showPickup && (config.header?.pickupDpValue || ctx.pickup_dp !== '-')) {
+    if (showPickup && (config.header?.pickupDpValue || ctx.pickup_dp || ctx.drop_point)) {
       const label = config.header?.pickupDpLabel || 'Pickup DP';
       const val = config.header?.pickupDpValue
         ? MessageTemplateEngine.render(config.header.pickupDpValue, ctx)
-        : ctx.pickup_dp;
-      headerFields.push({
-        is_short: true,
-        text: {
-          tag: 'lark_md',
-          content: `📦 **${label}:**\n${val}`,
-        },
-      });
+        : (ctx.pickup_dp !== '-' ? ctx.pickup_dp : ctx.drop_point);
+      if (val && val !== '-') {
+        headerFields.push({
+          is_short: true,
+          text: {
+            tag: 'lark_md',
+            content: `🏢 **${label}:**\n**${val}**`,
+          },
+        });
+      }
     }
 
-    if (showTarget && (config.header?.targetCityValue || ctx.target_city)) {
-      const label = config.header?.targetCityLabel || (config.lastScan ? 'Drop Point' : 'Kota Tujuan Delivery');
+    if (showTarget && (config.header?.targetCityValue || ctx.target_city || ctx.city)) {
+      const label = config.header?.targetCityLabel || (config.lastScan ? 'Area Delivery' : 'Kota Tujuan');
       const val = config.header?.targetCityValue
         ? MessageTemplateEngine.render(config.header.targetCityValue, ctx)
-        : (config.lastScan ? ctx.drop_point : ctx.target_city);
-      headerFields.push({
-        is_short: true,
-        text: {
-          tag: 'lark_md',
-          content: `🎯 **${label}:**\n**${val}**`,
-        },
-      });
+        : (ctx.target_city !== '-' ? ctx.target_city : ctx.city);
+      if (val && val !== '-') {
+        headerFields.push({
+          is_short: true,
+          text: {
+            tag: 'lark_md',
+            content: `🎯 **${label}:**\n**${val}**`,
+          },
+        });
+      }
     }
 
     if (showUpdate) {
-      const label = config.header?.updateLabel || 'Waktu Generate';
+      const label = config.header?.updateLabel || 'Generate';
       const val = config.header?.updateValue
         ? MessageTemplateEngine.render(config.header.updateValue, ctx)
         : ctx.generated_at;
@@ -86,7 +101,7 @@ export class CardCompilerService {
         is_short: true,
         text: {
           tag: 'lark_md',
-          content: `⏰ **${label}:**\n${val}`,
+          content: `🕒 **${label}:**\n${val}`,
         },
       });
     }
@@ -102,7 +117,7 @@ export class CardCompilerService {
     if (config.lastScan && config.lastScan.show) {
       if (elements.length > 0) elements.push({ tag: 'hr' });
 
-      const lastScanTitle = config.lastScan.title || 'Last Scan';
+      const lastScanTitle = config.lastScan.title || 'Last Scan Activity';
       const scanTime = ctx.last_scan_time || (config.lastScan.scanTimeValue ? MessageTemplateEngine.render(config.lastScan.scanTimeValue, ctx) : '');
       const scanAwb = ctx.last_scan_awb || (config.lastScan.awbValue ? MessageTemplateEngine.render(config.lastScan.awbValue, ctx) : '');
       const scanStatus = ctx.last_scan_status || (config.lastScan.statusValue ? MessageTemplateEngine.render(config.lastScan.statusValue, ctx) : '');
@@ -126,12 +141,12 @@ export class CardCompilerService {
       }
     }
 
-    // 4. Grid KPI (Ringkasan Monitoring INC / Delivery / Custom)
+    // 4. Grid KPI Summary (Ringkasan Monitoring INC / Delivery / Custom)
     const showKpi = config.kpiGrid ? true : (config.showKpiGrid ?? true);
     if (showKpi) {
       if (elements.length > 0) elements.push({ tag: 'hr' });
 
-      const kpiTitle = config.kpiGrid?.title || 'Ringkasan Operasional';
+      const kpiTitle = config.kpiGrid?.title || 'Ringkasan Monitoring';
       if (kpiTitle) {
         elements.push({
           tag: 'div',
@@ -170,75 +185,244 @@ export class CardCompilerService {
           tag: 'div',
           fields: kpiFields,
         });
-      } else {
-        // Fallback default 5/4/2 column KPI
+      }
+
+      const rawMetrics = (variables as any).metrics || (ctx as any).metrics;
+      if (Array.isArray(rawMetrics) && rawMetrics.length > 0) {
+        const metricFields = rawMetrics.map((m: any) => ({
+          is_short: true,
+          text: {
+            tag: 'lark_md',
+            content: `**${m.label}:**\n**${m.value}**`,
+          },
+        }));
         elements.push({
           tag: 'div',
-          fields: [
-            {
-              is_short: true,
-              text: {
-                tag: 'lark_md',
-                content: `📦 **Total AWB INC**\n**${ctx.total_inc}**`,
-              },
-            },
-            {
-              is_short: true,
-              text: {
-                tag: 'lark_md',
-                content: `✅ **Clear TTD**\n**${ctx.clear_ttd}**`,
-              },
-            },
-            {
-              is_short: true,
-              text: {
-                tag: 'lark_md',
-                content: `⏳ **Belum TTD**\n<font color='red'>**${ctx.pending_ttd}**</font>`,
-              },
-            },
-            {
-              is_short: true,
-              text: {
-                tag: 'lark_md',
-                content: `🚨 **Melebihi SLA**\n<font color='red'>**${ctx.over_sla}**</font>`,
-              },
-            },
-            {
-              is_short: true,
-              text: {
-                tag: 'lark_md',
-                content: `📈 **Persentase SLA**\n**${ctx.sla_percentage}%**`,
-              },
-            },
-          ],
+          fields: metricFields,
+        });
+      }
+
+      const rawNotes = (variables as any).notes || (ctx as any).notes;
+      if (rawNotes) {
+        elements.push({
+          tag: 'note',
+          elements: [{ tag: 'plain_text', content: String(rawNotes) }],
         });
       }
     }
 
-    // 5. 📍 Kecamatan Tujuan (Khusus Monitoring INC / jika di-enable)
+    // 5. OPERATIONAL ASSIGNMENT: 📍 Kecamatan Tujuan (Monitoring INC)
     const showSubdistricts = config.subdistricts ? config.subdistricts.show : (config.showTopKecamatan ?? true);
-    if (showSubdistricts && ctx.destination_subdistricts && ctx.destination_subdistricts !== '-') {
+    if (showSubdistricts) {
+      const subdistrictItems: Array<{ name: string; count: number | string; pic?: string; openId?: string }> = [];
+
+      // Parse from structured array or destination_subdistricts string
+      if (Array.isArray(variables.subdistricts)) {
+        variables.subdistricts.forEach((item: any) => {
+          if (typeof item === 'object' && item.name) {
+            subdistrictItems.push({
+              name: String(item.name),
+              count: item.count || 0,
+              pic: item.picName,
+              openId: item.openId,
+            });
+          }
+        });
+      } else if (ctx.destination_subdistricts && ctx.destination_subdistricts !== '-') {
+        const lines = ctx.destination_subdistricts.split('\n').filter(Boolean);
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          // Parse format "BATANG: 10 AWB" or "BATANG (10 AWB)" or multiline
+          const match = line.match(/^([^:\(\d]+)(?::|\(|\s+-\s+)?\s*(\d+)?/);
+          if (match) {
+            const name = match[1].trim().replace(/^📍\s*/, '');
+            const count = match[2] ? `${match[2]} AWB` : (lines[i + 1]?.includes('AWB') ? lines[++i].trim() : 'Perlu Follow Up');
+            subdistrictItems.push({ name, count });
+          } else {
+            subdistrictItems.push({ name: line, count: 'Perlu Follow Up' });
+          }
+        }
+      }
+
+      if (subdistrictItems.length > 0) {
+        if (elements.length > 0) elements.push({ tag: 'hr' });
+
+        const title = config.subdistricts?.title || '📍 Kecamatan Tujuan';
+        const maxLimit =
+          config.subdistricts?.maxItems === '10'
+            ? 10
+            : config.subdistricts?.maxItems === '15'
+            ? 15
+            : config.subdistricts?.maxItems === 'all'
+            ? 999
+            : 5;
+
+        const limitedItems = subdistrictItems.slice(0, maxLimit);
+
+        // Header Assignment Block
+        elements.push({
+          tag: 'div',
+          text: {
+            tag: 'lark_md',
+            content: `📍 **${title}**`,
+          },
+        });
+
+        // Render each Kecamatan as an Assignment Card row with Mention
+        const rowsText = limitedItems
+          .map((item) => {
+            const kecKey = item.name.trim().toUpperCase();
+
+            // Lookup mentions from map
+            let mentionTag = '';
+            if (config.subdistricts?.showMention !== false) {
+              const prefix = config.subdistricts?.mentionPrefix || '👤';
+              let mappings: MentionMappingRecord[] = [];
+
+              if (mentionMap instanceof Map) {
+                const found = mentionMap.get(kecKey);
+                mappings = Array.isArray(found) ? found : (found ? [found] : []);
+              } else if (mentionMap && typeof mentionMap === 'object') {
+                const found = (mentionMap as any)[kecKey];
+                mappings = Array.isArray(found) ? found : (found ? [found] : []);
+              }
+
+              if (mappings.length > 0) {
+                const mentions = mappings.map((m) => {
+                  if (m.feishu_open_id) {
+                    return `<at id="${m.feishu_open_id.trim()}">${m.pic_name.trim()}</at>`;
+                  }
+                  return `@${m.pic_name.trim()}`;
+                });
+                mentionTag = `\n${prefix} ${mentions.join(' ')}`;
+              } else if (item.openId) {
+                mentionTag = `\n${prefix} <at id="${item.openId.trim()}">${(item.pic || 'Admin DP').trim()}</at>`;
+              } else if (item.pic) {
+                mentionTag = `\n${prefix} @${item.pic.trim()}`;
+              } else {
+                mentionTag = `\n${prefix} @Admin DP ${item.name}`;
+              }
+            }
+
+            const countText = typeof item.count === 'number' || /^\d+$/.test(String(item.count))
+              ? `${item.count} AWB`
+              : item.count;
+
+            return `**${item.name}**\n${countText}${mentionTag}`;
+          })
+          .join('\n\n━━━━━━━━━━━━━━━━━━\n\n');
+
+        elements.push({
+          tag: 'div',
+          text: {
+            tag: 'lark_md',
+            content: rowsText,
+          },
+        });
+      }
+    }
+
+    // 6. OPERATIONAL ASSIGNMENT: 🛵 Kurir Perlu Follow Up (Monitoring Delivery)
+    if (config.kurirFollowUp && config.kurirFollowUp.show) {
+      const kurirItems: Array<{ name: string; count: number | string; pic?: string; openId?: string }> = [];
+
+      if (Array.isArray(variables.kurirList)) {
+        variables.kurirList.forEach((item: any) => {
+          if (typeof item === 'object' && item.name) {
+            kurirItems.push({
+              name: String(item.name),
+              count: item.count || 0,
+              pic: item.picName || item.name,
+              openId: item.openId,
+            });
+          }
+        });
+      }
+
+      if (kurirItems.length > 0) {
+        if (elements.length > 0) elements.push({ tag: 'hr' });
+
+        const title = config.kurirFollowUp.title || '🛵 Kurir Perlu Follow Up';
+        const maxLimit =
+          config.kurirFollowUp.maxItems === '10'
+            ? 10
+            : config.kurirFollowUp.maxItems === '15'
+            ? 15
+            : config.kurirFollowUp.maxItems === 'all'
+            ? 999
+            : 5;
+
+        const limitedKurir = kurirItems.slice(0, maxLimit);
+
+        elements.push({
+          tag: 'div',
+          text: {
+            tag: 'lark_md',
+            content: `🛵 **${title}**`,
+          },
+        });
+
+        const rowsText = limitedKurir
+          .map((item) => {
+            const kurirKey = item.name.trim();
+
+            let mentionTag = '';
+            if (config.kurirFollowUp?.showMention !== false) {
+              const prefix = config.kurirFollowUp?.mentionPrefix || '👉';
+              let mappings: MentionMappingRecord[] = [];
+
+              if (mentionMap instanceof Map) {
+                mappings = mentionMap.get(kurirKey.toUpperCase()) || [];
+              } else if (mentionMap && typeof mentionMap === 'object') {
+                mappings = mentionMap[kurirKey.toUpperCase()] || [];
+              }
+
+              if (mappings.length > 0) {
+                const mentions = mappings.map((m) => {
+                  if (m.feishu_open_id) {
+                    return `<at id="${m.feishu_open_id.trim()}">${m.pic_name.trim()}</at>`;
+                  }
+                  return `@${m.pic_name.trim()}`;
+                });
+                mentionTag = `\n${prefix} ${mentions.join(' ')}`;
+              } else if (item.openId) {
+                mentionTag = `\n${prefix} <at id="${item.openId.trim()}">${item.name}</at>`;
+              } else {
+                mentionTag = `\n${prefix} @${item.name}`;
+              }
+            }
+
+            const countText = typeof item.count === 'number' || /^\d+$/.test(String(item.count))
+              ? `${item.count} Paket Belum Selesai`
+              : item.count;
+
+            return `👤 **${item.name}**\n📦 ${countText}${mentionTag}`;
+          })
+          .join('\n\n━━━━━━━━━━━━━━━━━━\n\n');
+
+        elements.push({
+          tag: 'div',
+          text: {
+            tag: 'lark_md',
+            content: rowsText,
+          },
+        });
+      }
+    }
+
+    // 7. Lampiran Screenshot Monitoring (Offscreen Canvas Rendered)
+    const showScreenshot = config.screenshot ? config.screenshot.show : (config.showImage ?? true);
+    if (showScreenshot && imageKey) {
       if (elements.length > 0) elements.push({ tag: 'hr' });
-
-      const title = config.subdistricts?.title || '📍 Kecamatan Tujuan';
-      const maxLimit = config.subdistricts?.maxItems === '10' ? 10 : config.subdistricts?.maxItems === 'all' ? 999 : 5;
-      
-      const rawLines = ctx.destination_subdistricts.split('\n').filter(Boolean);
-      const limitedLines = rawLines.slice(0, maxLimit).join('\n');
-
+      const imgTitle = config.screenshot?.title || '🖼 Lampiran Monitoring';
       elements.push({
         tag: 'div',
         text: {
           tag: 'lark_md',
-          content: `📍 **${title}**\n${limitedLines}`,
+          content: `**${imgTitle}**`,
         },
       });
-    }
-
-    // 6. Lampiran Screenshot Monitoring
-    const showScreenshot = config.screenshot ? config.screenshot.show : (config.showImage ?? true);
-    if (showScreenshot && imageKey) {
-      if (elements.length > 0) elements.push({ tag: 'hr' });
       elements.push({
         tag: 'img',
         img_key: imageKey,
@@ -251,12 +435,14 @@ export class CardCompilerService {
       });
     }
 
-    // 7. Tombol Action Dashboard
+    // 8. Tombol Action Dashboard
     const btnEnabled = config.actionButton ? config.actionButton.enabled : (config.actionButton === 'open_dashboard');
     if (btnEnabled) {
       if (elements.length > 0) elements.push({ tag: 'hr' });
-      const btnLabel = config.actionButton?.label || '🚀 Buka Dashboard LTMS';
-      const btnUrl = config.actionButton?.url || appBaseUrl;
+      const btnLabel = config.actionButton?.label || '🚀 Buka LTMS Dashboard';
+      const btnUrl = config.actionButton?.url
+        ? MessageTemplateEngine.render(config.actionButton.url, ctx)
+        : (ctx.dashboard_url || appBaseUrl);
 
       elements.push({
         tag: 'action',
@@ -268,17 +454,17 @@ export class CardCompilerService {
               content: btnLabel,
             },
             type: config.theme === 'red' ? 'primary' : 'default',
-            url: btnUrl,
+            url: btnUrl || appBaseUrl,
           },
         ],
       });
     }
 
-    // 8. Footer
+    // 9. Footer
     const showFooter = config.footer ? config.footer.show : (config.showFooter ?? true);
     if (showFooter) {
-      const footerTitle = config.footer?.title || 'LTMS';
-      const footerDesc = config.footer?.description || config.footerText || 'Long Tail Monitoring System\nGenerated Automatically';
+      const footerTitle = config.footer?.title || 'Generated Automatically by LTMS';
+      const footerDesc = config.footer?.description || config.footerText || 'Long Tail Monitoring System • Real-Time Operational Reminder';
       const footerContent = footerTitle ? `${footerTitle}\n${footerDesc}` : footerDesc;
 
       elements.push({
@@ -292,7 +478,7 @@ export class CardCompilerService {
       });
     }
 
-    // Return Feishu Card 2.0 object
+    // Return official Feishu Card 2.0 object
     const result: Record<string, any> = {
       config: {
         wide_screen_mode: true,
@@ -315,6 +501,22 @@ export class CardCompilerService {
     }
 
     return result;
+  }
+
+  /**
+   * Alias backward-compatible untuk compileCard
+   */
+  public static compile(
+    config: VisualCardBlocksConfig,
+    variables: TemplateVariablesContext | Record<string, any> = {},
+    imageKey?: string | null,
+    mentionMapOrUrl?: Map<string, MentionMappingRecord[]> | Record<string, any> | string,
+    appBaseUrl = 'https://ltms.jt-express.id'
+  ): Record<string, any> {
+    if (typeof mentionMapOrUrl === 'string') {
+      return this.compileCard(config, variables, imageKey, undefined, mentionMapOrUrl);
+    }
+    return this.compileCard(config, variables, imageKey, mentionMapOrUrl, appBaseUrl);
   }
 }
 

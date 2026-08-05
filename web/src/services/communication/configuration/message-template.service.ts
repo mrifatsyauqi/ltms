@@ -38,7 +38,7 @@ export class MessageTemplateService {
           const created = await createMessageTemplate({
             module: preset.module,
             template_name: `Standar ${preset.name}`,
-            content: preset.messageContent,
+            content: (preset as any).messageContent || (preset as any).content || '',
             is_default: true,
             version_note: 'Auto-seeded from preset',
           });
@@ -79,7 +79,7 @@ export class MessageTemplateService {
         tpl = await createMessageTemplate({
           module: preset.module,
           template_name: `Standar ${preset.name}`,
-          content: preset.messageContent,
+          content: (preset as any).messageContent || (preset as any).content || '',
           is_default: true,
           version_note: 'Initial default preset',
         });

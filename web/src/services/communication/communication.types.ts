@@ -58,6 +58,8 @@ export interface GenericReportData {
   percent?: number;
   metrics?: ReportMetricItem[];
   topKecamatan?: string[];
+  subdistricts?: Array<{ name: string; count: number | string; picName?: string; openId?: string }>;
+  kurirList?: Array<{ name: string; count: number | string; picName?: string; openId?: string }>;
   kecamatanStats?: KecamatanStat[];
   details?: Array<{ label: string; value: string }>;
   notes?: string;
@@ -98,6 +100,8 @@ export interface FeishuGroup {
   groupName: string;
   avatar?: string | null;
   memberCount?: number;
+  isDefault?: boolean;
+  is_default?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

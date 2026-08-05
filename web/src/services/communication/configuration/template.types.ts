@@ -12,6 +12,7 @@ export type ActionButtonType = 'none' | 'open_dashboard';
 export interface CardHeaderConfig {
   title: string;
   subtitle?: string;
+  icon?: string;
   pickupDpLabel?: string;
   pickupDpValue?: string;
   targetCityLabel?: string;
@@ -39,9 +40,21 @@ export interface CardKpiGridConfig {
 
 export interface CardSubdistrictsConfig {
   title: string;
-  maxItems: '5' | '10' | 'all';
+  maxItems: '5' | '10' | '15' | 'all';
   sortOrder: 'desc' | 'asc';
   show: boolean;
+  showMention?: boolean;
+  mentionPrefix?: string;
+  badge?: string;
+}
+
+export interface CardKurirFollowUpConfig {
+  title: string;
+  maxItems: '5' | '10' | '15' | 'all';
+  show: boolean;
+  showMention?: boolean;
+  mentionPrefix?: string;
+  badge?: string;
 }
 
 export interface CardLastScanConfig {
@@ -58,6 +71,7 @@ export interface CardLastScanConfig {
 
 export interface CardScreenshotConfig {
   show: boolean;
+  title?: string;
   hdQuality?: boolean;
 }
 
@@ -79,6 +93,7 @@ export interface VisualCardBlocksConfig {
   lastScan?: CardLastScanConfig;
   kpiGrid: CardKpiGridConfig;
   subdistricts?: CardSubdistrictsConfig;
+  kurirFollowUp?: CardKurirFollowUpConfig;
   screenshot: CardScreenshotConfig;
   footer: CardFooterConfig;
   actionButton: CardActionButtonConfig;
@@ -102,6 +117,20 @@ export interface VariableDefinition {
   description: string;
   example: string;
   category: 'general' | 'metrics' | 'meta';
+}
+
+export interface SubdistrictItemContext {
+  name: string;
+  count: number | string;
+  picName?: string;
+  openId?: string;
+}
+
+export interface KurirItemContext {
+  name: string;
+  count: number | string;
+  picName?: string;
+  openId?: string;
 }
 
 export interface TemplateVariablesContext {
@@ -150,31 +179,27 @@ export interface TemplateVariablesContext {
   percent?: string | number;
 
   // Metrik Monitoring Delivery
-  total_arrived?: string | number;
-  totalArrived?: string | number;
-  totalSampai?: string | number;
   total_delivery?: string | number;
   totalDelivery?: string | number;
-  totalAntaran?: string | number;
-  delivery_percentage?: string | number;
-  deliveryPercentage?: string | number;
-
-  // Last Scan
+  delivered?: string | number;
+  pending_delivery?: string | number;
+  pendingDelivery?: string | number;
+  pending?: string | number;
+  delivery_sla?: string | number;
+  deliverySla?: string | number;
   last_scan_time?: string;
-  lastScanTime?: string;
   last_scan_awb?: string;
-  lastScanAwb?: string;
   last_scan_status?: string;
-  lastScanStatus?: string;
 
-  // Detail List Kecamatan
-  destination_subdistricts?: string;
-  district_list?: string;
-  top_kecamatan?: string;
-  topKecamatan?: any;
+  // Penugasan & Data List
+  subdistricts?: SubdistrictItemContext[] | Record<string, number | string>;
+  topSubdistricts?: Array<{ name: string; count: number | string }>;
+  kurirList?: KurirItemContext[] | Array<{ name: string; count: number | string }>;
 
-  // Lampiran & Footer
-  monitoring_image?: string;
-  footer?: string;
+  // Base URL aplikasi
+  appBaseUrl?: string;
+  dashboard_url?: string;
+  dashboardUrl?: string;
+
   [key: string]: any;
 }

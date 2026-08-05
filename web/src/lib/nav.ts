@@ -1,4 +1,5 @@
 import {
+  AtSign,
   Building2,
   ClipboardList,
   Clock,
@@ -72,9 +73,9 @@ export function navForRole(role: string | undefined, access: Record<MenuKey, boo
       {
         label: 'Communication Center',
         items: [
-          { label: 'Message Templates', href: '/communication/message-templates', icon: FileText },
           { label: 'Card Templates', href: '/communication/card-templates', icon: PanelsTopLeft },
           { label: 'Groups', href: '/communication/groups', icon: Users },
+          { label: 'Mention Mapping', href: '/communication/mentions', icon: AtSign },
         ],
       },
       {

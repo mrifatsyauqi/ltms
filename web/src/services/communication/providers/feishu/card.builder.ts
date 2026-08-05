@@ -2,8 +2,9 @@ import type {
   FeishuInteractiveCard,
   GenericReportData,
   MonitoringIncSummaryData,
-  ReportMetricItem,
 } from '../../communication.types';
+import { CardCompilerService } from '../../configuration/card-compiler.service';
+import { STARTER_PRESETS } from '../../configuration/template-presets';
 
 export interface CardHeaderConfig {
   title: string;
@@ -31,8 +32,8 @@ export interface CardField {
 }
 
 /**
- * Fluent Type-Safe Feishu Interactive Card Builder
- * Menjamin pembentukan struktur Card JSON 2.0 Feishu terstandarisasi dan tervalidasi.
+ * FeishuCardBuilder (Compatibility Wrapper)
+ * Seluruh pembentukan Interactive Card didelegasikan ke CardCompilerService sebagai Single Source of Truth.
  */
 export class FeishuCardBuilder {
   private card: FeishuInteractiveCard;
@@ -54,81 +55,49 @@ export class FeishuCardBuilder {
     };
   }
 
-  /**
-   * Set Header Card (Judul & Warna Banner)
-   */
   public setHeader(title: string, template: CardHeaderConfig['template'] = 'red'): this {
-    this.card.header = {
-      title: {
-        tag: 'plain_text',
-        content: title,
-      },
-      template,
-    };
+    if (this.card.header) {
+      this.card.header.title.content = title;
+      this.card.header.template = template;
+    }
     return this;
   }
 
-  /**
-   * Tambah Baris Pemisah (Horizontal Rule)
-   */
+  public addHeaderInfo(targetName: string, generateTime?: string, label = 'Target Kota'): this {
+    const time = generateTime || new Date().toLocaleString('id-ID');
+    this.card.elements.push({
+      tag: 'div',
+      fields: [
+        {
+          is_short: true,
+          text: {
+            tag: 'lark_md',
+            content: `**${label}:**\n**${targetName}**`,
+          },
+        },
+        {
+          is_short: true,
+          text: {
+            tag: 'lark_md',
+            content: `**Generate:**\n${time}`,
+          },
+        },
+      ],
+    });
+    return this;
+  }
+
   public addDivider(): this {
     this.card.elements.push({ tag: 'hr' });
     return this;
   }
 
-  /**
-   * Tambah Baris Informasi Target Scope & Waktu Generate
-   */
-  public addHeaderInfo(targetName?: string, timeStr?: string, scopeLabel = 'Target'): this {
-    const formattedTime =
-      timeStr ||
-      new Intl.DateTimeFormat('id-ID', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      }).format(new Date());
-
-    const scopeText = targetName ? `📍 **${targetName.toUpperCase()}**` : '🏢 **Seluruh Cabang**';
-
-    this.card.elements.push({
-      tag: 'div',
-      fields: [
-        {
-          is_short: true,
-          text: {
-            tag: 'lark_md',
-            content: `**${scopeLabel}:**\n${scopeText}`,
-          },
-        },
-        {
-          is_short: true,
-          text: {
-            tag: 'lark_md',
-            content: `**Waktu Generate:**\n🕒 ${formattedTime} WIB`,
-          },
-        },
-      ],
-    });
-    return this;
-  }
-
-  /**
-   * Tambah Grid KPI 4 Kartu (Total Resi, Belum TTD, Lewat SLA, Progress %)
-   */
-  public addKpiGrid(data: {
+  public addKpiGrid(kpi: {
     total?: number | string;
     belum?: number | string;
     late?: number | string;
     percent?: number | string;
   }): this {
-    const formattedTotal = Number(data.total || 0).toLocaleString('id-ID');
-    const formattedBelum = Number(data.belum || 0).toLocaleString('id-ID');
-    const formattedLate = Number(data.late || 0).toLocaleString('id-ID');
-    const percent = Math.round(Number(data.percent || 0));
-
     this.card.elements.push({
       tag: 'div',
       fields: [
@@ -136,28 +105,28 @@ export class FeishuCardBuilder {
           is_short: true,
           text: {
             tag: 'lark_md',
-            content: `**📦 Total Resi:**\n**${formattedTotal}**`,
+            content: `**Total AWB:**\n**${kpi.total ?? 0}**`,
           },
         },
         {
           is_short: true,
           text: {
             tag: 'lark_md',
-            content: `**⏳ Belum TTD:**\n**${formattedBelum}**`,
+            content: `**Belum Selesai:**\n<font color='red'>**${kpi.belum ?? 0}**</font>`,
           },
         },
         {
           is_short: true,
           text: {
             tag: 'lark_md',
-            content: `**🚨 Lewat SLA:**\n<font color='red'>**${formattedLate}**</font>`,
+            content: `**Late / Over SLA:**\n<font color='red'>**${kpi.late ?? 0}**</font>`,
           },
         },
         {
           is_short: true,
           text: {
             tag: 'lark_md',
-            content: `**📈 Progress:**\n<font color='green'>**${percent}%**</font>`,
+            content: `**SLA:**\n**${kpi.percent ?? 0}%**`,
           },
         },
       ],
@@ -165,100 +134,48 @@ export class FeishuCardBuilder {
     return this;
   }
 
-  /**
-   * Tambah Dynamic Metrics Grid dari array ReportMetricItem
-   */
-  public addDynamicMetrics(metrics: ReportMetricItem[]): this {
-    if (!metrics || metrics.length === 0) return this;
-
-    const fields: CardField[] = metrics.map((m) => {
-      let valStr = String(m.value);
-      if (m.color === 'red') valStr = `<font color='red'>**${valStr}**</font>`;
-      else if (m.color === 'green') valStr = `<font color='green'>**${valStr}**</font>`;
-      else if (m.color === 'yellow' || m.color === 'orange')
-        valStr = `<font color='orange'>**${valStr}**</font>`;
-      else valStr = `**${valStr}**`;
-
-      const sub = m.subValue ? ` _(${m.subValue})_` : '';
-
-      return {
-        is_short: true,
-        text: {
-          tag: 'lark_md',
-          content: `**${m.label}:**\n${valStr}${sub}`,
-        },
-      };
-    });
-
-    this.card.elements.push({
-      tag: 'div',
-      fields,
-    });
-    return this;
-  }
-
-  /**
-   * Tambah Distribusi Top Item / Kecamatan
-   */
-  public addTopList(items?: string[], title = 'Top Wilayah'): this {
+  public addTopList(items?: Array<{ name: string; count: number }>, title = 'Top Wilayah'): this {
     if (!items || items.length === 0) return this;
-
-    const formattedList = items.map((k) => `• ${k}`).join('\n');
-
+    const lines = items.map((it, idx) => `${idx + 1}. **${it.name}**: ${it.count} AWB`);
     this.card.elements.push({
       tag: 'div',
       text: {
         tag: 'lark_md',
-        content: `**🏙️ ${title}:**\n${formattedList}`,
+        content: `**${title}**\n${lines.join('\n')}`,
       },
     });
     return this;
   }
 
-  /**
-   * Tambah Instruksi Tindak Lanjut / Catatan
-   */
-  public addInstructionNote(text?: string): this {
-    const content =
-      text ||
-      'Mohon segera dilakukan tindak lanjut terhadap seluruh paket yang masih belum TTD, khususnya paket yang telah melewati batas SLA.';
+  public addInstructionNote(customText?: string): this {
     this.card.elements.push({
       tag: 'note',
       elements: [
         {
           tag: 'plain_text',
-          content,
+          content: customText || 'Laporan ringkasan operasional harian LTMS.',
         },
       ],
     });
     return this;
   }
 
-  /**
-   * Tambah Elemen Gambar Laporan (Fit Horizontal) jika imageKey tersedia
-   */
-  public addImage(imageKey?: string, altText?: string): this {
+  public addImage(imageKey?: string, altText = 'Lampiran Monitoring'): this {
     if (!imageKey) return this;
-
     this.card.elements.push({
       tag: 'img',
       img_key: imageKey,
       alt: {
         tag: 'plain_text',
-        content: altText || 'Laporan LTMS Enterprise',
+        content: altText,
       },
       mode: 'fit_horizontal',
     });
     return this;
   }
 
-  /**
-   * Tambah Footer Note Sistem
-   */
   public addFooter(footerText?: string): this {
-    const time = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-    const text = footerText || `Generated by LTMS Enterprise • ${time} WIB`;
-
+    const text = footerText || 'Generated Automatically by LTMS';
     this.card.elements.push(
       { tag: 'hr' },
       {
@@ -274,175 +191,52 @@ export class FeishuCardBuilder {
     return this;
   }
 
-  /**
-   * Validasi & Kembalikan Objek FeishuInteractiveCard JSON
-   */
   public build(): FeishuInteractiveCard {
-    if (!this.card.header?.title?.content) {
-      throw new Error('FeishuCardBuilder: Header title is required.');
-    }
     return JSON.parse(JSON.stringify(this.card));
   }
 
-  /**
-   * Static Factory untuk Monitoring INC
-   */
+  // ==========================================
+  // SINGLE SOURCE OF TRUTH STATIC FACTORIES:
+  // ==========================================
+
   public static createMonitoringIncCard(
     data: MonitoringIncSummaryData,
     imageKey?: string
   ): FeishuInteractiveCard {
-    const target = data.targetKota || data.targetScope?.name || 'Cabang';
-    const builder = new FeishuCardBuilder();
-    return builder
-      .setHeader(`LTMS • Monitoring INC ${target.toUpperCase()}`, 'red')
-      .addHeaderInfo(target, data.generateTime, 'Target Kota')
-      .addDivider()
-      .addKpiGrid({
-        total: data.total,
-        belum: data.belum,
-        late: data.late,
-        percent: data.percent,
-      })
-      .addDivider()
-      .addTopList(data.topKecamatan, 'Top Kecamatan')
-      .addInstructionNote()
-      .addImage(imageKey, `Monitoring INC ${target}`)
-      .addFooter()
-      .build();
+    const preset = STARTER_PRESETS.find((p) => p.module === 'monitoring_inc') || STARTER_PRESETS[0];
+    return CardCompilerService.compileCard(preset.blocksConfig, data, imageKey) as FeishuInteractiveCard;
   }
 
-  /**
-   * Static Factory untuk Monitoring Delivery
-   */
   public static createDeliveryCard(
     data: GenericReportData,
     imageKey?: string
   ): FeishuInteractiveCard {
-    const target = data.targetDp || data.targetKota || data.targetScope?.name || 'Cabang';
-    const builder = new FeishuCardBuilder();
-    const b = builder
-      .setHeader(`LTMS • Monitoring Delivery ${target.toUpperCase()}`, 'blue')
-      .addHeaderInfo(target, data.generateTime, 'Cakupan DP / Wilayah')
-      .addDivider();
-
-    if (data.metrics && data.metrics.length > 0) {
-      b.addDynamicMetrics(data.metrics);
-    } else {
-      b.addKpiGrid({
-        total: data.total,
-        belum: data.belum,
-        late: data.late,
-        percent: data.percent,
-      });
-    }
-
-    return b
-      .addInstructionNote(data.notes || 'Laporan Pengiriman Delivery Sprinter JMS.')
-      .addImage(imageKey, `Monitoring Delivery ${target}`)
-      .addFooter()
-      .build();
+    const preset = STARTER_PRESETS.find((p) => p.module === 'monitoring_delivery') || STARTER_PRESETS[0];
+    return CardCompilerService.compileCard(preset.blocksConfig, data, imageKey) as FeishuInteractiveCard;
   }
 
-  /**
-   * Static Factory untuk Dashboard Summary
-   */
   public static createDashboardCard(
     data: GenericReportData,
     imageKey?: string
   ): FeishuInteractiveCard {
-    const target = data.targetScope?.name || data.targetKota || 'Cabang';
-    const builder = new FeishuCardBuilder();
-    const b = builder
-      .setHeader(`LTMS • Ringkasan Dashboard ${target.toUpperCase()}`, 'indigo')
-      .addHeaderInfo(target, data.generateTime, 'Cakupan Scope')
-      .addDivider();
-
-    if (data.metrics && data.metrics.length > 0) {
-      b.addDynamicMetrics(data.metrics);
-    } else {
-      b.addKpiGrid({
-        total: data.total,
-        belum: data.belum,
-        late: data.late,
-        percent: data.percent,
-      });
-    }
-
-    return b
-      .addInstructionNote(data.notes || 'Ringkasan performa operasional harian LTMS.')
-      .addImage(imageKey, `Ringkasan Dashboard ${target}`)
-      .addFooter()
-      .build();
+    const preset = STARTER_PRESETS.find((p) => p.module === 'dashboard') || STARTER_PRESETS[0];
+    return CardCompilerService.compileCard(preset.blocksConfig, data, imageKey) as FeishuInteractiveCard;
   }
 
-  /**
-   * Static Factory untuk Long Tail Report
-   */
   public static createLongtailCard(
     data: GenericReportData,
     imageKey?: string
   ): FeishuInteractiveCard {
-    const target = data.targetDp || data.targetKota || data.targetScope?.name || 'Cabang';
-    const builder = new FeishuCardBuilder();
-    const b = builder
-      .setHeader(`LTMS • Laporan Long Tail ${target.toUpperCase()}`, 'orange')
-      .addHeaderInfo(target, data.generateTime, 'Cakupan Data')
-      .addDivider();
-
-    if (data.metrics && data.metrics.length > 0) {
-      b.addDynamicMetrics(data.metrics);
-    } else {
-      b.addKpiGrid({
-        total: data.total,
-        belum: data.belum,
-        late: data.late,
-        percent: data.percent,
-      });
-    }
-
-    return b
-      .addInstructionNote(data.notes || 'Laporan paket status Long Tail yang memerlukan penanganan.')
-      .addImage(imageKey, `Laporan Long Tail ${target}`)
-      .addFooter()
-      .build();
+    const preset = STARTER_PRESETS.find((p) => p.module === 'longtail') || STARTER_PRESETS[0];
+    return CardCompilerService.compileCard(preset.blocksConfig, data, imageKey) as FeishuInteractiveCard;
   }
 
-  /**
-   * Static Factory untuk Generic / Multi-Module Report
-   */
   public static createGenericReportCard(
     data: GenericReportData,
     imageKey?: string
   ): FeishuInteractiveCard {
-    const title = data.title || `LTMS • Laporan ${data.module?.toUpperCase() || 'OPERASIONAL'}`;
-    const template = data.headerTemplate || 'red';
-    const target = data.targetDp || data.targetKota || data.targetScope?.name || 'Cabang';
-
-    const builder = new FeishuCardBuilder();
-    const b = builder
-      .setHeader(title, template)
-      .addHeaderInfo(target, data.generateTime, 'Cakupan')
-      .addDivider();
-
-    if (data.metrics && data.metrics.length > 0) {
-      b.addDynamicMetrics(data.metrics);
-    } else if (data.total !== undefined || data.belum !== undefined) {
-      b.addKpiGrid({
-        total: data.total,
-        belum: data.belum,
-        late: data.late,
-        percent: data.percent,
-      });
-    }
-
-    if (data.topKecamatan && data.topKecamatan.length > 0) {
-      b.addTopList(data.topKecamatan, 'Top Wilayah');
-    }
-
-    return b
-      .addInstructionNote(data.notes)
-      .addImage(imageKey, title)
-      .addFooter()
-      .build();
+    const moduleName = data.module || 'monitoring_inc';
+    const preset = STARTER_PRESETS.find((p) => p.module === moduleName) || STARTER_PRESETS[0];
+    return CardCompilerService.compileCard(preset.blocksConfig, data, imageKey) as FeishuInteractiveCard;
   }
 }

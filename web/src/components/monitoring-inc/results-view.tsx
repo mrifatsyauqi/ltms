@@ -219,7 +219,8 @@ Terima kasih.`;
   // Handler Pengiriman Laporan ke Feishu Group
   const handleExecuteFeishuSend = async (
     selectedGroup: FeishuGroup,
-    updateStage: (stage: FeishuShareStage, progress: number) => void
+    updateStage: (stage: FeishuShareStage, progress: number) => void,
+    selectedCardTemplateId?: string
   ) => {
     if (!hiddenCanvasRef.current) {
       throw new Error('Canvas visual report belum siap dirender.');
@@ -240,22 +241,26 @@ Terima kasih.`;
     setGeneratedImageUrl(dataUrl);
     await new Promise((r) => setTimeout(r, 200));
 
-    // 3. Generating Caption
+    // 3. Generating Caption & Subdistricts
     updateStage('generating_caption', 55);
     const caption = buildSmartCaption();
     setGeneratedCaption(caption);
     await new Promise((r) => setTimeout(r, 200));
 
-    // Ekstrak Top 5 Kecamatan
+    // Ekstrak Kecamatan breakdown
     const kecCountMap = new Map<string, number>();
     data.forEach((r) => {
       const kec = r.tempatTujuan?.trim() || 'Lainnya';
       kecCountMap.set(kec, (kecCountMap.get(kec) || 0) + 1);
     });
-    const topKecamatan = Array.from(kecCountMap.entries())
+    const subdistricts = Array.from(kecCountMap.entries())
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([kec]) => kec);
+      .slice(0, 10)
+      .map(([kec, count]) => ({
+        name: kec,
+        count: `${count} AWB`,
+      }));
+    const topKecamatan = subdistricts.map((s) => s.name);
 
     // 4. Uploading Image to Feishu
     updateStage('uploading_image', 75);
@@ -270,6 +275,7 @@ Terima kasih.`;
         channel: 'feishu',
         chatId: selectedGroup.chatId || (selectedGroup as any).chat_id,
         messageType: 'interactive_card',
+        cardTemplateId: selectedCardTemplateId,
         data: {
           module: 'monitoring_inc',
           targetScope: {
@@ -277,13 +283,17 @@ Terima kasih.`;
             name: targetKota,
           },
           targetKota,
-          total: stats.total,
-          belum: stats.belum,
-          late: stats.late,
-          clear: stats.clear,
-          percent: stats.percent,
+          pickup_dp: userDropPoint || 'BATANG01',
+          target_city: targetKota,
+          total_inc: stats.total,
+          clear_ttd: stats.clear,
+          pending_ttd: stats.belum,
+          over_sla: stats.late,
+          sla_percentage: stats.percent,
+          subdistricts,
           topKecamatan,
           generateTime,
+          generated_at: generateTime,
           imageBase64: dataUrl,
           caption,
         },
@@ -291,7 +301,7 @@ Terima kasih.`;
     });
 
     const json = await res.json();
-    if (!res.ok || !json.ok) {
+    if (!res.ok || (!json.ok && !json.success)) {
       throw new Error(json.error || 'Gagal mengirim pesan ke API Feishu.');
     }
   };
@@ -322,6 +332,18 @@ Terima kasih.`;
           late: stats.late,
           clear: stats.clear,
           percent: stats.percent,
+          subdistricts: Array.from(
+            data
+              .reduce((map, r) => {
+                const k = r.tempatTujuan?.trim() || 'Lainnya';
+                map.set(k, (map.get(k) || 0) + 1);
+                return map;
+              }, new Map<string, number>())
+              .entries()
+          )
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([k, count]) => ({ name: k, count: `${count} AWB` })),
           topKecamatan: Array.from(
             data
               .reduce((map, r) => {

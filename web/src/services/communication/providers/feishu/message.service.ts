@@ -1,15 +1,16 @@
 import { feishuAuthService } from './auth.service';
 import { feishuImageService } from './image.service';
-import { feishuCardService } from './card.service';
 import { feishuChatService } from './chat.service';
 import { withRetry } from '../../utils/retry';
 import { fetchWithTimeout } from '../../utils/fetch-timeout';
 import { communicationSendQueue } from '../../utils/queue';
 import { COMMUNICATION_CONFIG, getFeishuCredentials } from '../../communication.config';
 import { FeishuSendMessageResponseSchema } from '../../communication.schemas';
-import type {
-  ICommunicationProvider,
-} from '../../communication.interface';
+import { CardCompilerService } from '../../configuration/card-compiler.service';
+import { cardTemplateService } from '../../configuration/card-template.service';
+import { mentionService } from '../../configuration/mention.service';
+import { STARTER_PRESETS } from '../../configuration/template-presets';
+import type { ICommunicationProvider } from '../../communication.interface';
 import type {
   CommunicationChannel,
   SendMessagePayload,
@@ -44,25 +45,76 @@ export class FeishuMessageService implements ICommunicationProvider {
         let msgType = 'text';
         let contentObj: any = {};
 
-        if (payload.messageType === 'interactive_card' && payload.data) {
+        if (payload.messageType === 'interactive_card' || (payload.data && !payload.textContent)) {
           msgType = 'interactive';
-          if (payload.cardConfig) {
-            const { CardCompilerService } = await import('../../configuration/card-compiler.service');
-            contentObj = CardCompilerService.compile(payload.cardConfig as any, payload.data, uploadedImageKey);
-          } else {
-            try {
-              const { cardTemplateService } = await import('../../configuration/card-template.service');
-              const defaultTpl = await cardTemplateService.getDefault((payload.data?.module as any) || 'monitoring_inc');
-              if (defaultTpl?.blocks_config) {
-                const { CardCompilerService } = await import('../../configuration/card-compiler.service');
-                contentObj = CardCompilerService.compile(defaultTpl.blocks_config as any, payload.data, uploadedImageKey);
-              } else {
-                contentObj = feishuCardService.generateCard(payload.data, uploadedImageKey);
-              }
-            } catch {
-              contentObj = feishuCardService.generateCard(payload.data, uploadedImageKey);
+          const moduleName = (payload.data?.module as any) || 'monitoring_inc';
+
+          // A. Resolve blocksConfig
+          let blocksConfig = payload.cardConfig;
+          if (!blocksConfig && payload.cardTemplateId) {
+            const tpl = await cardTemplateService.getById(payload.cardTemplateId);
+            if (tpl?.blocks_config) {
+              blocksConfig = tpl.blocks_config as any;
             }
           }
+
+          if (!blocksConfig) {
+            try {
+              const defaultTpl = await cardTemplateService.getDefault(moduleName);
+              if (defaultTpl?.blocks_config) {
+                blocksConfig = defaultTpl.blocks_config as any;
+              }
+            } catch {
+              // fallback to starter preset
+            }
+          }
+
+          if (!blocksConfig) {
+            const preset = STARTER_PRESETS.find((p) => p.module === moduleName) || STARTER_PRESETS[0];
+            blocksConfig = preset.blocksConfig;
+          }
+
+          // B. Resolve Mention Mappings
+          let mentionMap: Map<string, any> = new Map();
+          try {
+            if (moduleName === 'monitoring_inc') {
+              const subdistrictKeys: string[] = [];
+              if (Array.isArray(payload.data?.subdistricts)) {
+                payload.data.subdistricts.forEach((s: any) => {
+                  if (typeof s === 'object' && s.name) subdistrictKeys.push(s.name);
+                });
+              } else if ((payload.data as any)?.destination_subdistricts) {
+                const lines = String((payload.data as any).destination_subdistricts).split('\n');
+                lines.forEach((l) => {
+                  const m = l.match(/^([^:\(\d]+)/);
+                  if (m) subdistrictKeys.push(m[1].trim().replace(/^📍\s*/, ''));
+                });
+              }
+              if (subdistrictKeys.length > 0) {
+                mentionMap = await mentionService.getMentionsByKeys('kecamatan', subdistrictKeys);
+              }
+            } else if (moduleName === 'monitoring_delivery') {
+              const kurirKeys: string[] = [];
+              if (Array.isArray(payload.data?.kurirList)) {
+                payload.data.kurirList.forEach((k: any) => {
+                  if (typeof k === 'object' && k.name) kurirKeys.push(k.name);
+                });
+              }
+              if (kurirKeys.length > 0) {
+                mentionMap = await mentionService.getMentionsByKeys('kurir', kurirKeys);
+              }
+            }
+          } catch {
+            // Non-blocking fallback jika lookup mention database gagal
+          }
+
+          // C. Single Source of Truth Compilation
+          contentObj = CardCompilerService.compileCard(
+            blocksConfig as any,
+            payload.data,
+            uploadedImageKey,
+            mentionMap
+          );
         } else if (payload.messageType === 'image' && uploadedImageKey) {
           msgType = 'image';
           contentObj = { image_key: uploadedImageKey };
@@ -138,17 +190,18 @@ export class FeishuMessageService implements ICommunicationProvider {
           chatId: payload.chatId,
           responseTimeMs,
           imageKey: uploadedImageKey,
-          error: err?.message || 'Gagal mengirim pesan ke Feishu',
+          error: err.message || 'Gagal mengirim pesan Feishu',
         };
       }
     });
   }
 
-  /**
-   * Menyinkronkan daftar Group yang diikuti oleh bot.
-   */
-  public async syncChats(): Promise<FeishuGroup[]> {
-    return feishuChatService.syncChats();
+  public async syncGroups(): Promise<FeishuGroup[]> {
+    return feishuChatService.syncGroups();
+  }
+
+  public async getActiveGroups(): Promise<FeishuGroup[]> {
+    return feishuChatService.getActiveGroups();
   }
 }
 

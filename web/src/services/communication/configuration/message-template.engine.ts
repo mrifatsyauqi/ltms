@@ -7,14 +7,25 @@ export class MessageTemplateEngine {
   private static formatNumber(val: any): string {
     if (val === undefined || val === null || val === '') return '0';
     if (typeof val === 'number') {
-      return val.toLocaleString('id-ID');
+      return Number.isInteger(val)
+        ? val.toLocaleString('id-ID')
+        : val.toLocaleString('id-ID', { maximumFractionDigits: 2 });
     }
-    const num = Number(val);
-    if (!isNaN(num) && typeof val === 'string' && val.trim() !== '') {
-      // Jika string angka murni, format ribuan
-      if (/^-?\d+(\.\d+)?$/.test(val.trim())) {
-        return num.toLocaleString('id-ID');
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      // If it already has Indonesian thousand separator like 14.942, return as is
+      if (/^\d{1,3}(\.\d{3})+$/.test(trimmed)) {
+        return trimmed;
       }
+      // If it is integer string like "14942"
+      if (/^\d+$/.test(trimmed)) {
+        return Number(trimmed).toLocaleString('id-ID');
+      }
+      // If it is float string like "14942.5"
+      if (/^\d+\.\d+$/.test(trimmed)) {
+        return Number(trimmed).toLocaleString('id-ID', { maximumFractionDigits: 2 });
+      }
+      return trimmed;
     }
     return String(val);
   }

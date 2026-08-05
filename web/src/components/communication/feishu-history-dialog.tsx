@@ -44,14 +44,19 @@ interface CommunicationLogItem {
 }
 
 export interface FeishuHistoryDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  open?: boolean;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onClose?: () => void;
+  moduleName?: string;
 }
 
-export function FeishuHistoryDialog({
-  open,
-  onOpenChange,
-}: FeishuHistoryDialogProps) {
+export function FeishuHistoryDialog(props: FeishuHistoryDialogProps) {
+  const open = props.open ?? props.isOpen ?? false;
+  const handleOpenChange = (val: boolean) => {
+    if (props.onOpenChange) props.onOpenChange(val);
+    if (!val && props.onClose) props.onClose();
+  };
   const [logs, setLogs] = useState<CommunicationLogItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +103,7 @@ export function FeishuHistoryDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-0 overflow-hidden rounded-[10px]">
         {/* Header */}
         <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
@@ -222,7 +227,7 @@ export function FeishuHistoryDialog({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onOpenChange(false)}
+            onClick={() => handleOpenChange(false)}
             className="rounded-[6px] h-8 px-4 text-xs"
           >
             Tutup
