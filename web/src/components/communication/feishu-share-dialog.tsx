@@ -114,22 +114,42 @@ const STAGE_CONFIG: Record<
   },
 };
 
+const normalizeFeishuGroup = (g: any): FeishuGroup => {
+  const cId = g.chatId || g.chat_id || g.id || '';
+  const gName = g.groupName || g.group_name || 'Group Tanpa Nama';
+  const mCount = g.memberCount ?? g.member_count ?? 0;
+  const isDef = Boolean(g.isDefault || g.is_default);
+
+  return {
+    id: g.id || cId,
+    chatId: cId,
+    chat_id: cId,
+    groupName: gName,
+    group_name: gName,
+    memberCount: mCount,
+    member_count: mCount,
+    isDefault: isDef,
+    is_default: isDef,
+    status: g.status || 'active',
+  } as FeishuGroup;
+};
+
 const SAMPLE_FALLBACK_GROUPS: FeishuGroup[] = [
-  {
-    chatId: 'oc_test_ltms_ujicoba',
-    groupName: 'Uji Coba LTMS',
-    memberCount: 8,
-  },
-  {
-    chatId: 'oc_batang_all',
-    groupName: 'BATANG',
-    memberCount: 42,
-  },
-  {
-    chatId: 'oc_batang_barat',
-    groupName: 'BATANG BARAT',
-    memberCount: 18,
-  },
+  normalizeFeishuGroup({
+    chat_id: 'oc_test_ltms_ujicoba',
+    group_name: 'Uji Coba LTMS',
+    member_count: 8,
+  }),
+  normalizeFeishuGroup({
+    chat_id: 'oc_batang_all',
+    group_name: 'BATANG',
+    member_count: 42,
+  }),
+  normalizeFeishuGroup({
+    chat_id: 'oc_batang_barat',
+    group_name: 'BATANG BARAT',
+    member_count: 18,
+  }),
 ];
 
 type ActiveTab = 'group' | 'preview_card' | 'preview_image' | 'preview_caption';
@@ -190,12 +210,13 @@ export function FeishuShareDialog({
       ]);
 
       if (grpRes.ok && Array.isArray(grpRes.data) && grpRes.data.length > 0) {
-        setGroups(grpRes.data);
-        const defaultGrp = grpRes.data.find((g: any) => g.is_default);
+        const normalized = grpRes.data.map(normalizeFeishuGroup);
+        setGroups(normalized);
+        const defaultGrp = normalized.find((g: any) => g.is_default || g.isDefault);
         if (defaultGrp) {
-          setSelectedChatId(defaultGrp.chat_id || defaultGrp.chatId);
-        } else if (grpRes.data[0]) {
-          setSelectedChatId(grpRes.data[0].chat_id || grpRes.data[0].chatId);
+          setSelectedChatId(defaultGrp.chatId || (defaultGrp as any).chat_id);
+        } else if (normalized[0]) {
+          setSelectedChatId(normalized[0].chatId || (normalized[0] as any).chat_id);
         }
       } else {
         setGroups(SAMPLE_FALLBACK_GROUPS);
@@ -230,7 +251,8 @@ export function FeishuShareDialog({
       });
       const json = await res.json();
       if (json.ok && Array.isArray(json.data) && json.data.length > 0) {
-        setGroups(json.data);
+        const normalized = json.data.map(normalizeFeishuGroup);
+        setGroups(normalized);
         const now = new Date();
         setLastSyncTime(
           new Intl.DateTimeFormat('id-ID', {
@@ -253,11 +275,14 @@ export function FeishuShareDialog({
     }
   };
 
-  const filteredGroups = groups.filter((g) =>
-    g.groupName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredGroups = groups.filter((g: any) => {
+    const name = g.groupName || g.group_name || '';
+    return name.toLowerCase().includes((searchQuery || '').toLowerCase());
+  });
 
-  const selectedGroup = groups.find((g) => g.chatId === selectedChatId);
+  const selectedGroup = groups.find(
+    (g: any) => (g.chatId || g.chat_id) === selectedChatId
+  );
 
   const isSending = stage !== 'idle' && stage !== 'completed' && stage !== 'error';
 
@@ -274,7 +299,8 @@ export function FeishuShareDialog({
       setStage('completed');
       setProgress(100);
 
-      toast.success(`✓ Laporan berhasil dikirim ke ${selectedGroup.groupName}`, {
+      const displayGroupName = selectedGroup.groupName || (selectedGroup as any).group_name || 'Group Feishu';
+      toast.success(`✓ Laporan berhasil dikirim ke ${displayGroupName}`, {
         description: 'Interactive Card & Report Image telah terkirim.',
         position: 'bottom-right',
       });
@@ -370,7 +396,9 @@ export function FeishuShareDialog({
                   </h3>
                   <p className="text-xs text-slate-500 mt-1">
                     Interactive Card & Report Image telah terkirim ke{' '}
-                    <strong className="text-slate-800">{selectedGroup?.groupName}</strong>.
+                    <strong className="text-slate-800">
+                      {selectedGroup?.groupName || (selectedGroup as any)?.group_name || 'Group Feishu'}
+                    </strong>.
                   </p>
                 </div>
               </div>
@@ -870,7 +898,7 @@ export function FeishuShareDialog({
                       <span>
                         Tujuan:{' '}
                         <strong className="text-slate-800">
-                          {selectedGroup.groupName}
+                          {selectedGroup.groupName || (selectedGroup as any).group_name || 'Group Feishu'}
                         </strong>
                       </span>
                     ) : (

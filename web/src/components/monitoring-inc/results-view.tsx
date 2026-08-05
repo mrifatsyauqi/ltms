@@ -268,7 +268,7 @@ Terima kasih.`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         channel: 'feishu',
-        chatId: selectedGroup.chatId,
+        chatId: selectedGroup.chatId || (selectedGroup as any).chat_id,
         messageType: 'interactive_card',
         data: {
           module: 'monitoring_inc',
