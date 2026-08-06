@@ -240,6 +240,11 @@ export const STARTER_PRESETS: StarterPreset[] = [
         mentionPrefix: '👤',
         listStyle: 'numbered',
       },
+      freeText: {
+        show: true,
+        text: '',
+        placeholder: 'Tambahkan catatan di sini...',
+      },
       screenshot: {
         show: true,
         title: '🖼 Lampiran Monitoring',

@@ -241,6 +241,96 @@ describe('Phase 2.6.2 Communication Center Single Source Compiler & Mentions', (
       assert.match(url, /^https?:\/\//, `url must be a real link, got: ${url}`);
       assert.doesNotMatch(url, /\{\{.*\}\}/, 'url must not contain an unresolved {{placeholder}}');
     });
+
+    it('should render each section title emoji exactly ONCE, not doubled (kpiGrid, subdistricts, kurirFollowUp)', () => {
+      const incPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_inc')!;
+      const deliveryPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_delivery')!;
+
+      const incCard = CardCompilerService.compileCard(
+        incPreset.blocksConfig,
+        { subdistricts: [{ name: 'BATANG', count: '10 AWB' }] }
+      );
+      const incStr = JSON.stringify(incCard.elements);
+      assert.ok(incStr.includes('📊 Ringkasan Monitoring'), 'kpiGrid title should render once');
+      assert.ok(!incStr.includes('📊 📊'), 'kpiGrid title emoji must not be doubled');
+      assert.ok(incStr.includes('📍 Drop Point Tujuan'), 'subdistricts title should render once');
+      assert.ok(!incStr.includes('📍 📍'), 'subdistricts title emoji must not be doubled');
+
+      const deliveryConfig: VisualCardBlocksConfig = {
+        ...deliveryPreset.blocksConfig,
+        kurirFollowUp: { ...deliveryPreset.blocksConfig.kurirFollowUp!, show: true },
+      };
+      const deliveryCard = CardCompilerService.compileCard(deliveryConfig, {
+        kurirList: [{ name: 'Andi Setiawan', count: '12 Paket' }],
+      });
+      const deliveryStr = JSON.stringify(deliveryCard.elements);
+      assert.ok(deliveryStr.includes('🛵 Kurir Perlu Follow Up'), 'kurirFollowUp title should render once');
+      assert.ok(!deliveryStr.includes('🛵 🛵'), 'kurirFollowUp title emoji must not be doubled');
+    });
+
+    it('should place the KPI icon on the value line (left of the number), not on the label line', () => {
+      const incPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_inc')!;
+      const card = CardCompilerService.compileCard(incPreset.blocksConfig, {
+        total_inc: '81',
+        clear_ttd: '70',
+        pending_ttd: '11',
+        sla_percentage: '86.4',
+      });
+      // NOTE: header block juga bisa punya `fields` (mis. label "Generate") -
+      // cari field KPI spesifik lintas SEMUA div berfield, bukan div pertama.
+      const allFields = card.elements.flatMap((el: any) => (Array.isArray(el.fields) ? el.fields : []));
+      const totalField = allFields.find((f: any) => f.text.content.includes('Total AWB INC'));
+      assert.ok(totalField, 'Total AWB INC field should exist');
+      const content = totalField.text.content as string;
+      const [labelLine, valueLine] = content.split('\n');
+      assert.doesNotMatch(labelLine, /📦/, 'label line must NOT contain the icon');
+      assert.match(valueLine, /^\*\*📦 /, 'value line must start (right after markdown bold) with the icon immediately before the number');
+      assert.ok(valueLine.includes('81'), 'value line must contain the actual number');
+    });
+
+    it('should render the Teks Bebas (free text) block right after Drop Point Tujuan, only when non-empty', () => {
+      const incPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_inc')!;
+
+      // Kosong (default preset) -> blok tidak muncul sama sekali
+      const emptyCard = CardCompilerService.compileCard(incPreset.blocksConfig, {
+        subdistricts: [{ name: 'BATANG', count: '10 AWB' }],
+      });
+      assert.ok(
+        !JSON.stringify(emptyCard.elements).includes('Tambahkan catatan'),
+        'empty freeText must not render any block'
+      );
+
+      // Terisi -> muncul, posisinya tepat setelah blok Drop Point Tujuan
+      const filledConfig: VisualCardBlocksConfig = {
+        ...incPreset.blocksConfig,
+        freeText: { show: true, text: 'Mohon prioritaskan area rawan macet hari ini.' },
+      };
+      const filledCard = CardCompilerService.compileCard(filledConfig, {
+        subdistricts: [{ name: 'BATANG', count: '10 AWB' }],
+      });
+      const elements = filledCard.elements;
+      const subdistrictIdx = elements.findIndex(
+        (el: any) => el.text?.content?.includes('Drop Point Tujuan')
+      );
+      const freeTextIdx = elements.findIndex(
+        (el: any) => el.text?.content === 'Mohon prioritaskan area rawan macet hari ini.'
+      );
+      assert.ok(subdistrictIdx >= 0, 'subdistricts title block should exist');
+      assert.ok(freeTextIdx > subdistrictIdx, 'freeText block must come after the Drop Point Tujuan block');
+
+      // show: false paksa sembunyi walau text terisi
+      const hiddenConfig: VisualCardBlocksConfig = {
+        ...incPreset.blocksConfig,
+        freeText: { show: false, text: 'Catatan yang sengaja disembunyikan.' },
+      };
+      const hiddenCard = CardCompilerService.compileCard(hiddenConfig, {
+        subdistricts: [{ name: 'BATANG', count: '10 AWB' }],
+      });
+      assert.ok(
+        !JSON.stringify(hiddenCard.elements).includes('Catatan yang sengaja disembunyikan'),
+        'show:false must hide freeText even when text is non-empty'
+      );
+    });
   });
 
   describe('Starter Presets Catalog', () => {

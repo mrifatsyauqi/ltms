@@ -1,6 +1,10 @@
 export type IncRow = {
   awb: string;
   tempatTujuan: string;
+  /** Kolom opsional "DP Delivery" dari file tarikan JMS (Kode/Nama DP) -
+   *  dipakai sbg disambiguator UTAMA saat 1 Kecamatan dipakai >1 DP. Kosong
+   *  utk file lama yg belum punya kolom ini - fallback ke Kecamatan. */
+  dpDelivery?: string;
   namaPenerima: string;
   alamatPenerima: string;
   cod: number;

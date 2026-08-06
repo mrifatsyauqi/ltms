@@ -131,6 +131,7 @@ export default function CardTemplatesPage() {
     lastScan: true,
     kpiGrid: true,
     assignment: true,
+    freeText: true,
     screenshot: true,
     actionButton: true,
     footer: true,
@@ -1023,6 +1024,59 @@ export default function CardTemplatesPage() {
                           </select>
                         </div>
                       </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 4b. Blok Teks Bebas */}
+                <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div
+                      className="flex items-center gap-2 cursor-pointer flex-1"
+                      onClick={() => setOpenSections({ ...openSections, freeText: !openSections.freeText })}
+                    >
+                      <span className="font-bold text-slate-800 text-sm">Teks Bebas</span>
+                      {openSections.freeText ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </div>
+                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={formData.blocks_config.freeText?.show ?? true}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            blocks_config: {
+                              ...prev.blocks_config,
+                              freeText: { ...prev.blocks_config.freeText, show: e.target.checked },
+                            },
+                          }))
+                        }
+                        className="w-3.5 h-3.5 text-red-600 rounded border-slate-300"
+                      />
+                      <span>Tampilkan</span>
+                    </label>
+                  </div>
+
+                  {openSections.freeText && (
+                    <div className="space-y-1 pt-2">
+                      <label className="font-semibold text-slate-700">
+                        Catatan (tampil tepat setelah Drop Point Tujuan - kosong = blok tidak muncul di kartu)
+                      </label>
+                      <textarea
+                        value={formData.blocks_config.freeText?.text || ''}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            blocks_config: {
+                              ...prev.blocks_config,
+                              freeText: { ...prev.blocks_config.freeText, text: e.target.value },
+                            },
+                          }))
+                        }
+                        placeholder="Tambahkan catatan di sini..."
+                        rows={3}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium resize-none"
+                      />
                     </div>
                   )}
                 </div>

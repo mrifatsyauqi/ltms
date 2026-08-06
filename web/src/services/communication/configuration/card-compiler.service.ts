@@ -146,13 +146,16 @@ export class CardCompilerService {
     if (showKpi) {
       if (elements.length > 0) elements.push({ tag: 'hr' });
 
-      const kpiTitle = config.kpiGrid?.title || 'Ringkasan Monitoring';
+      // Judul sudah termasuk emoji-nya sendiri (default '📊 Ringkasan
+      // Monitoring', atau custom dari Builder) - JANGAN tambah emoji lagi di
+      // sini, dulu di-double (📊 📊 ...).
+      const kpiTitle = config.kpiGrid?.title || '📊 Ringkasan Monitoring';
       if (kpiTitle) {
         elements.push({
           tag: 'div',
           text: {
             tag: 'lark_md',
-            content: `📊 **${kpiTitle}**`,
+            content: `**${kpiTitle}**`,
           },
         });
       }
@@ -163,13 +166,21 @@ export class CardCompilerService {
         const kpiFields: any[] = [];
         items.forEach((item) => {
           const val = MessageTemplateEngine.render(item.valueTemplate, ctx);
-          let formattedContent = `**${item.label}**\n`;
+          // Icon HARUS di baris angka (kiri angka), bukan di baris judul -
+          // pisahkan emoji di awal label (mis. "📦 Total AWB INC") dari
+          // teksnya, lalu tempelkan ke depan nilainya.
+          const iconMatch = item.label.match(/^(\p{Extended_Pictographic}\u{FE0F}?)\s*(.*)$/u);
+          const icon = iconMatch ? iconMatch[1] : '';
+          const labelText = iconMatch ? iconMatch[2] : item.label;
+          const valueWithIcon = icon ? `${icon} ${val}` : val;
+
+          let formattedContent = `**${labelText}**\n`;
           if (item.color === 'red') {
-            formattedContent += `<font color='red'>**${val}**</font>`;
+            formattedContent += `<font color='red'>**${valueWithIcon}**</font>`;
           } else if (item.color === 'green') {
-            formattedContent += `<font color='green'>**${val}**</font>`;
+            formattedContent += `<font color='green'>**${valueWithIcon}**</font>`;
           } else {
-            formattedContent += `**${val}**`;
+            formattedContent += `**${valueWithIcon}**`;
           }
 
           kpiFields.push({
@@ -248,7 +259,7 @@ export class CardCompilerService {
       if (subdistrictItems.length > 0) {
         if (elements.length > 0) elements.push({ tag: 'hr' });
 
-        const title = config.subdistricts?.title || '📍 Kecamatan Tujuan';
+        const title = config.subdistricts?.title || '📍 Drop Point Tujuan';
         const maxLimit =
           config.subdistricts?.maxItems === '10'
             ? 10
@@ -260,12 +271,13 @@ export class CardCompilerService {
 
         const limitedItems = subdistrictItems.slice(0, maxLimit);
 
-        // Header Assignment Block
+        // Header Assignment Block - title sudah termasuk emoji-nya sendiri
+        // (default '📍 Drop Point Tujuan'), JANGAN tambah emoji lagi di sini.
         elements.push({
           tag: 'div',
           text: {
             tag: 'lark_md',
-            content: `📍 **${title}**`,
+            content: `**${title}**`,
           },
         });
 
@@ -333,6 +345,22 @@ export class CardCompilerService {
       }
     }
 
+    // 5b. BLOK TEKS BEBAS: diisi manual oleh admin saat build/edit kartu
+    // (BUKAN data otomatis dari sistem) - diposisikan tepat setelah "Drop
+    // Point Tujuan". Kosong = blok tidak dirender sama sekali, supaya tidak
+    // ada ruang kosong aneh di Feishu kalau memang tidak diisi.
+    const freeTextValue = config.freeText?.text?.trim();
+    if (config.freeText?.show !== false && freeTextValue) {
+      if (elements.length > 0) elements.push({ tag: 'hr' });
+      elements.push({
+        tag: 'div',
+        text: {
+          tag: 'lark_md',
+          content: MessageTemplateEngine.render(freeTextValue, ctx),
+        },
+      });
+    }
+
     // 6. OPERATIONAL ASSIGNMENT: 🛵 Kurir Perlu Follow Up (Monitoring Delivery)
     if (config.kurirFollowUp && config.kurirFollowUp.show) {
       const kurirItems: Array<{ name: string; count: number | string; pic?: string; openId?: string }> = [];
@@ -365,11 +393,13 @@ export class CardCompilerService {
 
         const limitedKurir = kurirItems.slice(0, maxLimit);
 
+        // title sudah termasuk emoji-nya sendiri (default '🛵 Kurir Perlu
+        // Follow Up'), JANGAN tambah emoji lagi di sini.
         elements.push({
           tag: 'div',
           text: {
             tag: 'lark_md',
-            content: `🛵 **${title}**`,
+            content: `**${title}**`,
           },
         });
 

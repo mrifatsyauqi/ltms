@@ -51,6 +51,14 @@ export interface CardSubdistrictsConfig {
   listStyle?: 'divided' | 'numbered';
 }
 
+export interface CardFreeTextConfig {
+  /** true (default) = tampil kalau `text` terisi; false = paksa sembunyi
+   *  walau `text` terisi. Teks kosong SELALU tidak tampil terlepas `show`. */
+  show?: boolean;
+  text?: string;
+  placeholder?: string;
+}
+
 export interface CardKurirFollowUpConfig {
   title: string;
   maxItems: '5' | '10' | '15' | 'all';
@@ -96,6 +104,9 @@ export interface VisualCardBlocksConfig {
   lastScan?: CardLastScanConfig;
   kpiGrid: CardKpiGridConfig;
   subdistricts?: CardSubdistrictsConfig;
+  /** Blok teks bebas, diisi manual oleh admin saat build/edit kartu (bukan
+   *  data otomatis) - diposisikan tepat setelah blok "Drop Point Tujuan". */
+  freeText?: CardFreeTextConfig;
   kurirFollowUp?: CardKurirFollowUpConfig;
   screenshot: CardScreenshotConfig;
   footer: CardFooterConfig;
