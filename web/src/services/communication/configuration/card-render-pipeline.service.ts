@@ -4,6 +4,7 @@ import { mentionService } from './mention.service';
 import { STARTER_PRESETS } from './template-presets';
 import type { VisualCardBlocksConfig } from './template.types';
 import type { MentionMappingRecord } from '@/lib/data/supabase/mention-mapping';
+import { findDpByKecamatanBatch } from '@/lib/data/supabase/drop-point-kecamatan';
 
 export interface CardRenderRequest {
   module: string;
@@ -70,7 +71,7 @@ export class CardRenderPipeline {
           });
         }
         if (subdistrictKeys.length > 0) {
-          mentionMap = await mentionService.getMentionsByKeys('kecamatan', subdistrictKeys);
+          mentionMap = await this.resolveMonitoringIncMentions(subdistrictKeys);
         }
       } else if (moduleName === 'monitoring_delivery') {
         const kurirKeys: string[] = [];
@@ -87,6 +88,60 @@ export class CardRenderPipeline {
       // Non-blocking fallback if mention database lookup fails
     }
     return mentionMap;
+  }
+
+  /**
+   * Resolusi mention Monitoring INC: setiap Kecamatan tujuan dicocokkan ke
+   * Kode DP-nya dulu (drop_point_kecamatan, satu-satunya sumber kebenaran -
+   * lihat findDpByKecamatanBatch), lalu mention diambil per-DP (scope_type
+   * 'drop_point'). Ini memastikan Kecamatan berbeda yang ditangani DP yang
+   * SAMA (mis. "Wonotunggal" & "Warungasem" sama-sama DP BGG06) selalu
+   * men-tag PIC yang SAMA, bukan dianggap tujuan terpisah.
+   *
+   * Fallback ke mention per-Kecamatan (scope_type 'kecamatan', mekanisme
+   * lama) kalau Kecamatan-nya belum terpetakan ke DP manapun, atau DP-nya
+   * belum punya PIC drop_point-scope terdaftar - supaya tidak ada mention
+   * yang hilang selama migrasi data belum 100% lengkap.
+   */
+  private static async resolveMonitoringIncMentions(
+    subdistrictKeysRaw: string[]
+  ): Promise<Map<string, MentionMappingRecord[]>> {
+    const result = new Map<string, MentionMappingRecord[]>();
+    const normalizedKeys = subdistrictKeysRaw.map((k) => k.trim().toUpperCase());
+
+    let dpByKecamatan = new Map<string, { kodeDp: string; namaDp: string }>();
+    try {
+      dpByKecamatan = await findDpByKecamatanBatch(subdistrictKeysRaw);
+    } catch {
+      // Lookup DP gagal - lanjut dgn fallback kecamatan-only di bawah (non-blocking).
+    }
+
+    const resolvedKodeDpSet = new Set<string>();
+    for (const key of normalizedKeys) {
+      const match = dpByKecamatan.get(key);
+      if (match) resolvedKodeDpSet.add(match.kodeDp);
+    }
+
+    const [dpMentionMap, kecamatanMentionMap] = await Promise.all([
+      resolvedKodeDpSet.size > 0
+        ? mentionService.getMentionsByKeys('drop_point', [...resolvedKodeDpSet])
+        : Promise.resolve(new Map<string, MentionMappingRecord[]>()),
+      mentionService.getMentionsByKeys('kecamatan', subdistrictKeysRaw),
+    ]);
+
+    for (const key of normalizedKeys) {
+      const match = dpByKecamatan.get(key);
+      if (match) {
+        const dpMentions = dpMentionMap.get(match.kodeDp.trim().toUpperCase());
+        if (dpMentions && dpMentions.length > 0) {
+          result.set(key, dpMentions);
+          continue;
+        }
+      }
+      const kecMentions = kecamatanMentionMap.get(key);
+      if (kecMentions) result.set(key, kecMentions);
+    }
+    return result;
   }
 
   public static async compile(req: CardRenderRequest): Promise<CardRenderResult> {
