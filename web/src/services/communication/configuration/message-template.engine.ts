@@ -138,7 +138,24 @@ export class MessageTemplateEngine {
       raw.total_antaran ??
       0;
 
+    const delivered =
+      raw.delivered ??
+      raw.total_arrived ??
+      raw.totalArrived ??
+      raw.totalSampai ??
+      raw.total_sampai ??
+      raw.sampai ??
+      0;
+
+    const pendingDelivery =
+      raw.pending_delivery ??
+      raw.pendingDelivery ??
+      raw.pending ??
+      0;
+
     const deliveryPercentage =
+      raw.delivery_sla ??
+      raw.deliverySla ??
       raw.delivery_percentage ??
       raw.deliveryPercentage ??
       raw.progressDelivery ??
@@ -220,8 +237,13 @@ export class MessageTemplateEngine {
       totalArrived: this.formatNumber(totalArrived),
       total_delivery: this.formatNumber(totalDelivery),
       totalDelivery: this.formatNumber(totalDelivery),
+      delivered: this.formatNumber(delivered),
+      pending_delivery: this.formatNumber(pendingDelivery),
+      pendingDelivery: this.formatNumber(pendingDelivery),
       delivery_percentage: String(deliveryPercentage),
       deliveryPercentage: String(deliveryPercentage),
+      delivery_sla: String(deliveryPercentage),
+      deliverySla: String(deliveryPercentage),
 
       // Last Scan
       last_scan_time: lastScanTime,

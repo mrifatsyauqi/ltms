@@ -763,30 +763,57 @@ export default function CardTemplatesPage() {
                         <span className="font-bold text-slate-700 block">Kolom Informasi Header</span>
                         <div className="grid grid-cols-3 gap-2 text-[11px]">
                           <div className="space-y-1">
-                            <label className="text-slate-600 block">Label Kolom 1</label>
+                            <label className="text-slate-600 flex items-center gap-1.5">
+                              <input
+                                type="checkbox"
+                                checked={formData.blocks_config.header?.showPickupDp ?? true}
+                                onChange={(e) => updateHeader({ showPickupDp: e.target.checked })}
+                                className="w-3.5 h-3.5 text-red-600 rounded border-slate-300"
+                              />
+                              <span>Label Kolom 1</span>
+                            </label>
                             <input
                               type="text"
                               value={formData.blocks_config.header?.pickupDpLabel || 'Pickup DP'}
                               onChange={(e) => updateHeader({ pickupDpLabel: e.target.value })}
-                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white"
+                              disabled={formData.blocks_config.header?.showPickupDp === false}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white disabled:opacity-40"
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-slate-600 block">Label Kolom 2</label>
+                            <label className="text-slate-600 flex items-center gap-1.5">
+                              <input
+                                type="checkbox"
+                                checked={formData.blocks_config.header?.showTargetCity ?? true}
+                                onChange={(e) => updateHeader({ showTargetCity: e.target.checked })}
+                                className="w-3.5 h-3.5 text-red-600 rounded border-slate-300"
+                              />
+                              <span>Label Kolom 2</span>
+                            </label>
                             <input
                               type="text"
                               value={formData.blocks_config.header?.targetCityLabel || 'Kota Tujuan'}
                               onChange={(e) => updateHeader({ targetCityLabel: e.target.value })}
-                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white"
+                              disabled={formData.blocks_config.header?.showTargetCity === false}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white disabled:opacity-40"
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-slate-600 block">Label Kolom 3</label>
+                            <label className="text-slate-600 flex items-center gap-1.5">
+                              <input
+                                type="checkbox"
+                                checked={formData.blocks_config.header?.showUpdate ?? true}
+                                onChange={(e) => updateHeader({ showUpdate: e.target.checked })}
+                                className="w-3.5 h-3.5 text-red-600 rounded border-slate-300"
+                              />
+                              <span>Label Kolom 3</span>
+                            </label>
                             <input
                               type="text"
                               value={formData.blocks_config.header?.updateLabel || 'Generate'}
                               onChange={(e) => updateHeader({ updateLabel: e.target.value })}
-                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white"
+                              disabled={formData.blocks_config.header?.showUpdate === false}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white disabled:opacity-40"
                             />
                           </div>
                         </div>
@@ -887,14 +914,33 @@ export default function CardTemplatesPage() {
 
                 {/* 4. Operational Assignment Section */}
                 <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
-                  <div
-                    className="flex items-center justify-between cursor-pointer"
-                    onClick={() => setOpenSections({ ...openSections, assignment: !openSections.assignment })}
-                  >
-                    <span className="font-bold text-slate-800 text-sm">
-                      Penugasan Operasional & Mention PIC
-                    </span>
-                    {openSections.assignment ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  <div className="flex items-center justify-between">
+                    <div
+                      className="flex items-center gap-2 cursor-pointer flex-1"
+                      onClick={() => setOpenSections({ ...openSections, assignment: !openSections.assignment })}
+                    >
+                      <span className="font-bold text-slate-800 text-sm">
+                        Penugasan Operasional & Mention PIC
+                      </span>
+                      {openSections.assignment ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </div>
+                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={formData.blocks_config.subdistricts?.show ?? true}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            blocks_config: {
+                              ...prev.blocks_config,
+                              subdistricts: { ...prev.blocks_config.subdistricts!, show: e.target.checked },
+                            },
+                          }))
+                        }
+                        className="w-3.5 h-3.5 text-red-600 rounded border-slate-300"
+                      />
+                      <span>Tampilkan</span>
+                    </label>
                   </div>
 
                   {openSections.assignment && (
@@ -954,6 +1000,28 @@ export default function CardTemplatesPage() {
                             <option value="all">Tampilkan Semua</option>
                           </select>
                         </div>
+                        <div className="space-y-1 col-span-2">
+                          <label className="font-semibold text-slate-700">Gaya Tampilan List</label>
+                          <select
+                            value={formData.blocks_config.subdistricts?.listStyle || 'divided'}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                blocks_config: {
+                                  ...prev.blocks_config,
+                                  subdistricts: {
+                                    ...prev.blocks_config.subdistricts!,
+                                    listStyle: e.target.value as any,
+                                  },
+                                },
+                              }))
+                            }
+                            className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium"
+                          >
+                            <option value="divided">Terpisah Garis (default)</option>
+                            <option value="numbered">Bernomor (1. Nama (jumlah) / mention di baris baru)</option>
+                          </select>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -961,12 +1029,31 @@ export default function CardTemplatesPage() {
 
                 {/* 5. Action Button & Footer Note */}
                 <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
-                  <div
-                    className="flex items-center justify-between cursor-pointer"
-                    onClick={() => setOpenSections({ ...openSections, actionButton: !openSections.actionButton })}
-                  >
-                    <span className="font-bold text-slate-800 text-sm">Tombol CTA & Catatan Kaki</span>
-                    {openSections.actionButton ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  <div className="flex items-center justify-between">
+                    <div
+                      className="flex items-center gap-2 cursor-pointer flex-1"
+                      onClick={() => setOpenSections({ ...openSections, actionButton: !openSections.actionButton })}
+                    >
+                      <span className="font-bold text-slate-800 text-sm">Tombol CTA & Catatan Kaki</span>
+                      {openSections.actionButton ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </div>
+                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={formData.blocks_config.actionButton?.enabled ?? true}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            blocks_config: {
+                              ...prev.blocks_config,
+                              actionButton: { ...prev.blocks_config.actionButton, enabled: e.target.checked },
+                            },
+                          }))
+                        }
+                        className="w-3.5 h-3.5 text-red-600 rounded border-slate-300"
+                      />
+                      <span>Tampilkan Tombol</span>
+                    </label>
                   </div>
 
                   {openSections.actionButton && (
@@ -976,6 +1063,7 @@ export default function CardTemplatesPage() {
                         <input
                           type="text"
                           value={formData.blocks_config.actionButton?.label || '🚀 Buka LTMS Dashboard'}
+                          disabled={formData.blocks_config.actionButton?.enabled === false}
                           onChange={(e) =>
                             setFormData((prev) => ({
                               ...prev,
@@ -984,12 +1072,11 @@ export default function CardTemplatesPage() {
                                 actionButton: {
                                   ...prev.blocks_config.actionButton,
                                   label: e.target.value,
-                                  enabled: true,
                                 },
                               },
                             }))
                           }
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium disabled:opacity-40"
                         />
                       </div>
                       <div className="space-y-1">

@@ -63,7 +63,7 @@ describe('Phase 2.6.2 Communication Center Single Source Compiler & Mentions', (
 
       const card = CardCompilerService.compileCard(incPreset.blocksConfig, context, 'img_test_inc_01');
 
-      assert.ok(card.header?.title?.content.includes('Monitoring INC'));
+      assert.ok(card.header?.title?.content.includes('MONITORING INC'));
       assert.equal(card.header?.template, 'red');
       assert.ok(Array.isArray(card.elements) && card.elements.length > 0);
 
@@ -140,7 +140,7 @@ describe('Phase 2.6.2 Communication Center Single Source Compiler & Mentions', (
       assert.ok(elementsStr.includes('@Rian Hidayat'));
     });
 
-    it('should compile Monitoring Delivery Assignment preset correctly', () => {
+    it('should compile Monitoring Delivery Assignment preset correctly (header, KPI grid, no assignment list)', () => {
       const deliveryPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_delivery')!;
       const context = {
         drop_point: 'BATANG01',
@@ -148,31 +148,92 @@ describe('Phase 2.6.2 Communication Center Single Source Compiler & Mentions', (
         delivered: '3.198',
         pending_delivery: '42',
         delivery_sla: '98.0',
-        last_scan_time: '08:21 WIB',
-        last_scan_awb: 'JT1234567890',
-        last_scan_status: 'Delivery',
+      };
+
+      const card = CardCompilerService.compileCard(deliveryPreset.blocksConfig, context);
+      assert.ok(card.header?.title?.content.includes('MONITORING DELIVERY'));
+      assert.ok(card.header?.title?.content.includes('BATANG01'));
+      assert.equal(card.header?.template, 'grey'); // Dark theme maps to grey header template in Feishu
+
+      const elementsStr = JSON.stringify(card.elements);
+      // KPI values resolved correctly (delivered/pending_delivery/delivery_sla)
+      assert.ok(elementsStr.includes('3.198'), 'delivered should resolve, not leak {{delivered}}');
+      assert.ok(elementsStr.includes('42'), 'pending_delivery should resolve');
+      assert.ok(elementsStr.includes('98.0%'), 'delivery_sla should resolve');
+      // Design has no assignment list, no kurir section, no action button
+      assert.equal(card.elements.find((el: any) => el.tag === 'action'), undefined);
+    });
+
+    it('should compile kurirFollowUp assignment list with per-item mentions when explicitly enabled', () => {
+      const deliveryPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_delivery')!;
+      const config: VisualCardBlocksConfig = {
+        ...deliveryPreset.blocksConfig,
+        kurirFollowUp: { ...deliveryPreset.blocksConfig.kurirFollowUp!, show: true },
+      };
+      const context = {
         kurirList: [
           { name: 'Andi Setiawan', count: '12 Paket' },
           { name: 'Rudi Hermawan', count: '8 Paket' },
         ],
       };
 
-      const card = CardCompilerService.compileCard(deliveryPreset.blocksConfig, context);
-      assert.ok(card.header?.title?.content.includes('Monitoring Delivery'));
-      assert.equal(card.header?.template, 'grey'); // Dark theme maps to grey header template in Feishu
-
+      const card = CardCompilerService.compileCard(config, context);
       const elementsStr = JSON.stringify(card.elements);
       assert.ok(elementsStr.includes('Andi Setiawan'));
       assert.ok(elementsStr.includes('Rudi Hermawan'));
     });
 
+    it('should render subdistricts as a numbered list with indented mention when listStyle is "numbered"', () => {
+      const incPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_inc')!;
+      const config: VisualCardBlocksConfig = {
+        ...incPreset.blocksConfig,
+        subdistricts: {
+          ...incPreset.blocksConfig.subdistricts!,
+          listStyle: 'numbered',
+        },
+      };
+      const context = {
+        subdistricts: [
+          { name: 'BATANG', count: '10 AWB', picName: 'Agus' },
+          { name: 'WARUNGASEM', count: '8 AWB', picName: 'Dimas' },
+        ],
+      };
+
+      const card = CardCompilerService.compileCard(config, context);
+      const elementsStr = JSON.stringify(card.elements);
+
+      assert.ok(elementsStr.includes('1. **BATANG**'), 'first row should be numbered 1.');
+      assert.ok(elementsStr.includes('2. **WARUNGASEM**'), 'second row should be numbered 2.');
+      assert.ok(!elementsStr.includes('━━━'), 'numbered style should not include dividers between rows');
+    });
+
+    it('should keep the default divided list style unchanged when listStyle is not set (backward-compat)', () => {
+      const incPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_inc')!;
+      const config: VisualCardBlocksConfig = {
+        ...incPreset.blocksConfig,
+        subdistricts: { ...incPreset.blocksConfig.subdistricts!, listStyle: undefined },
+      };
+      const context = {
+        subdistricts: [{ name: 'BATANG', count: '10 AWB', picName: 'Agus' }],
+      };
+
+      const card = CardCompilerService.compileCard(config, context);
+      const elementsStr = JSON.stringify(card.elements);
+
+      assert.ok(!elementsStr.includes('1. **BATANG**'), 'default style should not be numbered');
+    });
+
     it('should never leave an unresolved {{dashboard_url}} placeholder in the action button url (Feishu rejects non-URL strings with 400)', () => {
       const incPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_inc')!;
+      const config: VisualCardBlocksConfig = {
+        ...incPreset.blocksConfig,
+        actionButton: { ...incPreset.blocksConfig.actionButton, enabled: true },
+      };
       // dashboard_url intentionally omitted - this is the exact condition that
       // produced "Feishu Send Message HTTP Error: 400 Bad Request" in production.
       const context = { pickup_dp: 'BATANG01', target_city: 'KOTA BATANG' };
 
-      const card = CardCompilerService.compileCard(incPreset.blocksConfig, context);
+      const card = CardCompilerService.compileCard(config, context);
       const actionEl = card.elements.find((el: any) => el.tag === 'action');
       const url = actionEl?.actions?.[0]?.url;
 

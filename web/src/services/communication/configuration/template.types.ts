@@ -46,6 +46,9 @@ export interface CardSubdistrictsConfig {
   showMention?: boolean;
   mentionPrefix?: string;
   badge?: string;
+  /** 'divided' (default): rows separated by a divider. 'numbered': "1. Name (count)"
+   *  with the mention indented on the next line. */
+  listStyle?: 'divided' | 'numbered';
 }
 
 export interface CardKurirFollowUpConfig {

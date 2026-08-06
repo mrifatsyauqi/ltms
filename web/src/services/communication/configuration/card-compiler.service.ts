@@ -269,13 +269,17 @@ export class CardCompilerService {
           },
         });
 
-        // Render each Kecamatan as an Assignment Card row with Mention
+        // Render each Kecamatan as an Assignment Card row with Mention.
+        // listStyle: 'divided' (default, backward-compatible w/ existing
+        // presets) separates rows with a horizontal divider; 'numbered'
+        // renders "1. Name (count)" with the mention indented underneath.
+        const listStyle = config.subdistricts?.listStyle || 'divided';
         const rowsText = limitedItems
-          .map((item) => {
+          .map((item, idx) => {
             const kecKey = item.name.trim().toUpperCase();
 
             // Lookup mentions from map
-            let mentionTag = '';
+            let mentionText = '';
             if (config.subdistricts?.showMention !== false) {
               const prefix = config.subdistricts?.mentionPrefix || '👤';
               let mappings: MentionMappingRecord[] = [];
@@ -295,13 +299,13 @@ export class CardCompilerService {
                   }
                   return `@${m.pic_name.trim()}`;
                 });
-                mentionTag = `\n${prefix} ${mentions.join(' ')}`;
+                mentionText = `${prefix} ${mentions.join(' ')}`;
               } else if (item.openId) {
-                mentionTag = `\n${prefix} <at id="${item.openId.trim()}">${(item.pic || 'Admin DP').trim()}</at>`;
+                mentionText = `${prefix} <at id="${item.openId.trim()}">${(item.pic || 'Admin DP').trim()}</at>`;
               } else if (item.pic) {
-                mentionTag = `\n${prefix} @${item.pic.trim()}`;
+                mentionText = `${prefix} @${item.pic.trim()}`;
               } else {
-                mentionTag = `\n${prefix} @Admin DP ${item.name}`;
+                mentionText = `${prefix} @Admin DP ${item.name}`;
               }
             }
 
@@ -309,9 +313,15 @@ export class CardCompilerService {
               ? `${item.count} AWB`
               : item.count;
 
+            if (listStyle === 'numbered') {
+              const mentionLine = mentionText ? `\n     ${mentionText}` : '';
+              return `${idx + 1}. **${item.name}** (${countText})${mentionLine}`;
+            }
+
+            const mentionTag = mentionText ? `\n${mentionText}` : '';
             return `**${item.name}**\n${countText}${mentionTag}`;
           })
-          .join('\n\n━━━━━━━━━━━━━━━━━━\n\n');
+          .join(listStyle === 'numbered' ? '\n' : '\n\n━━━━━━━━━━━━━━━━━━\n\n');
 
         elements.push({
           tag: 'div',
