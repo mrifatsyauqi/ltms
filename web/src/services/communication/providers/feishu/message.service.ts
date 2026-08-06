@@ -90,8 +90,19 @@ export class FeishuMessageService implements ICommunicationProvider {
             });
 
             if (!response.ok) {
+              // Feishu still returns a JSON body with { code, msg } on non-2xx
+              // responses - read it instead of throwing away the actual reason.
+              let detail = '';
+              try {
+                const errJson = await response.json();
+                if (errJson?.msg || errJson?.code !== undefined) {
+                  detail = ` [Code ${errJson.code}]: ${errJson.msg || 'Tidak ada detail dari Feishu'}`;
+                }
+              } catch {
+                // body bukan JSON valid - lanjut tanpa detail tambahan
+              }
               throw new Error(
-                `Feishu Send Message HTTP Error: ${response.status} ${response.statusText}`
+                `Feishu Send Message HTTP Error: ${response.status} ${response.statusText}${detail}`
               );
             }
 

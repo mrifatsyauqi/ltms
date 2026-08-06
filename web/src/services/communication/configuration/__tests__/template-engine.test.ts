@@ -165,6 +165,21 @@ describe('Phase 2.6.2 Communication Center Single Source Compiler & Mentions', (
       assert.ok(elementsStr.includes('Andi Setiawan'));
       assert.ok(elementsStr.includes('Rudi Hermawan'));
     });
+
+    it('should never leave an unresolved {{dashboard_url}} placeholder in the action button url (Feishu rejects non-URL strings with 400)', () => {
+      const incPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_inc')!;
+      // dashboard_url intentionally omitted - this is the exact condition that
+      // produced "Feishu Send Message HTTP Error: 400 Bad Request" in production.
+      const context = { pickup_dp: 'BATANG01', target_city: 'KOTA BATANG' };
+
+      const card = CardCompilerService.compileCard(incPreset.blocksConfig, context);
+      const actionEl = card.elements.find((el: any) => el.tag === 'action');
+      const url = actionEl?.actions?.[0]?.url;
+
+      assert.ok(url, 'action button url should be present');
+      assert.match(url, /^https?:\/\//, `url must be a real link, got: ${url}`);
+      assert.doesNotMatch(url, /\{\{.*\}\}/, 'url must not contain an unresolved {{placeholder}}');
+    });
   });
 
   describe('Starter Presets Catalog', () => {

@@ -440,9 +440,13 @@ export class CardCompilerService {
     if (btnEnabled) {
       if (elements.length > 0) elements.push({ tag: 'hr' });
       const btnLabel = config.actionButton?.label || '🚀 Buka LTMS Dashboard';
-      const btnUrl = config.actionButton?.url
+      const renderedBtnUrl = config.actionButton?.url
         ? MessageTemplateEngine.render(config.actionButton.url, ctx)
         : (ctx.dashboard_url || appBaseUrl);
+      // render() leaves unresolved {{placeholders}} in place (e.g. dashboard_url
+      // is never provided by any caller) — Feishu rejects a non-URL string here
+      // with 400 Bad Request, so guard against ever sending one.
+      const btnUrl = /^https?:\/\//.test(renderedBtnUrl) ? renderedBtnUrl : (ctx.dashboard_url || appBaseUrl);
 
       elements.push({
         tag: 'action',
@@ -454,7 +458,7 @@ export class CardCompilerService {
               content: btnLabel,
             },
             type: config.theme === 'red' ? 'primary' : 'default',
-            url: btnUrl || appBaseUrl,
+            url: btnUrl,
           },
         ],
       });
