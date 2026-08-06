@@ -290,41 +290,6 @@ export async function setDefaultCardTemplate(id: string): Promise<boolean> {
   return !error;
 }
 
-export async function listCardTemplateVersions(
-  cardTemplateId: string
-): Promise<CardTemplateVersionRecord[]> {
-  try {
-    const supabase = db();
-    const { data, error } = await supabase
-      .from('card_template_versions')
-      .select('*')
-      .eq('card_template_id', cardTemplateId)
-      .order('created_at', { ascending: false });
-
-    if (error) return [];
-    return (data || []) as CardTemplateVersionRecord[];
-  } catch {
-    return [];
-  }
-}
-
-export async function getCardTemplateVersionById(
-  versionId: string
-): Promise<CardTemplateVersionRecord | null> {
-  try {
-    const supabase = db();
-    const { data, error } = await supabase
-      .from('card_template_versions')
-      .select('*')
-      .eq('id', versionId)
-      .single();
-
-    if (error) return null;
-    return data as CardTemplateVersionRecord;
-  } catch {
-    return null;
-  }
-}
 
 // ==========================================
 // FEISHU GROUPS CONFIGURATION

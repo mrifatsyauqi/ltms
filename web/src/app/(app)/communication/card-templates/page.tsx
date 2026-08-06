@@ -11,7 +11,6 @@ import {
   Copy,
   Archive,
   RotateCcw,
-  History,
   Sparkles,
   Layers,
   ChevronRight,
@@ -36,7 +35,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
-import type { CardTemplateRecord, CardTemplateVersionRecord, FeishuGroupConfigRecord } from '@/lib/data/supabase/communication-config';
+import type { CardTemplateRecord, FeishuGroupConfigRecord } from '@/lib/data/supabase/communication-config';
 import type { StarterPreset } from '@/services/communication/configuration/template-presets';
 import { STARTER_PRESETS, OFFICIAL_VARIABLES } from '@/services/communication/configuration/template-presets';
 import type {
@@ -111,7 +110,6 @@ export default function CardTemplatesPage() {
 
   // Modals
   const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [isVersionsOpen, setIsVersionsOpen] = useState(false);
   const [isTestSendOpen, setIsTestSendOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<CardTemplateRecord | null>(null);
 
@@ -269,41 +267,6 @@ export default function CardTemplatesPage() {
   });
 
   const handleArchive = (t: CardTemplateRecord) => archiveMut.mutate(t);
-
-  const handleOpenVersions = (t: CardTemplateRecord) => {
-    setEditingTemplate(t);
-    setIsVersionsOpen(true);
-  };
-
-  const { data: versions = [], isLoading: loadingVersions } = useQuery({
-    queryKey: ['communication-card-template-versions', editingTemplate?.id],
-    queryFn: () =>
-      commApi<CardTemplateVersionRecord[]>(
-        `/api/communication/card-templates/${editingTemplate?.id}/versions`
-      ),
-    enabled: isVersionsOpen && !!editingTemplate?.id,
-  });
-
-  const rollbackMut = useMutation({
-    mutationFn: (v: CardTemplateVersionRecord) =>
-      commApi(
-        `/api/communication/card-templates/${editingTemplate?.id}/versions/${v.id}/rollback`,
-        { method: 'POST' }
-      ),
-    onSuccess: (_data, v) => {
-      const ver = (v as any).version_number || v.version || '1.0';
-      showToast(`Berhasil rollback ke v${ver}`);
-      setIsVersionsOpen(false);
-      qc.invalidateQueries({ queryKey: TEMPLATES_KEY });
-    },
-    onError: () => showToast('Gagal rollback versi', 'error'),
-  });
-
-  const handleRollbackVersion = (v: CardTemplateVersionRecord) => {
-    const ver = (v as any).version_number || v.version || '1.0';
-    if (!confirm(`Kembalikan template ke versi v${ver}?`)) return;
-    rollbackMut.mutate(v);
-  };
 
   const sendTestMut = useMutation({
     mutationFn: (chatId: string) =>
@@ -632,14 +595,6 @@ export default function CardTemplatesPage() {
 
               <div className="pt-4 mt-2 border-t border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenVersions(t)}
-                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg text-xs"
-                    title="Riwayat Versi"
-                  >
-                    <History className="w-3.5 h-3.5" />
-                  </button>
                   <button
                     type="button"
                     onClick={() => handleToggleDefault(t)}
@@ -1175,62 +1130,6 @@ export default function CardTemplatesPage() {
         </div>
       )}
 
-      {/* Version History Modal */}
-      {isVersionsOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-5 space-y-4 border border-slate-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <History className="w-4 h-4 text-slate-700" />
-                <h3 className="text-sm font-bold text-slate-900">
-                  Riwayat Versi: {(editingTemplate as any)?.template_name || (editingTemplate as any)?.name}
-                </h3>
-              </div>
-              <button onClick={() => setIsVersionsOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-2.5 max-h-80 overflow-y-auto text-xs">
-              {loadingVersions ? (
-                <div className="p-8 text-center text-slate-400">
-                  <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-1 text-slate-300" />
-                  <span>Memuat versi...</span>
-                </div>
-              ) : versions.length === 0 ? (
-                <div className="p-6 text-center text-slate-400">Belum ada riwayat versi</div>
-              ) : (
-                versions.map((v) => (
-                  <div
-                    key={v.id}
-                    className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-slate-900">
-                          v{(v as any).version_number || v.version || '1.0'}
-                        </span>
-                        <span className="text-[11px] text-slate-500">
-                          {new Date(v.created_at).toLocaleString('id-ID')}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-600 mt-0.5">{v.note || (v as any).change_summary || 'Pembaruan template'}</p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleRollbackVersion(v)}
-                      className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold border border-slate-200 rounded-lg text-[11px]"
-                    >
-                      Rollback
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

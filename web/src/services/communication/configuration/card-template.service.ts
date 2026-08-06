@@ -7,10 +7,7 @@ import {
   archiveCardTemplate,
   restoreCardTemplate,
   setDefaultCardTemplate,
-  listCardTemplateVersions,
-  getCardTemplateVersionById,
   type CardTemplateRecord,
-  type CardTemplateVersionRecord,
   type TemplateStatus,
 } from '@/lib/data/supabase/communication-config';
 import { memoryCache } from '../utils/cache';
@@ -167,26 +164,6 @@ export class CardTemplateService {
     return copy;
   }
 
-  public async getVersions(cardTemplateId: string): Promise<CardTemplateVersionRecord[]> {
-    return listCardTemplateVersions(cardTemplateId);
-  }
-
-  /** Kembalikan blocks_config template ke isi versi lama - dicatat sbg versi
-   *  BARU (bukan menghapus riwayat), konsisten dgn semantik updateFromBlocks
-   *  yang lain (setiap perubahan blocks_config = versi baru). */
-  public async rollbackToVersion(
-    cardTemplateId: string,
-    versionId: string
-  ): Promise<CardTemplateRecord> {
-    const version = await getCardTemplateVersionById(versionId);
-    if (!version || version.card_template_id !== cardTemplateId) {
-      throw new Error('Versi template tidak ditemukan');
-    }
-    return this.updateFromBlocks(cardTemplateId, {
-      blocks_config: version.blocks_config as VisualCardBlocksConfig,
-      version_note: `Rollback ke v${version.version}`,
-    });
-  }
 }
 
 export const cardTemplateService = new CardTemplateService();
