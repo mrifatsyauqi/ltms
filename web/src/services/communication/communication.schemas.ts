@@ -106,3 +106,28 @@ export const FeishuSendMessageResponseSchema = z.object({
 });
 
 export type FeishuSendMessageValidated = z.infer<typeof FeishuSendMessageResponseSchema>;
+
+/**
+ * Schema untuk Response Batch Get ID Feishu (contact/v3/users/batch_get_id)
+ * Dipakai utk mencari Open ID (khusus scope app/bot ini) dari nomor HP/email.
+ */
+export const FeishuBatchGetIdResponseSchema = z.object({
+  code: z.number(),
+  msg: z.string().optional(),
+  data: z
+    .object({
+      user_list: z
+        .array(
+          z.object({
+            user_id: z.string().optional(),
+            mobile: z.string().optional(),
+            email: z.string().nullish(),
+          })
+        )
+        .optional()
+        .default([]),
+    })
+    .optional(),
+});
+
+export type FeishuBatchGetIdValidated = z.infer<typeof FeishuBatchGetIdResponseSchema>;

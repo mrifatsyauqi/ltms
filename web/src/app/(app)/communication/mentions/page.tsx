@@ -22,6 +22,7 @@ import {
   Building,
   Truck,
   MapPin,
+  Phone,
 } from 'lucide-react';
 import type { MentionMappingRecord, MentionScopeType } from '@/lib/data/supabase/mention-mapping';
 import { commApi } from '@/lib/communication-client';
@@ -220,6 +221,32 @@ export default function MentionMappingPage() {
     },
     onError: (err: Error) => showToast(err.message || 'Gagal mengimpor', 'error'),
   });
+
+  const lookupOpenIdMut = useMutation({
+    mutationFn: (phone: string) =>
+      commApi<{ open_id: string; mobile?: string }>('/api/communication/mentions/lookup-open-id', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      }),
+    onSuccess: (data) => {
+      setFormData((prev) => ({ ...prev, feishu_open_id: data.open_id }));
+      setValidationResult({ valid: true, status: 'valid', message: `Open ID ditemukan: ${data.open_id}` });
+      showToast('Open ID berhasil ditemukan dan diisi otomatis');
+    },
+    onError: (err: Error) => {
+      setValidationResult(null);
+      showToast(err.message || 'Nomor HP tidak ditemukan di Feishu', 'error');
+    },
+  });
+
+  const handleLookupOpenId = () => {
+    if (!formData.phone.trim()) {
+      showToast('Masukkan nomor HP terlebih dahulu', 'error');
+      return;
+    }
+    lookupOpenIdMut.mutate(formData.phone);
+  };
 
   const handleValidateOpenId = async () => {
     if (!formData.feishu_open_id.trim()) {
@@ -722,6 +749,42 @@ export default function MentionMappingPage() {
                 </div>
               </div>
 
+              {/* Nomor HP & Cari Open ID */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="font-semibold text-slate-700 block">Nomor HP (utk cari Open ID otomatis)</label>
+                  <span className="text-[10px] text-slate-400">Format bebas, cth: 081234567890</span>
+                </div>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      placeholder="081234567890"
+                      className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 font-medium"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleLookupOpenId}
+                    disabled={lookupOpenIdMut.isPending || !formData.phone.trim()}
+                    className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1 whitespace-nowrap"
+                  >
+                    {lookupOpenIdMut.isPending ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Search className="w-3.5 h-3.5" />
+                    )}
+                    <span>Cari Open ID</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Mencari Open ID resmi via Feishu Contact API berdasarkan nomor HP - hasilnya otomatis mengisi field Open ID di bawah.
+                </p>
+              </div>
+
               {/* Feishu Open ID & Validation */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
@@ -895,14 +958,27 @@ export default function MentionMappingPage() {
                 </p>
               </div>
 
+              <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-100 text-amber-900 space-y-1">
+                <span className="font-bold block">Open ID TIDAK ada di profil Feishu</span>
+                <p className="text-[11px]">
+                  Open ID bukan identitas personal - ini ID teknis yang khusus per aplikasi/bot. Membuka profil seseorang di app Feishu manapun tidak akan pernah menampilkannya.
+                </p>
+              </div>
+
               <div className="space-y-2">
-                <span className="font-bold text-slate-800 block">Langkah Mendapatkan Open ID:</span>
+                <span className="font-bold text-slate-800 block">Cara Mendapatkan Open ID (Direkomendasikan):</span>
                 <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-slate-700 pl-1">
-                  <li>Buka aplikasi Feishu Desktop atau Web.</li>
-                  <li>Buka profil PIC yang ingin di-tag.</li>
-                  <li>Atau Administrator dapat mengunduh daftar Open ID dari Feishu Admin Console &gt; Contacts &gt; Member List.</li>
-                  <li>Salin nilai Open ID (diawali dengan <code className="font-mono font-bold text-slate-900">ou_</code>) dan simpan pada form mapping di atas.</li>
+                  <li>Isi kolom <strong>Nomor HP</strong> PIC di form mapping (nomor yang terdaftar di akun Feishu-nya).</li>
+                  <li>Klik tombol <strong>&quot;Cari Open ID&quot;</strong> di sebelah kolom itu.</li>
+                  <li>Sistem mencari langsung ke Feishu (Contact API resmi) dan mengisi Open ID otomatis kalau ketemu.</li>
                 </ol>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-600 space-y-1 text-[11px]">
+                <span className="font-bold text-slate-800 block">Kalau nomor HP tidak ditemukan?</span>
+                <p>
+                  Berarti nomor itu belum terdaftar di tenant Feishu perusahaan, atau formatnya beda dengan yang tercatat di Feishu. Administrator IT bisa mengecek lewat Feishu Admin Console &gt; Contacts &gt; Member List untuk memastikan nomor yang benar.
+                </p>
               </div>
 
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-600 space-y-1 text-[11px]">
