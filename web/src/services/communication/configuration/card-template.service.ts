@@ -4,8 +4,7 @@ import {
   getDefaultCardTemplate,
   createCardTemplate,
   updateCardTemplate,
-  archiveCardTemplate,
-  restoreCardTemplate,
+  deleteCardTemplate,
   setDefaultCardTemplate,
   type CardTemplateRecord,
   type TemplateStatus,
@@ -131,14 +130,8 @@ export class CardTemplateService {
     return result;
   }
 
-  public async archive(id: string): Promise<boolean> {
-    const success = await archiveCardTemplate(id);
-    if (success) memoryCache.clear();
-    return success;
-  }
-
-  public async restore(id: string): Promise<boolean> {
-    const success = await restoreCardTemplate(id);
+  public async deletePermanently(id: string): Promise<boolean> {
+    const success = await deleteCardTemplate(id);
     if (success) memoryCache.clear();
     return success;
   }

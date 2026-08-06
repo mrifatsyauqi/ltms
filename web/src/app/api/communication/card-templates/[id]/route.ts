@@ -45,7 +45,9 @@ export async function PUT(
   }
 }
 
-/** Arsipkan (soft delete) - konsisten dgn tombol Archive di UI, BUKAN hard delete. */
+/** Hapus permanen - bukan soft-archive. card_template_versions ikut terhapus
+ *  (ON DELETE CASCADE); communication_logs tidak terpengaruh (card_json
+ *  snapshot sendiri, tidak ada foreign key ke card_templates). */
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -55,8 +57,8 @@ export async function DELETE(
 
   try {
     const { id } = await params;
-    const ok = await cardTemplateService.archive(id);
-    if (!ok) throw new ApiError('INTERNAL_ERROR', 'Gagal mengarsipkan card template');
+    const ok = await cardTemplateService.deletePermanently(id);
+    if (!ok) throw new ApiError('INTERNAL_ERROR', 'Gagal menghapus card template');
     return NextResponse.json({ ok: true, data: { id } });
   } catch (err) {
     return errorResponse(err);

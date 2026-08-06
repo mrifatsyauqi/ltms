@@ -254,21 +254,12 @@ export async function updateCardTemplate(
   return updated;
 }
 
-export async function archiveCardTemplate(id: string): Promise<boolean> {
+/** Hapus permanen - card_template_versions ikut terhapus otomatis (ON DELETE
+ *  CASCADE). communication_logs TIDAK punya foreign key ke card_templates
+ *  (menyimpan card_json snapshot sendiri), jadi History tidak terpengaruh. */
+export async function deleteCardTemplate(id: string): Promise<boolean> {
   const supabase = db();
-  const { error } = await supabase
-    .from('card_templates')
-    .update({ status: 'archived', is_default: false, updated_at: new Date().toISOString() })
-    .eq('id', id);
-  return !error;
-}
-
-export async function restoreCardTemplate(id: string): Promise<boolean> {
-  const supabase = db();
-  const { error } = await supabase
-    .from('card_templates')
-    .update({ status: 'active', updated_at: new Date().toISOString() })
-    .eq('id', id);
+  const { error } = await supabase.from('card_templates').delete().eq('id', id);
   return !error;
 }
 

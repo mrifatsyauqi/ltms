@@ -9,8 +9,6 @@ import {
   Search,
   CheckCircle2,
   Copy,
-  Archive,
-  RotateCcw,
   Sparkles,
   Layers,
   ChevronRight,
@@ -93,7 +91,7 @@ export default function CardTemplatesPage() {
 
   const { data: templates = [], isLoading: loading, refetch: refetchTemplates } = useQuery({
     queryKey: TEMPLATES_KEY,
-    queryFn: () => commApi<CardTemplateRecord[]>('/api/communication/card-templates?include_archived=true'),
+    queryFn: () => commApi<CardTemplateRecord[]>('/api/communication/card-templates'),
     staleTime: 30 * 1000,
   });
 
@@ -106,7 +104,6 @@ export default function CardTemplatesPage() {
   // Filters
   const [search, setSearch] = useState('');
   const [selectedModule, setSelectedModule] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<'active' | 'archived'>('active');
 
   // Modals
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -151,12 +148,9 @@ export default function CardTemplatesPage() {
   };
 
   const filteredTemplates = templates.filter((t) => {
-    const isArchived = t.status === 'archived';
     const name = (t as any).template_name || (t as any).name || '';
     const description = (t as any).version_note || (t as any).description || '';
 
-    if (selectedStatus === 'active' && isArchived) return false;
-    if (selectedStatus === 'archived' && !isArchived) return false;
     if (selectedModule !== 'all' && t.module !== selectedModule) return false;
     if (search.trim()) {
       const s = search.toLowerCase();
@@ -251,22 +245,21 @@ export default function CardTemplatesPage() {
 
   const handleToggleDefault = (t: CardTemplateRecord) => setDefaultMut.mutate(t);
 
-  const archiveMut = useMutation({
-    mutationFn: (t: CardTemplateRecord) => {
-      const isArchived = t.status === 'archived';
-      return isArchived
-        ? commApi(`/api/communication/card-templates/${t.id}/restore`, { method: 'POST' })
-        : commApi(`/api/communication/card-templates/${t.id}`, { method: 'DELETE' });
-    },
-    onSuccess: (_data, t) => {
-      const isArchived = t.status === 'archived';
-      showToast(isArchived ? 'Template dipulihkan' : 'Template diarsipkan');
+  const deleteMut = useMutation({
+    mutationFn: (t: CardTemplateRecord) =>
+      commApi(`/api/communication/card-templates/${t.id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      showToast('Template berhasil dihapus');
       qc.invalidateQueries({ queryKey: TEMPLATES_KEY });
     },
-    onError: () => showToast('Gagal mengubah status arsip', 'error'),
+    onError: () => showToast('Gagal menghapus template', 'error'),
   });
 
-  const handleArchive = (t: CardTemplateRecord) => archiveMut.mutate(t);
+  const handleDelete = (t: CardTemplateRecord) => {
+    const name = (t as any).template_name || (t as any).name || 'template ini';
+    if (!confirm(`Yakin hapus "${name}"? Tindakan tidak bisa dibatalkan.`)) return;
+    deleteMut.mutate(t);
+  };
 
   const sendTestMut = useMutation({
     mutationFn: (chatId: string) =>
@@ -609,11 +602,11 @@ export default function CardTemplatesPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleArchive(t)}
+                    onClick={() => handleDelete(t)}
                     className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-xs"
-                    title={t.status === 'archived' ? 'Pulihkan' : 'Arsipkan'}
+                    title="Hapus Permanen"
                   >
-                    <Archive className="w-3.5 h-3.5" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
