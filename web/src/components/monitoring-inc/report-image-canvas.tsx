@@ -36,7 +36,7 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
     return (
       <div
         ref={ref}
-        style={{ width: '1200px', minHeight: '900px', backgroundColor: '#FFFFFF' }}
+        style={{ width: 'max-content', minWidth: '1200px', minHeight: '900px', backgroundColor: '#FFFFFF' }}
         className="p-8 text-slate-900 font-sans flex flex-col justify-between"
       >
         <div>
@@ -131,31 +131,31 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
             <table className="w-full text-left text-[14px] border-collapse border border-gray-400">
               <thead className="bg-white border-b border-gray-400">
                 <tr className="text-black uppercase font-bold text-[13px] tracking-wider">
-                  <th className="py-1.5 px-3 font-bold border border-gray-400 text-center">No</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400">AWB</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400">Tempat Tujuan</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400">Nama Penerima</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400">Alamat Penerima</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400 text-right">COD</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400">Waktu TTD</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400">Maksimal TTD</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400">Waktu Upload ke Sistem</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400 text-center">Status</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap text-center">No</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">AWB</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Tempat Tujuan</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Nama Penerima</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Alamat Penerima</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap text-right">COD</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Waktu TTD</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Maksimal TTD</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Waktu Upload ke Sistem</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap text-center">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleRows.map((row, idx) => (
                   <tr key={`${row.awb}-${idx}`} className="even:bg-slate-50/50">
-                    <td className="py-1 px-3 border border-gray-400 text-center text-slate-500 font-medium">{idx + 1}</td>
-                    <td className="py-1 px-3 border border-gray-400 font-mono font-bold text-slate-900">{row.awb}</td>
-                    <td className="py-1 px-3 border border-gray-400 font-medium text-slate-800">{row.tempatTujuan}</td>
-                    <td className="py-1 px-3 border border-gray-400 text-slate-700">{row.namaPenerima}</td>
-                    <td className="py-1 px-3 border border-gray-400 text-slate-600 max-w-[200px] truncate">{row.alamatPenerima}</td>
-                    <td className="py-1 px-3 border border-gray-400 font-mono text-right text-slate-800">{formatCurrency(row.cod)}</td>
-                    <td className="py-1 px-3 border border-gray-400 font-mono text-slate-600">{row.waktuTtd || '-'}</td>
-                    <td className="py-1 px-3 border border-gray-400 font-mono text-slate-600">{row.maksimalTtd || '-'}</td>
-                    <td className="py-1 px-3 border border-gray-400 font-mono text-slate-600">{row.waktuUploadSistem || '-'}</td>
-                    <td className="py-1 px-3 border border-gray-400 text-center">
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap text-center text-slate-500 font-medium">{idx + 1}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-mono font-bold text-slate-900">{row.awb}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-medium text-slate-800">{row.tempatTujuan}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap text-slate-700">{row.namaPenerima}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap text-slate-600">{row.alamatPenerima}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-mono text-right text-slate-800">{formatCurrency(row.cod)}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-mono text-slate-600">{row.waktuTtd || '-'}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-mono text-slate-600">{row.maksimalTtd || '-'}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-mono text-slate-600">{row.waktuUploadSistem || '-'}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap text-center">
                       {row.status === 'CLEAR' && (
                         <span className="px-2 py-0.5 rounded-full text-[13px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
                           Clear TTD
