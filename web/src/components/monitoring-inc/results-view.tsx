@@ -271,9 +271,23 @@ Terima kasih.`;
       }),
     });
 
-    const json = await res.json();
-    if (!res.ok || (!json.ok && !json.success)) {
-      throw new Error(json.error || 'Gagal mengirim pesan ke API Feishu.');
+    // Respons non-2xx dari platform (mis. 413 Request Entity Too Large saat
+    // body kegedean) berupa teks biasa, bukan JSON - res.json() akan lempar
+    // SyntaxError kriptik ("Unexpected token...") kalau langsung dipanggil.
+    const rawBody = await res.text();
+    let json: any = null;
+    try {
+      json = rawBody ? JSON.parse(rawBody) : null;
+    } catch {
+      // bukan JSON - kemungkinan besar respons platform (413/502/dst)
+    }
+    if (!res.ok || !json || (!json.ok && !json.success)) {
+      throw new Error(
+        json?.error ||
+          (!json
+            ? `Gagal mengirim (${res.status} ${res.statusText || ''}). Kemungkinan gambar lampiran terlalu besar - coba lagi dengan data lebih sedikit.`
+            : 'Gagal mengirim pesan ke API Feishu.')
+      );
     }
   };
 

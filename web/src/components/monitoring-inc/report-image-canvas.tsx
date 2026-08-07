@@ -23,6 +23,16 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
       ? userDropPoint
       : `DP ${targetKota}`;
 
+    // Batas baris di SCREENSHOT (bukan tabel di layar/Ekspor Excel - itu
+    // tetap tampilkan semua baris). Tanpa batas, toPng() bisa menghasilkan
+    // gambar raksasa (data ratusan/ribuan baris x pixelRatio 2) yang base64-nya
+    // menembus limit body request platform (413 Request Entity Too Large,
+    // gagal kirim ke Feishu). 60 baris tetap jauh lebih banyak dari batas
+    // lama (8) tanpa berisiko gambar kegedean.
+    const SCREENSHOT_ROW_LIMIT = 60;
+    const visibleRows = data.slice(0, SCREENSHOT_ROW_LIMIT);
+    const hiddenRowCount = data.length - visibleRows.length;
+
     return (
       <div
         ref={ref}
@@ -127,7 +137,7 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {data.map((row, idx) => (
+                {visibleRows.map((row, idx) => (
                   <tr key={`${row.awb}-${idx}`} className="even:bg-slate-50/50">
                     <td className="py-1 px-3 font-mono font-bold text-slate-900">{row.awb}</td>
                     <td className="py-1 px-3 font-medium text-slate-800">{row.tempatTujuan}</td>
@@ -158,6 +168,11 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
                 ))}
               </tbody>
             </table>
+            {hiddenRowCount > 0 && (
+              <div className="bg-slate-50 py-1.5 px-3 text-center text-[13px] text-slate-500 font-medium border-t border-slate-200">
+                +{hiddenRowCount.toLocaleString('id-ID')} baris lainnya - lihat tabel lengkap di layar atau Ekspor Excel
+              </div>
+            )}
           </div>
         </div>
 
