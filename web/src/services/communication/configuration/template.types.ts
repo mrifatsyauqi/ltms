@@ -138,6 +138,11 @@ export interface SubdistrictItemContext {
   count: number | string;
   picName?: string;
   openId?: string;
+  /** Kode DP yang SUDAH di-resolve oleh caller (mis. dp_delivery -> Kode DP
+   *  di results-view.tsx) - kalau ada, dipakai LANGSUNG utk lookup mention
+   *  scope_type 'drop_point', tanpa menebak ulang dari `name` (yang bisa
+   *  berisi Nama DP ATAU Kecamatan mentah, keduanya ambigu di sisi server). */
+  kodeDp?: string;
 }
 
 export interface KurirItemContext {

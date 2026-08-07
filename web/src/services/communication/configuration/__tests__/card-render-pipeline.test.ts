@@ -100,4 +100,42 @@ describe('CardRenderPipeline.resolveMentionMap (monitoring_inc): pemetaan Kecama
     });
     assert.equal(mentionMap.get('WONOTUNGGAL'), undefined);
   });
+
+  it('BUG REGRESSION: baris hasil pengelompokan per DP (label = Nama DP, mis. "BATANG_UTARA") HARUS dapat mention via kodeDp eksplisit, bukan ditebak ulang dari label sbg Kecamatan', async () => {
+    // Nama DP "BATANG_UTARA" SENGAJA tidak ada di drop_point_kecamatan sama
+    // sekali (persis kasus produksi yg dilaporkan) - kalau pipeline masih
+    // menebak dari label, lookup ini akan gagal diam-diam.
+    store.set('drop_point_kecamatan', [
+      { id: 'dpk1', kode_dp: 'BGG10', kecamatan: 'BATANG' },
+      { id: 'dpk2', kode_dp: 'BGG10', kecamatan: 'BANDAR' },
+    ]);
+    store.set('master_drop_point', [{ kode_dp: 'BGG10', nama_dp: 'BATANG_UTARA' }]);
+    store.set('communication_mention_mappings', [
+      {
+        id: 'dp2',
+        scope_type: 'drop_point',
+        scope_key: 'BGG10',
+        pic_name: 'Dwi Adi Kristanto',
+        role: 'SPV Drop Point Batang Utara',
+        feishu_open_id: 'ou_dwi_bgg10',
+        feishu_user_id: null,
+        phone: null,
+        is_active: true,
+        created_at: '2026-08-01T00:00:00Z',
+        updated_at: '2026-08-01T00:00:00Z',
+      },
+    ]);
+
+    const { CardRenderPipeline } = pipeline;
+    // Persis spt buildSubdistrictBreakdown() di results-view.tsx: name = Nama
+    // DP (hasil resolve dp_delivery), kodeDp = hasil resolve yg sama.
+    const mentionMap = await CardRenderPipeline.resolveMentionMap('monitoring_inc', {
+      subdistricts: [{ name: 'BATANG_UTARA', count: '5 AWB', kodeDp: 'BGG10' }],
+    });
+
+    const mention = mentionMap.get('BATANG_UTARA');
+    assert.ok(mention && mention.length > 0, 'BATANG_UTARA harus dapat mention lewat kodeDp eksplisit (BGG10)');
+    assert.equal(mention![0].feishu_open_id, 'ou_dwi_bgg10');
+    assert.equal(mention![0].pic_name, 'Dwi Adi Kristanto');
+  });
 });

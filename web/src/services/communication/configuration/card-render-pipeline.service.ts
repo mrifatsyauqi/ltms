@@ -59,9 +59,16 @@ export class CardRenderPipeline {
     try {
       if (moduleName === 'monitoring_inc') {
         const subdistrictKeys: string[] = [];
+        // Kode DP yang SUDAH di-resolve oleh caller (mis. results-view.tsx,
+        // via dp_delivery atau Kecamatan->DP) per key - kalau ada, dipakai
+        // LANGSUNG (lihat resolveMonitoringIncMentions) tanpa menebak ulang.
+        const keyToKodeDp = new Map<string, string>();
         if (Array.isArray(data?.subdistricts)) {
           data!.subdistricts.forEach((s: any) => {
-            if (typeof s === 'object' && s.name) subdistrictKeys.push(s.name);
+            if (typeof s === 'object' && s.name) {
+              subdistrictKeys.push(s.name);
+              if (s.kodeDp) keyToKodeDp.set(String(s.name).trim().toUpperCase(), String(s.kodeDp));
+            }
           });
         } else if (data?.destination_subdistricts) {
           const lines = String(data.destination_subdistricts).split('\n');
@@ -71,7 +78,7 @@ export class CardRenderPipeline {
           });
         }
         if (subdistrictKeys.length > 0) {
-          mentionMap = await this.resolveMonitoringIncMentions(subdistrictKeys);
+          mentionMap = await this.resolveMonitoringIncMentions(subdistrictKeys, keyToKodeDp);
         }
       } else if (moduleName === 'monitoring_delivery') {
         const kurirKeys: string[] = [];
@@ -91,32 +98,43 @@ export class CardRenderPipeline {
   }
 
   /**
-   * Resolusi mention Monitoring INC: setiap Kecamatan tujuan dicocokkan ke
-   * Kode DP-nya dulu (drop_point_kecamatan, satu-satunya sumber kebenaran -
-   * lihat findDpByKecamatanBatch), lalu mention diambil per-DP (scope_type
-   * 'drop_point'). Ini memastikan Kecamatan berbeda yang ditangani DP yang
-   * SAMA (mis. "Wonotunggal" & "Warungasem" sama-sama DP BGG06) selalu
-   * men-tag PIC yang SAMA, bukan dianggap tujuan terpisah.
+   * Resolusi mention Monitoring INC, dua jalur (urutan prioritas):
    *
-   * Fallback ke mention per-Kecamatan (scope_type 'kecamatan', mekanisme
-   * lama) kalau Kecamatan-nya belum terpetakan ke DP manapun, atau DP-nya
-   * belum punya PIC drop_point-scope terdaftar - supaya tidak ada mention
-   * yang hilang selama migrasi data belum 100% lengkap.
+   * 1) Kode DP EKSPLISIT dari caller (`keyToKodeDp`, mis. results-view.tsx
+   *    yang sudah resolve dp_delivery -> Kode DP sebelum mengirim data ini) -
+   *    dipakai LANGSUNG utk lookup scope_type 'drop_point'. WAJIB jalur
+   *    utama: `s.name` bisa berisi Nama DP (BATANG_UTARA) ATAU Kecamatan
+   *    mentah (WONOTUNGGAL) - keduanya string biasa yg TIDAK BISA dibedakan
+   *    lagi di server, jadi menebak ulang dari `s.name` saja tidak reliable
+   *    (nama DP yg kebetulan sama dgn nama Kecamatan-nya "beruntung" ketemu,
+   *    yg lain diam-diam gagal & fallback ke placeholder generik - regresi
+   *    yang pernah terjadi).
+   * 2) Utk key TANPA kodeDp eksplisit (caller lama, atau baris yg gagal
+   *    resolve DP sama sekali): tetap coba cocokkan `s.name` sbg Kecamatan
+   *    lewat drop_point_kecamatan (findDpByKecamatanBatch), lalu fallback ke
+   *    mention per-Kecamatan (scope_type 'kecamatan') kalau itu pun gagal -
+   *    supaya tidak ada mention yang hilang selama migrasi data belum lengkap.
    */
   private static async resolveMonitoringIncMentions(
-    subdistrictKeysRaw: string[]
+    subdistrictKeysRaw: string[],
+    keyToKodeDp: Map<string, string> = new Map()
   ): Promise<Map<string, MentionMappingRecord[]>> {
     const result = new Map<string, MentionMappingRecord[]>();
     const normalizedKeys = subdistrictKeysRaw.map((k) => k.trim().toUpperCase());
 
+    // Key tanpa kodeDp eksplisit - jalur lama (tebak dari Kecamatan).
+    const keysNeedingGuess = subdistrictKeysRaw.filter(
+      (k) => !keyToKodeDp.has(k.trim().toUpperCase())
+    );
+
     let dpByKecamatan = new Map<string, { kodeDp: string; namaDp: string }>();
     try {
-      dpByKecamatan = await findDpByKecamatanBatch(subdistrictKeysRaw);
+      dpByKecamatan = await findDpByKecamatanBatch(keysNeedingGuess);
     } catch {
       // Lookup DP gagal - lanjut dgn fallback kecamatan-only di bawah (non-blocking).
     }
 
-    const resolvedKodeDpSet = new Set<string>();
+    const resolvedKodeDpSet = new Set<string>(keyToKodeDp.values());
     for (const key of normalizedKeys) {
       const match = dpByKecamatan.get(key);
       if (match) resolvedKodeDpSet.add(match.kodeDp);
@@ -130,9 +148,10 @@ export class CardRenderPipeline {
     ]);
 
     for (const key of normalizedKeys) {
-      const match = dpByKecamatan.get(key);
-      if (match) {
-        const dpMentions = dpMentionMap.get(match.kodeDp.trim().toUpperCase());
+      const explicitKodeDp = keyToKodeDp.get(key);
+      const kodeDp = explicitKodeDp || dpByKecamatan.get(key)?.kodeDp;
+      if (kodeDp) {
+        const dpMentions = dpMentionMap.get(kodeDp.trim().toUpperCase());
         if (dpMentions && dpMentions.length > 0) {
           result.set(key, dpMentions);
           continue;

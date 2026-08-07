@@ -83,18 +83,25 @@ export function ResultsView({
   /** Satu fungsi dipakai baik oleh Send sungguhan maupun Preview Share Dialog,
    *  supaya keduanya TIDAK PERNAH berbeda (Single Source of Truth, sama spt
    *  render pipeline kartu). Label baris = Nama DP kalau ter-resolve, kalau
-   *  tidak fallback ke nama Kecamatan mentah. */
-  function buildSubdistrictBreakdown(rows: IncRow[], limit: number): Array<{ name: string; count: string }> {
-    const countMap = new Map<string, number>();
+   *  tidak fallback ke nama Kecamatan mentah. `kodeDp` ikut disertakan per
+   *  baris (kalau ter-resolve) supaya pipeline mention di server TIDAK perlu
+   *  menebak ulang DP dari label yang ambigu (Nama DP vs Kecamatan mentah,
+   *  keduanya sama-sama string biasa dari sudut pandang server). */
+  function buildSubdistrictBreakdown(
+    rows: IncRow[],
+    limit: number
+  ): Array<{ name: string; count: string; kodeDp?: string }> {
+    const countMap = new Map<string, { count: number; kodeDp?: string }>();
     for (const r of rows) {
       const match = resolveDpForRow(r);
       const label = match ? match.namaDp : (r.tempatTujuan?.trim() || 'Lainnya');
-      countMap.set(label, (countMap.get(label) || 0) + 1);
+      const existing = countMap.get(label);
+      countMap.set(label, { count: (existing?.count || 0) + 1, kodeDp: match?.kodeDp });
     }
     return Array.from(countMap.entries())
-      .sort((a, b) => b[1] - a[1])
+      .sort((a, b) => b[1].count - a[1].count)
       .slice(0, limit)
-      .map(([name, count]) => ({ name, count: `${count} AWB` }));
+      .map(([name, v]) => ({ name, count: `${v.count} AWB`, kodeDp: v.kodeDp }));
   }
 
   // Auto Caption Generator (Clean format, WhatsApp/Feishu ready, NO dashboard links)
