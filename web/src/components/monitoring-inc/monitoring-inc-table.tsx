@@ -60,6 +60,15 @@ export function MonitoringIncTable({ data }: MonitoringIncTableProps) {
         ),
       },
       {
+        accessorKey: 'dpDelivery',
+        header: 'DP Delivery',
+        cell: (info) => (
+          <span className="font-mono text-slate-700">
+            {(info.getValue() as string) || '-'}
+          </span>
+        ),
+      },
+      {
         accessorKey: 'namaPenerima',
         header: 'Nama Penerima',
         cell: (info) => (

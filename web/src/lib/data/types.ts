@@ -8,7 +8,12 @@ import type { ManageableRole, MenuKey } from '@/lib/data/supabase/permissions';
 export type DropPointRow = {
   'Kode DP': string;
   'Nama DP': string;
+  /** Turunan dari `Kecamatan` (join ', ') - dipertahankan utk tampilan/cari
+   *  ringkas yang sudah ada. Sumber kebenaran sebenarnya adalah `Kecamatan`. */
   'Wilayah/Cabang': string;
+  /** Daftar Kecamatan terstruktur yang ditangani DP ini (tabel
+   *  drop_point_kecamatan) - satu Kecamatan cuma boleh milik 1 DP. */
+  'Kecamatan': string[];
   'Status Aktif': string;
   /** '' = belum di-assign ke Kota manapun (lihat cabang.ts). */
   'Kode Kota': string;
@@ -24,13 +29,13 @@ export type DropPointRow = {
 export type CreateDropPointInput = {
   kodeDp: string;
   namaDp: string;
-  wilayah?: string;
+  kecamatan?: string[];
   kodeKota?: string | null;
   spvDropPointUserId?: string | null;
 };
 export type UpdateDropPointInput = Partial<{
   namaDp: string;
-  wilayah: string;
+  kecamatan: string[];
   statusAktif: boolean;
   kodeKota: string | null;
   spvDropPointUserId: string | null;

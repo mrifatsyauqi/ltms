@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { MapPin, Lock } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
@@ -18,6 +19,14 @@ import { UploadedFileCard } from './uploaded-file-card';
 import { GenerateSection } from './generate-section';
 import { RecentHistoryCard } from './recent-history-card';
 import { ResultsView } from './results-view';
+import type { DropPointRow } from '@/lib/data/drop-points';
+
+async function api<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  const body = await res.json();
+  if (!body.ok) throw new Error(body.message || body.error);
+  return body.data as T;
+}
 
 interface MonitoringIncClientProps {
   userRole?: string;
@@ -49,6 +58,14 @@ export function MonitoringIncClient({
   const [generateTimestamp, setGenerateTimestamp] = useState<string>('');
   const [viewMode, setViewMode] = useState<'workflow' | 'results'>('workflow');
   const [historyList, setHistoryList] = useState<RecentUploadHistoryItem[]>([]);
+
+  // Dipakai utk disambiguasi "DP Delivery"/Kecamatan -> DP (lihat resolveDp
+  // di results-view.tsx) - jarang berubah (data master), staleTime panjang.
+  const { data: dropPoints = [] } = useQuery({
+    queryKey: ['drop-points'],
+    queryFn: () => api<DropPointRow[]>('/api/drop-points'),
+    staleTime: 5 * 60 * 1000,
+  });
 
   // 7-Day Auto Retention: Load & Cleanup expired items
   useEffect(() => {
@@ -194,6 +211,7 @@ export function MonitoringIncClient({
 
         const kotaPenerima = String(getCol('Kota Penerima', 'Kota/Kabupaten', 'Kabupaten Penerima') || '').trim();
         const tempatTujuan = String(getCol('Kecamatan Penerima', 'Kecamatan', 'Tempat Tujuan', 'Tujuan') || '').trim();
+        const dpDelivery = String(getCol('DP Delivery') || '').trim();
         const namaPenerima = String(getCol('Nama Penerima', 'Penerima') || '-').trim();
         const alamatPenerima = String(getCol('Alamat Penerima', 'Alamat') || '-').trim();
         const codRaw = getCol('Biaya COD', 'COD', 'Nilai COD') || 0;
@@ -259,6 +277,7 @@ export function MonitoringIncClient({
         mappedRows.push({
           awb,
           tempatTujuan: tempatTujuan || kotaPenerima || targetKota,
+          dpDelivery: dpDelivery || undefined,
           namaPenerima,
           alamatPenerima,
           cod,
@@ -398,6 +417,7 @@ export function MonitoringIncClient({
         onReset={() => setViewMode('workflow')}
         onTargetKotaChange={(k) => setTargetKota(k)}
         isCityLocked={isCityLocked}
+        dropPoints={dropPoints}
       />
     );
   }

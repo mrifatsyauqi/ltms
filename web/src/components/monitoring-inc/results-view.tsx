@@ -1,9 +1,9 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
-  Share2,
+  Send,
   Download,
   FileText,
   CheckCircle2,
@@ -18,7 +18,10 @@ import { toPng } from 'html-to-image';
 import { IncRow, IncStats, AVAILABLE_CITIES } from './types';
 import { MonitoringIncTable } from './monitoring-inc-table';
 import { ReportImageCanvas } from './report-image-canvas';
-import { SmartShareModal, SmartShareStage } from './smart-share-modal';
+import { FeishuShareDialog, FeishuShareStage } from './feishu-share-dialog';
+import { FeishuGroup } from '@/services/communication/communication.types';
+import type { DropPointRow } from '@/lib/data/drop-points';
+import { normalizeKecamatan } from '@/lib/kecamatan';
 
 interface ResultsViewProps {
   data: IncRow[];
@@ -29,7 +32,10 @@ interface ResultsViewProps {
   onTargetKotaChange: (city: string) => void;
   isCityLocked?: boolean;
   userDropPoint?: string;
+  dropPoints?: DropPointRow[];
 }
+
+type DpMatch = { kodeDp: string; namaDp: string };
 
 export function ResultsView({
   data,
@@ -40,15 +46,63 @@ export function ResultsView({
   onTargetKotaChange,
   isCityLocked,
   userDropPoint,
+  dropPoints = [],
 }: ResultsViewProps) {
   const hiddenCanvasRef = useRef<HTMLDivElement>(null);
 
-  // Smart Share state
-  const [isSmartShareOpen, setIsSmartShareOpen] = useState(false);
-  const [smartShareStage, setSmartShareStage] = useState<SmartShareStage>('idle');
-  const [smartShareProgress, setSmartShareProgress] = useState(0);
+  // Feishu Communication Share Dialog state
+  const [isFeishuShareOpen, setIsFeishuShareOpen] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
-  const [generatedCaption, setGeneratedCaption] = useState<string>('');
+
+  // Disambiguasi "Drop Point Tujuan": dp_delivery (dari kolom "DP Delivery"
+  // di file JMS) sbg penentu UTAMA, cocokkan thd Kode DP ATAU Nama DP -
+  // fallback ke pemetaan Kecamatan -> DP (drop_point_kecamatan, lihat Master
+  // Drop Point) kalau dp_delivery kosong. Kalau keduanya tak cocok, baris
+  // tetap dikelompokkan per Kecamatan mentah spt sekarang (TIDAK digabung ke
+  // grup DP manapun yg sudah teridentifikasi).
+  const { dpByCode, dpByKecamatan } = useMemo(() => {
+    const byCode = new Map<string, DpMatch>();
+    const byKec = new Map<string, DpMatch>();
+    for (const dp of dropPoints) {
+      const match: DpMatch = { kodeDp: dp['Kode DP'], namaDp: dp['Nama DP'] };
+      byCode.set(normalizeKecamatan(dp['Kode DP']), match);
+      byCode.set(normalizeKecamatan(dp['Nama DP']), match);
+      for (const kec of dp['Kecamatan']) byKec.set(normalizeKecamatan(kec), match);
+    }
+    return { dpByCode: byCode, dpByKecamatan: byKec };
+  }, [dropPoints]);
+
+  function resolveDpForRow(row: IncRow): DpMatch | null {
+    if (row.dpDelivery) {
+      const match = dpByCode.get(normalizeKecamatan(row.dpDelivery));
+      if (match) return match;
+    }
+    return dpByKecamatan.get(normalizeKecamatan(row.tempatTujuan)) ?? null;
+  }
+
+  /** Satu fungsi dipakai baik oleh Send sungguhan maupun Preview Share Dialog,
+   *  supaya keduanya TIDAK PERNAH berbeda (Single Source of Truth, sama spt
+   *  render pipeline kartu). Label baris = Nama DP kalau ter-resolve, kalau
+   *  tidak fallback ke nama Kecamatan mentah. `kodeDp` ikut disertakan per
+   *  baris (kalau ter-resolve) supaya pipeline mention di server TIDAK perlu
+   *  menebak ulang DP dari label yang ambigu (Nama DP vs Kecamatan mentah,
+   *  keduanya sama-sama string biasa dari sudut pandang server). */
+  function buildSubdistrictBreakdown(
+    rows: IncRow[],
+    limit: number
+  ): Array<{ name: string; count: string; kodeDp?: string }> {
+    const countMap = new Map<string, { count: number; kodeDp?: string }>();
+    for (const r of rows) {
+      const match = resolveDpForRow(r);
+      const label = match ? match.namaDp : (r.tempatTujuan?.trim() || 'Lainnya');
+      const existing = countMap.get(label);
+      countMap.set(label, { count: (existing?.count || 0) + 1, kodeDp: match?.kodeDp });
+    }
+    return Array.from(countMap.entries())
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, limit)
+      .map(([name, v]) => ({ name, count: `${v.count} AWB`, kodeDp: v.kodeDp }));
+  }
 
   // Auto Caption Generator (Clean format, WhatsApp/Feishu ready, NO dashboard links)
   const buildSmartCaption = () => {
@@ -97,79 +151,13 @@ Mohon seluruh DP segera melakukan follow up terhadap seluruh paket yang belum TT
 Terima kasih.`;
   };
 
-  // 1-Click Smart Share Handler
-  const handleSmartShare = async () => {
-    if (!hiddenCanvasRef.current || smartShareStage === 'rendering') return;
-
-    try {
-      setIsSmartShareOpen(true);
-      setSmartShareStage('preparing');
-      setSmartShareProgress(15);
-      await new Promise((r) => setTimeout(r, 200));
-
-      setSmartShareStage('generating');
-      setSmartShareProgress(35);
-      await new Promise((r) => setTimeout(r, 250));
-
-      // Render Canvas to HD Image
-      setSmartShareStage('rendering');
-      setSmartShareProgress(60);
-      const node = hiddenCanvasRef.current;
-      const dataUrl = await toPng(node, {
-        quality: 1,
-        pixelRatio: 2,
-        backgroundColor: '#FFFFFF',
-      });
-      setGeneratedImageUrl(dataUrl);
-      await new Promise((r) => setTimeout(r, 250));
-
-      // Build Caption
-      setSmartShareStage('captioning');
-      setSmartShareProgress(80);
-      const caption = buildSmartCaption();
-      setGeneratedCaption(caption);
-      await new Promise((r) => setTimeout(r, 200));
-
-      // Auto Copy Caption to Clipboard
-      setSmartShareStage('copying');
-      setSmartShareProgress(95);
-      try {
-        await navigator.clipboard.writeText(caption);
-        toast.success('✔ Caption berhasil disalin ke clipboard!', {
-          description: 'Format WhatsApp/Feishu siap dibagikan.',
-          position: 'bottom-right',
-        });
-      } catch (clipErr) {
-        console.warn('Clipboard write error:', clipErr);
-        toast.error('Gagal otomatis menyalin caption. Anda dapat menyalinnya manual di popup.');
-      }
-
-      setSmartShareProgress(100);
-      await new Promise((r) => setTimeout(r, 200));
-      setSmartShareStage('success');
-    } catch (err) {
-      console.error('Smart Share error:', err);
-      setSmartShareStage('error');
-      toast.error('Gagal memproses Smart Share.');
-    }
-  };
-
-  // Download Report PNG
-  const handleDownloadPng = () => {
-    if (!generatedImageUrl) return;
-    const link = document.createElement('a');
-    link.download = `MONITORING_INC_${targetKota}_${Date.now()}.png`;
-    link.href = generatedImageUrl;
-    link.click();
-    toast.success('Gambar laporan berhasil diunduh!');
-  };
-
   // Export Excel (.xlsx)
   const handleExportExcel = () => {
     try {
       const exportRows = data.map((row) => ({
         'AWB': row.awb,
         'Tempat Tujuan': row.tempatTujuan,
+        'DP Delivery': row.dpDelivery || '-',
         'Nama Penerima': row.namaPenerima,
         'Alamat Penerima': row.alamatPenerima,
         'COD': row.cod,
@@ -211,6 +199,98 @@ Terima kasih.`;
     }
   };
 
+  // Handler Pengiriman Laporan ke Feishu Group
+  const handleExecuteFeishuSend = async (
+    selectedGroup: FeishuGroup,
+    updateStage: (stage: FeishuShareStage, progress: number) => void,
+    selectedCardTemplateId?: string
+  ) => {
+    if (!hiddenCanvasRef.current) {
+      throw new Error('Canvas visual report belum siap dirender.');
+    }
+
+    // 1. Preparing Data
+    updateStage('preparing_data', 15);
+    await new Promise((r) => setTimeout(r, 200));
+
+    // 2. Rendering HD PNG Report (1200x900)
+    updateStage('rendering_report', 35);
+    const node = hiddenCanvasRef.current;
+    const dataUrl = await toPng(node, {
+      quality: 1,
+      pixelRatio: 2,
+      backgroundColor: '#FFFFFF',
+    });
+    setGeneratedImageUrl(dataUrl);
+    await new Promise((r) => setTimeout(r, 200));
+
+    // 3. Generating Caption & Subdistricts
+    updateStage('generating_caption', 55);
+    const caption = buildSmartCaption();
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Ekstrak Drop Point Tujuan breakdown (dp_delivery > Kecamatan->DP > Kecamatan mentah)
+    const subdistricts = buildSubdistrictBreakdown(data, 10);
+    const topKecamatan = subdistricts.map((s) => s.name);
+
+    // 4. Uploading Image to Feishu
+    updateStage('uploading_image', 75);
+    await new Promise((r) => setTimeout(r, 250));
+
+    // 5. Sending Interactive Card Message
+    updateStage('sending_message', 90);
+    const res = await fetch('/api/communication/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        channel: 'feishu',
+        chatId: selectedGroup.chatId || (selectedGroup as any).chat_id,
+        messageType: 'interactive_card',
+        cardTemplateId: selectedCardTemplateId,
+        data: {
+          module: 'monitoring_inc',
+          targetScope: {
+            type: 'kota',
+            name: targetKota,
+          },
+          targetKota,
+          pickup_dp: userDropPoint || 'BATANG01',
+          target_city: targetKota,
+          total_inc: stats.total,
+          clear_ttd: stats.clear,
+          pending_ttd: stats.belum,
+          over_sla: stats.late,
+          sla_percentage: stats.percent,
+          subdistricts,
+          topKecamatan,
+          generateTime,
+          generated_at: generateTime,
+          imageBase64: dataUrl,
+          caption,
+        },
+      }),
+    });
+
+    // Respons non-2xx dari platform (mis. 413 Request Entity Too Large saat
+    // body kegedean) berupa teks biasa, bukan JSON - res.json() akan lempar
+    // SyntaxError kriptik ("Unexpected token...") kalau langsung dipanggil.
+    const rawBody = await res.text();
+    let json: any = null;
+    try {
+      json = rawBody ? JSON.parse(rawBody) : null;
+    } catch {
+      // bukan JSON - kemungkinan besar respons platform (413/502/dst)
+    }
+    if (!res.ok || !json || (!json.ok && !json.success)) {
+      throw new Error(
+        json?.error ||
+          (!json
+            ? `Gagal mengirim (${res.status} ${res.statusText || ''}). Kemungkinan gambar lampiran terlalu besar - coba lagi dengan data lebih sedikit.`
+            : 'Gagal mengirim pesan ke API Feishu.')
+      );
+    }
+  };
+
   return (
     <div className="space-y-4 animate-in fade-in-50 duration-300">
       {/* Hidden Offscreen Canvas for Generating Crisp Formal Image */}
@@ -225,15 +305,24 @@ Terima kasih.`;
         />
       </div>
 
-      {/* Smart Share Modal */}
-      <SmartShareModal
-        isOpen={isSmartShareOpen}
-        onClose={() => setIsSmartShareOpen(false)}
-        stage={smartShareStage}
-        progress={smartShareProgress}
-        imageUrl={generatedImageUrl}
-        captionText={generatedCaption}
-        onDownload={handleDownloadPng}
+      {/* Feishu Communication Share Dialog */}
+      <FeishuShareDialog
+        isOpen={isFeishuShareOpen}
+        onClose={() => setIsFeishuShareOpen(false)}
+        targetKota={targetKota}
+        generateTime={generateTime}
+        summaryData={{
+          total: stats.total,
+          belum: stats.belum,
+          late: stats.late,
+          clear: stats.clear,
+          percent: stats.percent,
+          subdistricts: buildSubdistrictBreakdown(data, 10),
+          topKecamatan: buildSubdistrictBreakdown(data, 5).map((s) => s.name),
+        }}
+        captionPreview={buildSmartCaption()}
+        imagePreviewUrl={generatedImageUrl}
+        onExecuteSend={handleExecuteFeishuSend}
       />
 
       {/* 1. Header Bar with Integrated Action Toolbar */}
@@ -283,15 +372,14 @@ Terima kasih.`;
             )}
           </div>
 
-          {/* SMART SHARE Button (Primary 1-Click Action) */}
+          {/* KIRIM KE FEISHU Button (Primary Outbound Action, Feishu brand blue) */}
           <button
             type="button"
-            disabled={smartShareStage === 'rendering'}
-            onClick={handleSmartShare}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[6px] bg-[#E2231A] hover:bg-[#C91C15] active:scale-[0.98] text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
+            onClick={() => setIsFeishuShareOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[6px] bg-[#3370FF] hover:bg-[#2B5CD9] active:scale-[0.98] text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
           >
-            <Share2 className="size-3.5" />
-            Smart Share
+            <Send className="size-3.5" />
+            Kirim ke Feishu
           </button>
 
           {/* Export Excel */}

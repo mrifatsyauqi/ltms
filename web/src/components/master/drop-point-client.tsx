@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { TablePager } from '@/components/ui/table-pager';
 import { CopyButton } from '@/components/ui/copy-button';
+import { TagInput } from '@/components/ui/tag-input';
+import { normalizeKecamatan } from '@/lib/kecamatan';
 import {
   Dialog,
   DialogContent,
@@ -37,7 +39,7 @@ const NONE = ''; // sentinel "belum di-assign" - Kota & SPV Drop Point opsional
 type FormState = {
   kodeDp: string;
   namaDp: string;
-  wilayah: string;
+  kecamatan: string[];
   statusAktif: boolean;
   kodeKota: string;
   spvDropPointUserId: string;
@@ -45,7 +47,7 @@ type FormState = {
 const EMPTY: FormState = {
   kodeDp: '',
   namaDp: '',
-  wilayah: '',
+  kecamatan: [],
   statusAktif: true,
   kodeKota: NONE,
   spvDropPointUserId: NONE,
@@ -117,7 +119,7 @@ export function DropPointClient() {
         body: JSON.stringify({
           kodeDp: f.kodeDp.trim(),
           namaDp: f.namaDp.trim(),
-          wilayah: f.wilayah.trim(),
+          kecamatan: f.kecamatan,
           kodeKota: f.kodeKota || null,
           spvDropPointUserId: f.spvDropPointUserId || null,
         }),
@@ -137,7 +139,7 @@ export function DropPointClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           namaDp: f.namaDp.trim(),
-          wilayah: f.wilayah.trim(),
+          kecamatan: f.kecamatan,
           statusAktif: f.statusAktif,
           kodeKota: f.kodeKota || null,
           spvDropPointUserId: f.spvDropPointUserId || null,
@@ -190,14 +192,16 @@ export function DropPointClient() {
   function openCreate() {
     setEditing(null);
     setForm(EMPTY);
+    setKecamatanError(null);
     setDialogOpen(true);
   }
   function openEdit(r: DropPointRow) {
     setEditing(r);
+    setKecamatanError(null);
     setForm({
       kodeDp: r['Kode DP'],
       namaDp: r['Nama DP'],
-      wilayah: r['Wilayah/Cabang'],
+      kecamatan: r['Kecamatan'],
       statusAktif: isAktif(r['Status Aktif']),
       kodeKota: r['Kode Kota'],
       spvDropPointUserId: r['SPV Drop Point'],
@@ -212,6 +216,39 @@ export function DropPointClient() {
   const saving = createMut.isPending || updateMut.isPending;
   const canSave = editing ? form.namaDp.trim() : form.kodeDp.trim() && form.namaDp.trim();
 
+  // Peta Kecamatan -> Kode DP pemilik (dari data yang sudah dimuat) - dipakai
+  // utk memberi peringatan instan di form saat user menambah Kecamatan yang
+  // sudah dipakai DP lain, tanpa perlu round-trip ke server dulu. Validasi
+  // final tetap di backend (lihat drop-points.ts validateKecamatanConflicts).
+  const kecamatanOwnerMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of data ?? []) {
+      for (const k of r['Kecamatan']) m.set(k, r['Kode DP']);
+    }
+    return m;
+  }, [data]);
+  const [kecamatanError, setKecamatanError] = useState<string | null>(null);
+
+  function addKecamatan(raw: string) {
+    const kec = normalizeKecamatan(raw);
+    if (!kec) return;
+    if (form.kecamatan.includes(kec)) {
+      setKecamatanError(`"${kec}" sudah ada di daftar ini.`);
+      return;
+    }
+    const owner = kecamatanOwnerMap.get(kec);
+    if (owner && owner !== form.kodeDp) {
+      setKecamatanError(`"${kec}" sudah terdaftar di DP ${owner}.`);
+      return;
+    }
+    setKecamatanError(null);
+    setForm((prev) => ({ ...prev, kecamatan: [...prev.kecamatan, kec] }));
+  }
+  function removeKecamatan(kec: string) {
+    setKecamatanError(null);
+    setForm((prev) => ({ ...prev, kecamatan: prev.kecamatan.filter((k) => k !== kec) }));
+  }
+
   // WAJIB: base-ui Select butuh peta value->label eksplisit (`items`) supaya
   // trigger menampilkan label yang benar, bukan value mentah.
   const kotaItems: Record<string, string> = { [NONE]: '— Belum ada Kota —' };
@@ -223,7 +260,7 @@ export function DropPointClient() {
     <>
       <PageHeader
         title="Master Drop Point"
-        description="Kelola kode, nama, wilayah, dan status aktif Drop Point."
+        description="Kelola kode, nama, Kecamatan, dan status aktif Drop Point."
         actions={
           <Button size="sm" onClick={openCreate}>
             <Plus className="size-4" aria-hidden /> Tambah Drop Point
@@ -236,7 +273,7 @@ export function DropPointClient() {
           <div className="relative">
             <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2" aria-hidden />
             <Input
-              placeholder="Cari kode / nama / wilayah…"
+              placeholder="Cari kode / nama / kecamatan…"
               value={q}
               onChange={(e) => {
                 setQ(e.target.value);
@@ -269,7 +306,7 @@ export function DropPointClient() {
                   <tr>
                     <th className="h-8 border-b px-3 text-left font-medium">Kode DP</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Nama DP</th>
-                    <th className="h-8 border-b px-3 text-left font-medium">Wilayah/Cabang</th>
+                    <th className="h-8 border-b px-3 text-left font-medium">Kecamatan</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Kota</th>
                     <th className="h-8 border-b px-3 text-left font-medium">SPV Drop Point</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Admin DP</th>
@@ -381,8 +418,19 @@ export function DropPointClient() {
               <Input id="namaDp" value={form.namaDp} onChange={(e) => setForm({ ...form, namaDp: e.target.value })} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="wilayah">Wilayah/Cabang</Label>
-              <Input id="wilayah" value={form.wilayah} onChange={(e) => setForm({ ...form, wilayah: e.target.value })} />
+              <Label htmlFor="kecamatan">Kecamatan</Label>
+              <TagInput
+                id="kecamatan"
+                value={form.kecamatan}
+                onAdd={addKecamatan}
+                onRemove={removeKecamatan}
+                placeholder="Ketik nama Kecamatan, lalu Enter/Tambah"
+                error={kecamatanError}
+              />
+              <p className="text-muted-foreground text-[11px]">
+                Satu Kecamatan cuma boleh terdaftar di satu DP - dipakai fitur lain (mis. Monitoring INC) utk
+                mengetahui DP mana yang menangani Kecamatan tujuan tertentu.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="kodeKota">Kota</Label>

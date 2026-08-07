@@ -1,12 +1,15 @@
 import {
+  AtSign,
   Building2,
   ClipboardList,
   Clock,
   Database,
   FileClock,
+  FileText,
   History,
   LayoutDashboard,
   MessageSquareText,
+  PanelsTopLeft,
   Settings,
   ShieldCheck,
   Table2,
@@ -14,6 +17,7 @@ import {
   Upload,
   UserCog,
   UserRound,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 import { hasFullAccess } from '@/lib/roles';
@@ -64,6 +68,14 @@ export function navForRole(role: string | undefined, access: Record<MenuKey, boo
           { label: 'Import Long Tail', href: '/import', icon: Upload, menuKey: 'import_longtail' },
           { label: 'Monitoring Delivery', href: '/monitoring-delivery', icon: Truck, menuKey: 'monitoring_delivery_cabang' },
           { label: 'Monitoring INC', href: '/monitoring-inc', icon: Clock, menuKey: 'monitoring_inc' },
+        ],
+      },
+      {
+        label: 'Communication Center',
+        items: [
+          { label: 'Card Templates', href: '/communication/card-templates', icon: PanelsTopLeft },
+          { label: 'Groups', href: '/communication/groups', icon: Users },
+          { label: 'Mention Mapping', href: '/communication/mentions', icon: AtSign },
         ],
       },
       {
