@@ -183,6 +183,13 @@ export function FeishuShareDialog({
     enabled: isOpen,
     staleTime: 30 * 1000,
   });
+  // Dropdown "Desain Interactive Card" cuma boleh menampilkan template modul
+  // yang RELEVAN dgn halaman tempat dialog ini dibuka (mis. dari Monitoring
+  // INC -> jangan ikut tampilkan template Monitoring Delivery/Long Tail).
+  const moduleCardTemplates = useMemo(
+    () => cardTemplates.filter((t: any) => t.module === modKey),
+    [cardTemplates, modKey]
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -205,10 +212,10 @@ export function FeishuShareDialog({
 
   // Reactively select the default card template once the templates query resolves.
   useEffect(() => {
-    if (!isOpen || cardTemplates.length === 0 || selectedCardTemplateId) return;
-    const defCard = cardTemplates.find((t: any) => t.module === modKey && t.is_default) || cardTemplates[0];
+    if (!isOpen || moduleCardTemplates.length === 0 || selectedCardTemplateId) return;
+    const defCard = moduleCardTemplates.find((t: any) => t.is_default) || moduleCardTemplates[0];
     if (defCard) setSelectedCardTemplateId(defCard.id);
-  }, [isOpen, cardTemplates, modKey, selectedCardTemplateId]);
+  }, [isOpen, moduleCardTemplates, selectedCardTemplateId]);
 
   const syncMut = useMutation({
     mutationFn: () => commApi<FeishuGroupConfigRecord[]>('/api/communication/groups', { method: 'POST' }),
@@ -391,20 +398,18 @@ export function FeishuShareDialog({
               <LayoutTemplate className="w-3.5 h-3.5" />
               <span>2. Live Preview Card</span>
             </button>
-            {imagePreviewUrl && (
-              <button
-                type="button"
-                onClick={() => setActiveTab('preview_image')}
-                className={`px-3 py-2 font-bold rounded-xl flex items-center gap-1.5 transition-all ${
-                  activeTab === 'preview_image'
-                    ? 'bg-[#E2231A] text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <ImageIcon className="w-3.5 h-3.5" />
-                <span>3. Preview Screenshot</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setActiveTab('preview_image')}
+              className={`px-3 py-2 font-bold rounded-xl flex items-center gap-1.5 transition-all ${
+                activeTab === 'preview_image'
+                  ? 'bg-[#E2231A] text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <ImageIcon className="w-3.5 h-3.5" />
+              <span>3. Preview Screenshot</span>
+            </button>
           </div>
 
           {/* Body Content */}
@@ -449,7 +454,7 @@ export function FeishuShareDialog({
                       onChange={(e) => setSelectedCardTemplateId(e.target.value)}
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/20"
                     >
-                      {cardTemplates.map((t: any) => (
+                      {moduleCardTemplates.map((t: any) => (
                         <option key={t.id} value={t.id}>
                           {t.template_name || t.name} {t.is_default ? '★ (Default)' : ''}
                         </option>
@@ -549,13 +554,20 @@ export function FeishuShareDialog({
                 </div>
               </div>
             ) : (
-              <div className="p-2 bg-slate-950 rounded-2xl overflow-hidden flex justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={imagePreviewUrl || ''}
-                  alt="Preview Attachment"
-                  className="max-h-80 w-auto object-contain rounded-lg"
-                />
+              <div className="space-y-2">
+                <div className="p-2 bg-slate-950 rounded-2xl overflow-hidden flex justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={imagePreviewUrl || PREVIEW_MOCK_IMAGE_URL}
+                    alt="Preview Attachment"
+                    className="max-h-80 w-auto object-contain rounded-lg"
+                  />
+                </div>
+                {!imagePreviewUrl && (
+                  <p className="text-center text-[11px] text-slate-400 font-medium">
+                    Contoh tampilan - laporan sesungguhnya baru ter-render saat Anda menekan &quot;Kirim ke Feishu&quot;.
+                  </p>
+                )}
               </div>
             )}
           </div>

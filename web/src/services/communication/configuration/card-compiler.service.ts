@@ -504,12 +504,17 @@ export class CardCompilerService {
       });
     }
 
-    // 9. Footer
+    // 9. Footer - SATU field utuh (config.footer.text). Template lama yang
+    // masih menyimpan title/description terpisah (dari sebelum footer
+    // disatukan) tetap dirender benar lewat fallback di bawah.
     const showFooter = config.footer ? config.footer.show : (config.showFooter ?? true);
     if (showFooter) {
-      const footerTitle = config.footer?.title || 'Generated Automatically by LTMS';
-      const footerDesc = config.footer?.description || config.footerText || 'Long Tail Monitoring System • Real-Time Operational Reminder';
-      const footerContent = footerTitle ? `${footerTitle}\n${footerDesc}` : footerDesc;
+      let footerContent = config.footer?.text;
+      if (!footerContent) {
+        const footerTitle = config.footer?.title || 'Generated Automatically by LTMS';
+        const footerDesc = config.footer?.description || config.footerText || 'Long Tail Monitoring System • Real-Time Operational Reminder';
+        footerContent = footerTitle ? `${footerTitle}\n${footerDesc}` : footerDesc;
+      }
 
       elements.push({
         tag: 'note',

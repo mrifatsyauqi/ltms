@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import * as xlsx from 'xlsx';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
-import { Image as ImageIcon, Table2, Share2 } from 'lucide-react';
+import { Image as ImageIcon, Table2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -362,10 +362,10 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
               </Button>
               <Button
                 onClick={() => setIsFeishuShareOpen(true)}
-                className="bg-[#E2231A] hover:bg-[#B81912] text-white font-bold gap-1.5 shadow-sm"
+                className="bg-[#3370FF] hover:bg-[#2B5CD9] text-white font-bold gap-1.5 shadow-sm"
               >
-                <Share2 className="size-4" />
-                <span>Bagikan ke Feishu</span>
+                <Send className="size-4" />
+                <span>Kirim ke Feishu</span>
               </Button>
             </div>
           </CardHeader>

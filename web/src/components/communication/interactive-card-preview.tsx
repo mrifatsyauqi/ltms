@@ -219,11 +219,18 @@ export function InteractiveCardPreview({
           if (el.tag === 'note') {
             return (
               <div key={key} className="pt-2 border-t border-slate-100 text-[11px] text-slate-400 text-center space-y-0.5">
-                {(el.elements || []).map((e: any, ei: number) => (
-                  <span key={`${key}-n-${ei}`} className="block">
-                    {e.content}
-                  </span>
-                ))}
+                {(el.elements || []).map((e: any, ei: number) =>
+                  // Feishu renders \n inside plain_text as a real line break;
+                  // a raw \n inside JSX text does NOT (whitespace collapses),
+                  // so split explicitly to match how the real message looks.
+                  String(e.content ?? '')
+                    .split('\n')
+                    .map((line: string, li: number) => (
+                      <span key={`${key}-n-${ei}-${li}`} className="block">
+                        {line}
+                      </span>
+                    ))
+                )}
               </div>
             );
           }

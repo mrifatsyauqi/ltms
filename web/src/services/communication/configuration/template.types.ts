@@ -87,6 +87,15 @@ export interface CardScreenshotConfig {
 }
 
 export interface CardFooterConfig {
+  /** SATU field teks utuh (boleh multi-baris via \n), ditampilkan PERSIS
+   *  apa adanya sbg footer note kartu - menggantikan title+description lama
+   *  (dulu cuma title yg bisa diedit di Builder, description hardcode beku
+   *  sejak template dibuat). Template baru/preset WAJIB pakai field ini. */
+  text?: string;
+  /** @deprecated dipertahankan HANYA utk baca template lama yg masih
+   *  menyimpan title/description terpisah dari sebelum footer disatukan -
+   *  lihat resolveFooterText() di card-compiler.service.ts. JANGAN dipakai
+   *  utk template baru, gunakan `text`. */
   title?: string;
   description?: string;
   show: boolean;

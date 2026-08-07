@@ -256,8 +256,7 @@ export const STARTER_PRESETS: StarterPreset[] = [
         enabled: false,
       },
       footer: {
-        title: 'Generated Automatically by LTMS',
-        description: 'Long Tail Monitoring System • Real-Time Operational Reminder',
+        text: 'Generated Automatically by LTMS\nLong Tail Monitoring System • Real-Time Operational Reminder',
         show: true,
       },
     },
@@ -311,8 +310,7 @@ export const STARTER_PRESETS: StarterPreset[] = [
         enabled: false,
       },
       footer: {
-        title: 'Generated Automatically by LTMS',
-        description: 'Long Tail Monitoring System • Delivery Distribution Reminder',
+        text: 'Generated Automatically by LTMS\nLong Tail Monitoring System • Delivery Distribution Reminder',
         show: true,
       },
     },
@@ -357,8 +355,7 @@ export const STARTER_PRESETS: StarterPreset[] = [
         enabled: true,
       },
       footer: {
-        title: 'Generated Automatically by LTMS',
-        description: 'Long Tail Monitoring System • Automated Exception Dispatch',
+        text: 'Generated Automatically by LTMS\nLong Tail Monitoring System • Automated Exception Dispatch',
         show: true,
       },
     },

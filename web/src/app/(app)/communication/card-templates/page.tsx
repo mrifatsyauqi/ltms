@@ -92,6 +92,18 @@ const MOCK_PREVIEW_VARIABLES = {
 const TEMPLATES_KEY = ['communication-card-templates'];
 const GROUPS_KEY = ['communication-groups'];
 
+/** footer.text adalah sumber kebenaran (satu field utuh). Template LAMA yang
+ *  masih menyimpan title/description terpisah (dari sebelum footer
+ *  disatukan) ditampilkan sbg gabungan keduanya di sini - begitu user
+ *  mengetik apa pun, tersimpan sbg `text` tunggal ke depannya (lihat
+ *  card-compiler.service.ts utk fallback rendering yg sama persis). */
+function resolveFooterDisplayText(footer?: VisualCardBlocksConfig['footer']): string {
+  if (footer?.text) return footer.text;
+  const title = footer?.title || 'Generated Automatically by LTMS';
+  const desc = footer?.description || 'Long Tail Monitoring System • Real-Time Operational Reminder';
+  return `${title}\n${desc}`;
+}
+
 export default function CardTemplatesPage() {
   const qc = useQueryClient();
 
@@ -1145,19 +1157,22 @@ export default function CardTemplatesPage() {
                       </div>
                       <div className="space-y-1">
                         <label className="font-semibold text-slate-700">Teks Footer Note</label>
-                        <input
-                          type="text"
-                          value={formData.blocks_config.footer?.title || 'Generated Automatically by LTMS'}
+                        <p className="text-[11px] text-slate-500">
+                          Satu field utuh, ditampilkan PERSIS apa adanya di kartu (boleh lebih dari 1 baris).
+                        </p>
+                        <textarea
+                          value={resolveFooterDisplayText(formData.blocks_config.footer)}
                           onChange={(e) =>
                             setFormData((prev) => ({
                               ...prev,
                               blocks_config: {
                                 ...prev.blocks_config,
-                                footer: { ...prev.blocks_config.footer, title: e.target.value, show: true },
+                                footer: { text: e.target.value, show: true },
                               },
                             }))
                           }
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium"
+                          rows={2}
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium resize-none"
                         />
                       </div>
                     </div>

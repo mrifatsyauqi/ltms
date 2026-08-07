@@ -331,6 +331,30 @@ describe('Phase 2.6.2 Communication Center Single Source Compiler & Mentions', (
         'show:false must hide freeText even when text is non-empty'
       );
     });
+
+    it('should render footer.text VERBATIM as a single field (no more split title+description)', () => {
+      const incPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_inc')!;
+      const config: VisualCardBlocksConfig = {
+        ...incPreset.blocksConfig,
+        footer: { text: 'Baris pertama custom\nBaris kedua custom', show: true },
+      };
+      const card = CardCompilerService.compileCard(config, {});
+      const noteEl = card.elements.find((el: any) => el.tag === 'note');
+      assert.ok(noteEl, 'footer note element should exist');
+      assert.equal(noteEl.elements[0].content, 'Baris pertama custom\nBaris kedua custom');
+    });
+
+    it('should fall back to legacy title+description ONLY when footer.text is absent (old templates keep rendering)', () => {
+      const incPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_inc')!;
+      const config: VisualCardBlocksConfig = {
+        ...incPreset.blocksConfig,
+        // Simulasi template lama dari sebelum footer disatukan - tidak ada `text`.
+        footer: { title: 'Judul Lama', description: 'Deskripsi Lama', show: true },
+      };
+      const card = CardCompilerService.compileCard(config, {});
+      const noteEl = card.elements.find((el: any) => el.tag === 'note');
+      assert.equal(noteEl.elements[0].content, 'Judul Lama\nDeskripsi Lama');
+    });
   });
 
   describe('Starter Presets Catalog', () => {
