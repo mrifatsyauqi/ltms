@@ -50,6 +50,9 @@ export function ResultsView({
 }: ResultsViewProps) {
   const hiddenCanvasRef = useRef<HTMLDivElement>(null);
 
+  // Judul title bar excel-style tabel (sama formula dgn ReportImageCanvas).
+  const dpDisplayName = userDropPoint && userDropPoint !== 'SEMUA DP' ? userDropPoint : `DP ${targetKota}`;
+
   // Feishu Communication Share Dialog state
   const [isFeishuShareOpen, setIsFeishuShareOpen] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
@@ -448,7 +451,7 @@ Terima kasih.`;
       </div>
 
       {/* 3. Modern Data Table with TanStack Table Sorting */}
-      <MonitoringIncTable data={data} />
+      <MonitoringIncTable data={data} title={dpDisplayName} />
     </div>
   );
 }

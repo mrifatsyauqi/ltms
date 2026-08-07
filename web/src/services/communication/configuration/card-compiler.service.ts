@@ -290,10 +290,11 @@ export class CardCompilerService {
           .map((item, idx) => {
             const kecKey = item.name.trim().toUpperCase();
 
-            // Lookup mentions from map
+            // Lookup mentions from map - TANPA icon orang di depan tag
+            // mention (dihapus dari compiler, berlaku utk semua baris Drop
+            // Point Tujuan terlepas dari config mentionPrefix tersimpan).
             let mentionText = '';
             if (config.subdistricts?.showMention !== false) {
-              const prefix = config.subdistricts?.mentionPrefix || '👤';
               let mappings: MentionMappingRecord[] = [];
 
               if (mentionMap instanceof Map) {
@@ -311,13 +312,13 @@ export class CardCompilerService {
                   }
                   return `@${m.pic_name.trim()}`;
                 });
-                mentionText = `${prefix} ${mentions.join(' ')}`;
+                mentionText = mentions.join(' ');
               } else if (item.openId) {
-                mentionText = `${prefix} <at id="${item.openId.trim()}">${(item.pic || 'Admin DP').trim()}</at>`;
+                mentionText = `<at id="${item.openId.trim()}">${(item.pic || 'Admin DP').trim()}</at>`;
               } else if (item.pic) {
-                mentionText = `${prefix} @${item.pic.trim()}`;
+                mentionText = `@${item.pic.trim()}`;
               } else {
-                mentionText = `${prefix} @Admin DP ${item.name}`;
+                mentionText = `@Admin DP ${item.name}`;
               }
             }
 
@@ -451,18 +452,13 @@ export class CardCompilerService {
       }
     }
 
-    // 7. Lampiran Screenshot Monitoring (Offscreen Canvas Rendered)
+    // 7. Lampiran Screenshot Monitoring (Offscreen Canvas Rendered) - TANPA
+    // judul section di atas gambar (dihapus total, tidak ada toggle admin
+    // untuk ini di Card Content Builder sehingga baris judulnya dihapus
+    // sepenuhnya dari compiler, bukan cuma diubah default-nya).
     const showScreenshot = config.screenshot ? config.screenshot.show : (config.showImage ?? true);
     if (showScreenshot && imageKey) {
       if (elements.length > 0) elements.push({ tag: 'hr' });
-      const imgTitle = config.screenshot?.title || '🖼 Lampiran Monitoring';
-      elements.push({
-        tag: 'div',
-        text: {
-          tag: 'lark_md',
-          content: `**${imgTitle}**`,
-        },
-      });
       elements.push({
         tag: 'img',
         img_key: imageKey,
