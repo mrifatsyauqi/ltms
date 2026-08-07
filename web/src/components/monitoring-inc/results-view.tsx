@@ -157,6 +157,7 @@ Terima kasih.`;
       const exportRows = data.map((row) => ({
         'AWB': row.awb,
         'Tempat Tujuan': row.tempatTujuan,
+        'DP Delivery': row.dpDelivery || '-',
         'Nama Penerima': row.namaPenerima,
         'Alamat Penerima': row.alamatPenerima,
         'COD': row.cod,

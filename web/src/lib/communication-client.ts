@@ -38,6 +38,31 @@ export function compileCardPreview(req: CardPreviewRequest): Promise<CardPreview
   });
 }
 
+/**
+ * Preview-only placeholder attachment. The compile-preview endpoint never
+ * has a real Feishu-uploaded image (that only exists on the actual send
+ * path, after uploading to Feishu - see message.service.ts), so without
+ * SOME truthy imageKey, CardCompilerService silently omits the screenshot
+ * block entirely (not even a placeholder) whenever `showScreenshot` is on.
+ * Passing this mock key/url pair to compileCardPreview() + InteractiveCardPreview
+ * keeps Card Builder and Share Dialog "Live Preview Card" visually
+ * representative of what a real send will look like, without claiming to
+ * be a real report screenshot. The actual value of imageKey is otherwise
+ * unused by the preview renderer (it only reads imagePreviewUrl).
+ */
+export const PREVIEW_MOCK_IMAGE_KEY = 'preview_mock_attachment';
+export const PREVIEW_MOCK_IMAGE_URL = `data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="338" viewBox="0 0 600 338">
+    <rect width="600" height="338" fill="#0f172a"/>
+    <g fill="none" stroke="#64748b" stroke-width="2">
+      <rect x="220" y="120" width="160" height="110" rx="8"/>
+      <circle cx="255" cy="150" r="10"/>
+      <path d="M220 210 l40-40 30 30 40-50 50 60"/>
+    </g>
+    <text x="300" y="270" font-family="sans-serif" font-size="16" fill="#94a3b8" text-anchor="middle">Preview Lampiran Monitoring</text>
+  </svg>`
+)}`;
+
 /** Debounces a fast-changing value (e.g. Builder form state) so dependent
  *  effects/queries (like calling /preview) don't fire on every keystroke. */
 export function useDebouncedValue<T>(value: T, delayMs = 400): T {

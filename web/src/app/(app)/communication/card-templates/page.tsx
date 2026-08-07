@@ -42,7 +42,13 @@ import type {
   CardKpiItem,
 } from '@/services/communication/configuration/template.types';
 import { InteractiveCardPreview } from '@/components/communication/interactive-card-preview';
-import { commApi, compileCardPreview, useDebouncedValue } from '@/lib/communication-client';
+import {
+  commApi,
+  compileCardPreview,
+  useDebouncedValue,
+  PREVIEW_MOCK_IMAGE_KEY,
+  PREVIEW_MOCK_IMAGE_URL,
+} from '@/lib/communication-client';
 
 const THEMES: Array<{ id: CardTheme; name: string; bgClass: string; hex: string }> = [
   { id: 'red', name: 'J&T Red (Utama)', bgClass: 'bg-[#E2231A]', hex: '#E2231A' },
@@ -373,6 +379,10 @@ export default function CardTemplatesPage() {
         module: formData.module,
         cardConfig: debouncedBlocksConfig,
         data: MOCK_PREVIEW_VARIABLES,
+        // Preview never has a real Feishu-uploaded image (that only exists
+        // on the actual send path) - without a truthy imageKey the compiler
+        // silently omits the screenshot block entirely. See PREVIEW_MOCK_IMAGE_KEY.
+        imageKey: PREVIEW_MOCK_IMAGE_KEY,
       }),
     enabled: isEditorOpen,
     staleTime: 10 * 1000,
@@ -1179,6 +1189,7 @@ export default function CardTemplatesPage() {
                 <div className="w-full max-w-sm sticky top-0">
                   <InteractiveCardPreview
                     cardJson={previewData?.cardJson}
+                    imagePreviewUrl={PREVIEW_MOCK_IMAGE_URL}
                     loading={isCompilingPreview && !previewData}
                   />
                 </div>

@@ -29,7 +29,7 @@ import type {
 import { FeishuHistoryDialog } from './feishu-history-dialog';
 import { InteractiveCardPreview } from './interactive-card-preview';
 import type { CardTemplateRecord, FeishuGroupConfigRecord } from '@/lib/data/supabase/communication-config';
-import { commApi, compileCardPreview } from '@/lib/communication-client';
+import { commApi, compileCardPreview, PREVIEW_MOCK_IMAGE_KEY, PREVIEW_MOCK_IMAGE_URL } from '@/lib/communication-client';
 
 export type FeishuShareStage =
   | 'idle'
@@ -312,6 +312,11 @@ export function FeishuShareDialog({
         module: modKey,
         cardTemplateId: selectedCardTemplateId || undefined,
         data: previewVarContext,
+        // Live Preview Card runs before any report screenshot exists (that
+        // only happens once Send actually starts rendering) - without a
+        // truthy imageKey the compiler silently omits the screenshot block
+        // entirely. See PREVIEW_MOCK_IMAGE_KEY.
+        imageKey: PREVIEW_MOCK_IMAGE_KEY,
       }),
     enabled: isOpen && activeTab === 'preview_card',
     staleTime: 10 * 1000,
@@ -538,7 +543,7 @@ export function FeishuShareDialog({
                 <div className="w-full max-w-sm">
                   <InteractiveCardPreview
                     cardJson={sharePreviewResult?.cardJson}
-                    imagePreviewUrl={imagePreviewUrl}
+                    imagePreviewUrl={imagePreviewUrl || PREVIEW_MOCK_IMAGE_URL}
                     loading={isCompilingSharePreview && !sharePreviewResult}
                   />
                 </div>
