@@ -21,9 +21,11 @@ import { IncRow } from './types';
 
 interface MonitoringIncTableProps {
   data: IncRow[];
+  /** Judul title bar excel-style di atas tabel, mis. "BATANG01". */
+  title: string;
 }
 
-export function MonitoringIncTable({ data }: MonitoringIncTableProps) {
+export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
   // Default sort by Tempat Tujuan ascending
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'tempatTujuan', desc: false },
@@ -188,17 +190,23 @@ export function MonitoringIncTable({ data }: MonitoringIncTableProps) {
   const startIndex = totalRows === 0 ? 0 : pageIndex * pageSize + 1;
   const endIndex = Math.min((pageIndex + 1) * pageSize, totalRows);
 
+  // Warna title bar excel-style - REUSE persis dari MonitoringTable
+  // (Monitoring Delivery), jangan definisikan warna baru.
   return (
     <div className="bg-white rounded-[8px] border border-slate-200 shadow-xs overflow-hidden flex flex-col transition-all">
+      <div className="bg-[#4f6272] text-white px-3 py-2.5 text-center text-sm font-bold uppercase tracking-wide">
+        MONITORING INC {title}
+      </div>
       {/* Table Area with Sticky Header & 3-state sort */}
       <div className="overflow-x-auto overflow-y-auto max-h-[520px]">
-        <table className="w-full text-left text-xs border-collapse">
-          <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200">
+        <table className="w-full text-left text-xs border-collapse border border-gray-400">
+          <thead className="sticky top-0 z-10 bg-white border-b border-gray-400">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr
                 key={headerGroup.id}
-                className="text-slate-600 font-semibold uppercase text-[11px] tracking-wider"
+                className="text-black font-bold uppercase text-[11px] tracking-wider"
               >
+                <th className="py-2.5 px-3.5 border border-gray-400 text-center">No</th>
                 {headerGroup.headers.map((header) => {
                   const canSort = header.column.getCanSort();
                   const isSorted = header.column.getIsSorted();
@@ -207,8 +215,8 @@ export function MonitoringIncTable({ data }: MonitoringIncTableProps) {
                     <th
                       key={header.id}
                       onClick={header.column.getToggleSortingHandler()}
-                      className={`py-2.5 px-3.5 select-none transition-colors ${
-                        canSort ? 'cursor-pointer hover:bg-slate-100/80 hover:text-slate-900' : ''
+                      className={`py-2.5 px-3.5 border border-gray-400 select-none transition-colors ${
+                        canSort ? 'cursor-pointer hover:bg-slate-100/80' : ''
                       }`}
                     >
                       <div className="flex items-center gap-1.5">
@@ -231,21 +239,24 @@ export function MonitoringIncTable({ data }: MonitoringIncTableProps) {
               </tr>
             ))}
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {table.getRowModel().rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="py-8 text-center text-slate-400 font-medium">
+                <td colSpan={columns.length + 1} className="py-8 text-center text-slate-400 font-medium border border-gray-400">
                   Tidak ada data yang ditemukan
                 </td>
               </tr>
             ) : (
-              table.getRowModel().rows.map((row) => (
+              table.getRowModel().rows.map((row, idx) => (
                 <tr
                   key={row.id}
                   className="hover:bg-slate-50/70 transition-colors"
                 >
+                  <td className="py-2.5 px-3.5 border border-gray-400 text-center text-slate-500 font-medium">
+                    {startIndex + idx}
+                  </td>
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="py-2.5 px-3.5">
+                    <td key={cell.id} className="py-2.5 px-3.5 border border-gray-400">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}

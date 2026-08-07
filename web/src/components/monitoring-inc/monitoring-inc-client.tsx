@@ -245,14 +245,17 @@ export function MonitoringIncClient({
           ? rawWaktuTtd.trim()
           : 'Belum TTD';
 
-        // Kalkulasi SLA 24 Jam
+        // Kalkulasi SLA Monitoring INC: 23 jam 55 menit (1435 menit) dari
+        // Waktu Upload ke Sistem - BUKAN 24 jam genap. Ini KHUSUS Monitoring
+        // INC (parser client-side ini), tidak memengaruhi SLA Monitoring
+        // Delivery / freeze aging Long Tail yang punya logic terpisah.
         let isClear = false;
         let isLate = false;
         let maksimalTtdStr = '-';
         let slaHoursVal: number | null = null;
 
         if (parsedInput) {
-          const deadline = new Date(parsedInput.date.getTime() + 24 * 60 * 60 * 1000);
+          const deadline = new Date(parsedInput.date.getTime() + (23 * 60 + 55) * 60 * 1000);
           const hh = String(deadline.getHours()).padStart(2, '0');
           const mm = String(deadline.getMinutes()).padStart(2, '0');
           const ss = String(deadline.getSeconds()).padStart(2, '0');

@@ -117,37 +117,45 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
             </div>
           </div>
 
-          {/* 3. Tabel penuh semua AWB - GANTI blok "Drop Point Tujuan"/breakdown
-              Kecamatan yang dulu ada di sini (blok itu TETAP ADA di kartu
-              Interactive Feishu yang dikirim, cuma dihapus dari versi
-              gambar/screenshot ini). Font +30%, padding baris dirapatkan. */}
-          <div className="rounded-[8px] border border-slate-200 overflow-hidden shadow-2xs">
-            <table className="w-full text-left text-[14px] border-collapse">
-              <thead className="bg-slate-100 border-b border-slate-200">
-                <tr className="text-slate-700 uppercase font-bold text-[13px] tracking-wider">
-                  <th className="py-1.5 px-3 font-bold">AWB</th>
-                  <th className="py-1.5 px-3 font-bold">Tempat Tujuan</th>
-                  <th className="py-1.5 px-3 font-bold">Nama Penerima</th>
-                  <th className="py-1.5 px-3 font-bold">Alamat Penerima</th>
-                  <th className="py-1.5 px-3 font-bold text-right">COD</th>
-                  <th className="py-1.5 px-3 font-bold">Waktu TTD</th>
-                  <th className="py-1.5 px-3 font-bold">Maksimal TTD</th>
-                  <th className="py-1.5 px-3 font-bold">Waktu Upload ke Sistem</th>
-                  <th className="py-1.5 px-3 font-bold text-center">Status</th>
+          {/* 3. Tabel penuh semua AWB, gaya Excel - REUSE title bar & grid
+              style persis dari MonitoringTable (Monitoring Delivery), sama
+              dgn tabel on-screen (monitoring-inc-table.tsx). GANTI blok
+              "Drop Point Tujuan"/breakdown Kecamatan yang dulu ada di sini
+              (blok itu TETAP ADA di kartu Interactive Feishu yang dikirim,
+              cuma dihapus dari versi gambar/screenshot ini). Font +30%,
+              padding baris dirapatkan. */}
+          <div className="rounded-[8px] border border-gray-400 overflow-hidden shadow-2xs">
+            <div className="bg-[#4f6272] text-white px-3 py-2 text-center text-[15px] font-bold uppercase tracking-wide">
+              Monitoring INC {dpDisplayName}
+            </div>
+            <table className="w-full text-left text-[14px] border-collapse border border-gray-400">
+              <thead className="bg-white border-b border-gray-400">
+                <tr className="text-black uppercase font-bold text-[13px] tracking-wider">
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 text-center">No</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400">AWB</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400">Tempat Tujuan</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400">Nama Penerima</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400">Alamat Penerima</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 text-right">COD</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400">Waktu TTD</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400">Maksimal TTD</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400">Waktu Upload ke Sistem</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 text-center">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {visibleRows.map((row, idx) => (
                   <tr key={`${row.awb}-${idx}`} className="even:bg-slate-50/50">
-                    <td className="py-1 px-3 font-mono font-bold text-slate-900">{row.awb}</td>
-                    <td className="py-1 px-3 font-medium text-slate-800">{row.tempatTujuan}</td>
-                    <td className="py-1 px-3 text-slate-700">{row.namaPenerima}</td>
-                    <td className="py-1 px-3 text-slate-600 max-w-[200px] truncate">{row.alamatPenerima}</td>
-                    <td className="py-1 px-3 font-mono text-right text-slate-800">{formatCurrency(row.cod)}</td>
-                    <td className="py-1 px-3 font-mono text-slate-600">{row.waktuTtd || '-'}</td>
-                    <td className="py-1 px-3 font-mono text-slate-600">{row.maksimalTtd || '-'}</td>
-                    <td className="py-1 px-3 font-mono text-slate-600">{row.waktuUploadSistem || '-'}</td>
-                    <td className="py-1 px-3 text-center">
+                    <td className="py-1 px-3 border border-gray-400 text-center text-slate-500 font-medium">{idx + 1}</td>
+                    <td className="py-1 px-3 border border-gray-400 font-mono font-bold text-slate-900">{row.awb}</td>
+                    <td className="py-1 px-3 border border-gray-400 font-medium text-slate-800">{row.tempatTujuan}</td>
+                    <td className="py-1 px-3 border border-gray-400 text-slate-700">{row.namaPenerima}</td>
+                    <td className="py-1 px-3 border border-gray-400 text-slate-600 max-w-[200px] truncate">{row.alamatPenerima}</td>
+                    <td className="py-1 px-3 border border-gray-400 font-mono text-right text-slate-800">{formatCurrency(row.cod)}</td>
+                    <td className="py-1 px-3 border border-gray-400 font-mono text-slate-600">{row.waktuTtd || '-'}</td>
+                    <td className="py-1 px-3 border border-gray-400 font-mono text-slate-600">{row.maksimalTtd || '-'}</td>
+                    <td className="py-1 px-3 border border-gray-400 font-mono text-slate-600">{row.waktuUploadSistem || '-'}</td>
+                    <td className="py-1 px-3 border border-gray-400 text-center">
                       {row.status === 'CLEAR' && (
                         <span className="px-2 py-0.5 rounded-full text-[13px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
                           Clear TTD
@@ -169,7 +177,7 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
               </tbody>
             </table>
             {hiddenRowCount > 0 && (
-              <div className="bg-slate-50 py-1.5 px-3 text-center text-[13px] text-slate-500 font-medium border-t border-slate-200">
+              <div className="bg-slate-50 py-1.5 px-3 text-center text-[13px] text-slate-500 font-medium border-t border-gray-400">
                 +{hiddenRowCount.toLocaleString('id-ID')} baris lainnya - lihat tabel lengkap di layar atau Ekspor Excel
               </div>
             )}

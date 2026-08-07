@@ -237,7 +237,6 @@ export const STARTER_PRESETS: StarterPreset[] = [
         sortOrder: 'desc',
         show: true,
         showMention: true,
-        mentionPrefix: '👤',
         listStyle: 'numbered',
       },
       freeText: {
