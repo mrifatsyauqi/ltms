@@ -8,12 +8,11 @@ interface ReportImageCanvasProps {
   data: IncRow[];
   stats: IncStats;
   targetKota: string;
-  generateTime: string;
   userDropPoint?: string;
 }
 
 export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasProps>(
-  ({ data, stats, targetKota, generateTime, userDropPoint }, ref) => {
+  ({ data, stats, targetKota, userDropPoint }, ref) => {
     const formatCurrency = (val: number) => {
       if (!val || val === 0) return '0';
       return new Intl.NumberFormat('id-ID').format(val);
@@ -36,13 +35,14 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
     return (
       <div
         ref={ref}
-        style={{ width: 'max-content', minWidth: '1200px', minHeight: '900px', backgroundColor: '#FFFFFF' }}
-        className="p-8 text-slate-900 font-sans flex flex-col justify-between"
+        style={{ width: 'max-content', minWidth: '1200px', backgroundColor: '#FFFFFF' }}
+        className="p-8 text-slate-900 font-sans"
       >
         <div>
           {/* 1. 4 KPI Summary Cards Grid - elemen paling atas gambar (logo +
-              judul enterprise header dihapus; Waktu Generate dipindah ke
-              footer, lihat bawah). */}
+              judul enterprise header + footer dihapus). Tinggi kanvas TIDAK
+              dipaksa minHeight lagi - selalu mengikuti tinggi konten asli
+              (KPI + tabel), tanpa space kosong di bawah. */}
           <div className="grid grid-cols-4 gap-3.5 mb-6">
             {/* Card 1: Total Resi */}
             <div className="bg-slate-50/80 rounded-[8px] p-4 border border-slate-200 flex items-center gap-3.5 shadow-2xs">
@@ -158,12 +158,6 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
               </div>
             )}
           </div>
-        </div>
-
-        {/* Footer info in graphic */}
-        <div className="pt-4 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-400 font-medium">
-          <span>LTMS Enterprise • Logistics Task & Monitoring System</span>
-          <span>Waktu Generate: {generateTime}</span>
         </div>
       </div>
     );
