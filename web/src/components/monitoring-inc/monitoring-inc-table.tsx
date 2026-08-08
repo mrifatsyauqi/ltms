@@ -74,10 +74,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
         accessorKey: 'namaPenerima',
         header: 'Nama Penerima',
         cell: (info) => (
-          <span
-            className="text-slate-700 max-w-[140px] truncate block"
-            title={(info.getValue() as string) || '-'}
-          >
+          <span className="text-slate-700">
             {(info.getValue() as string) || '-'}
           </span>
         ),
@@ -86,10 +83,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
         accessorKey: 'alamatPenerima',
         header: 'Alamat Penerima',
         cell: (info) => (
-          <span
-            className="text-slate-600 max-w-[200px] truncate block"
-            title={(info.getValue() as string) || '-'}
-          >
+          <span className="text-slate-600">
             {(info.getValue() as string) || '-'}
           </span>
         ),
@@ -197,7 +191,10 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
       <div className="bg-[#4f6272] text-white px-3 py-2.5 text-center text-sm font-bold uppercase tracking-wide">
         MONITORING INC {title}
       </div>
-      {/* Table Area with Sticky Header & 3-state sort */}
+      {/* Table Area with Sticky Header & 3-state sort - whitespace-nowrap di
+          setiap sel supaya kolom melebar sesuai isi konten (tidak ada teks
+          yang terpotong jadi 2 baris); overflow-x-auto di wrapper menangani
+          scroll horizontal kalau total lebar tabel > lebar container. */}
       <div className="overflow-x-auto overflow-y-auto max-h-[520px]">
         <table className="w-full text-left text-xs border-collapse border border-gray-400">
           <thead className="sticky top-0 z-10 bg-white border-b border-gray-400">
@@ -206,7 +203,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
                 key={headerGroup.id}
                 className="text-black font-bold uppercase text-[11px] tracking-wider"
               >
-                <th className="py-2.5 px-3.5 border border-gray-400 text-center">No</th>
+                <th className="py-2.5 px-3.5 border border-gray-400 text-center whitespace-nowrap">No</th>
                 {headerGroup.headers.map((header) => {
                   const canSort = header.column.getCanSort();
                   const isSorted = header.column.getIsSorted();
@@ -215,7 +212,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
                     <th
                       key={header.id}
                       onClick={header.column.getToggleSortingHandler()}
-                      className={`py-2.5 px-3.5 border border-gray-400 select-none transition-colors ${
+                      className={`py-2.5 px-3.5 border border-gray-400 whitespace-nowrap select-none transition-colors ${
                         canSort ? 'cursor-pointer hover:bg-slate-100/80' : ''
                       }`}
                     >
@@ -252,11 +249,11 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
                   key={row.id}
                   className="hover:bg-slate-50/70 transition-colors"
                 >
-                  <td className="py-2.5 px-3.5 border border-gray-400 text-center text-slate-500 font-medium">
+                  <td className="py-2.5 px-3.5 border border-gray-400 whitespace-nowrap text-center text-slate-500 font-medium">
                     {startIndex + idx}
                   </td>
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="py-2.5 px-3.5 border border-gray-400">
+                    <td key={cell.id} className="py-2.5 px-3.5 border border-gray-400 whitespace-nowrap">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}

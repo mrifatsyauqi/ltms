@@ -303,7 +303,6 @@ Terima kasih.`;
           data={data}
           stats={stats}
           targetKota={targetKota}
-          generateTime={generateTime}
           userDropPoint={userDropPoint}
         />
       </div>

@@ -8,12 +8,11 @@ interface ReportImageCanvasProps {
   data: IncRow[];
   stats: IncStats;
   targetKota: string;
-  generateTime: string;
   userDropPoint?: string;
 }
 
 export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasProps>(
-  ({ data, stats, targetKota, generateTime, userDropPoint }, ref) => {
+  ({ data, stats, targetKota, userDropPoint }, ref) => {
     const formatCurrency = (val: number) => {
       if (!val || val === 0) return '0';
       return new Intl.NumberFormat('id-ID').format(val);
@@ -36,37 +35,14 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
     return (
       <div
         ref={ref}
-        style={{ width: '1200px', minHeight: '900px', backgroundColor: '#FFFFFF' }}
-        className="p-8 text-slate-900 font-sans flex flex-col justify-between"
+        style={{ width: 'max-content', minWidth: '1200px', backgroundColor: '#FFFFFF' }}
+        className="p-8 text-slate-900 font-sans"
       >
         <div>
-          {/* 1. Modern Enterprise Header */}
-          <div className="flex items-center justify-between border-b border-slate-200 pb-5 mb-6">
-            <div className="flex items-center gap-3.5">
-              <div className="size-11 rounded-[8px] bg-[#E2231A] text-white flex items-center justify-center font-black text-lg shadow-sm">
-                LT
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-slate-900 uppercase">
-                  Monitoring INC {dpDisplayName}
-                </h1>
-                <p className="text-xs font-medium text-slate-500 mt-0.5">
-                  {targetKota} • Last Mile Delivery Logistics
-                </p>
-              </div>
-            </div>
-
-            <div className="text-right">
-              <span className="inline-block text-[11px] uppercase font-bold text-slate-400 tracking-wider">
-                Waktu Generate
-              </span>
-              <p className="text-sm font-bold text-slate-800 font-mono mt-0.5">
-                {generateTime}
-              </p>
-            </div>
-          </div>
-
-          {/* 2. 4 KPI Summary Cards Grid */}
+          {/* 1. 4 KPI Summary Cards Grid - elemen paling atas gambar (logo +
+              judul enterprise header + footer dihapus). Tinggi kanvas TIDAK
+              dipaksa minHeight lagi - selalu mengikuti tinggi konten asli
+              (KPI + tabel), tanpa space kosong di bawah. */}
           <div className="grid grid-cols-4 gap-3.5 mb-6">
             {/* Card 1: Total Resi */}
             <div className="bg-slate-50/80 rounded-[8px] p-4 border border-slate-200 flex items-center gap-3.5 shadow-2xs">
@@ -131,31 +107,31 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
             <table className="w-full text-left text-[14px] border-collapse border border-gray-400">
               <thead className="bg-white border-b border-gray-400">
                 <tr className="text-black uppercase font-bold text-[13px] tracking-wider">
-                  <th className="py-1.5 px-3 font-bold border border-gray-400 text-center">No</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400">AWB</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400">Tempat Tujuan</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400">Nama Penerima</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400">Alamat Penerima</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400 text-right">COD</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400">Waktu TTD</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400">Maksimal TTD</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400">Waktu Upload ke Sistem</th>
-                  <th className="py-1.5 px-3 font-bold border border-gray-400 text-center">Status</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap text-center">No</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">AWB</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Tempat Tujuan</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Nama Penerima</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Alamat Penerima</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap text-right">COD</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Waktu TTD</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Maksimal TTD</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Waktu Upload ke Sistem</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap text-center">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleRows.map((row, idx) => (
                   <tr key={`${row.awb}-${idx}`} className="even:bg-slate-50/50">
-                    <td className="py-1 px-3 border border-gray-400 text-center text-slate-500 font-medium">{idx + 1}</td>
-                    <td className="py-1 px-3 border border-gray-400 font-mono font-bold text-slate-900">{row.awb}</td>
-                    <td className="py-1 px-3 border border-gray-400 font-medium text-slate-800">{row.tempatTujuan}</td>
-                    <td className="py-1 px-3 border border-gray-400 text-slate-700">{row.namaPenerima}</td>
-                    <td className="py-1 px-3 border border-gray-400 text-slate-600 max-w-[200px] truncate">{row.alamatPenerima}</td>
-                    <td className="py-1 px-3 border border-gray-400 font-mono text-right text-slate-800">{formatCurrency(row.cod)}</td>
-                    <td className="py-1 px-3 border border-gray-400 font-mono text-slate-600">{row.waktuTtd || '-'}</td>
-                    <td className="py-1 px-3 border border-gray-400 font-mono text-slate-600">{row.maksimalTtd || '-'}</td>
-                    <td className="py-1 px-3 border border-gray-400 font-mono text-slate-600">{row.waktuUploadSistem || '-'}</td>
-                    <td className="py-1 px-3 border border-gray-400 text-center">
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap text-center text-slate-500 font-medium">{idx + 1}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-mono font-bold text-slate-900">{row.awb}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-medium text-slate-800">{row.tempatTujuan}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap text-slate-700">{row.namaPenerima}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap text-slate-600">{row.alamatPenerima}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-mono text-right text-slate-800">{formatCurrency(row.cod)}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-mono text-slate-600">{row.waktuTtd || '-'}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-mono text-slate-600">{row.maksimalTtd || '-'}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-mono text-slate-600">{row.waktuUploadSistem || '-'}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap text-center">
                       {row.status === 'CLEAR' && (
                         <span className="px-2 py-0.5 rounded-full text-[13px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
                           Clear TTD
@@ -182,12 +158,6 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
               </div>
             )}
           </div>
-        </div>
-
-        {/* Footer info in graphic */}
-        <div className="pt-4 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-400 font-medium">
-          <span>LTMS Enterprise • Logistics Task & Monitoring System</span>
-          <span>Target Kota: {targetKota}</span>
         </div>
       </div>
     );
