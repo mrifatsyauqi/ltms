@@ -40,33 +40,9 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
         className="p-8 text-slate-900 font-sans flex flex-col justify-between"
       >
         <div>
-          {/* 1. Modern Enterprise Header */}
-          <div className="flex items-center justify-between border-b border-slate-200 pb-5 mb-6">
-            <div className="flex items-center gap-3.5">
-              <div className="size-11 rounded-[8px] bg-[#E2231A] text-white flex items-center justify-center font-black text-lg shadow-sm">
-                LT
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-slate-900 uppercase">
-                  Monitoring INC {dpDisplayName}
-                </h1>
-                <p className="text-xs font-medium text-slate-500 mt-0.5">
-                  {targetKota} • Last Mile Delivery Logistics
-                </p>
-              </div>
-            </div>
-
-            <div className="text-right">
-              <span className="inline-block text-[11px] uppercase font-bold text-slate-400 tracking-wider">
-                Waktu Generate
-              </span>
-              <p className="text-sm font-bold text-slate-800 font-mono mt-0.5">
-                {generateTime}
-              </p>
-            </div>
-          </div>
-
-          {/* 2. 4 KPI Summary Cards Grid */}
+          {/* 1. 4 KPI Summary Cards Grid - elemen paling atas gambar (logo +
+              judul enterprise header dihapus; Waktu Generate dipindah ke
+              footer, lihat bawah). */}
           <div className="grid grid-cols-4 gap-3.5 mb-6">
             {/* Card 1: Total Resi */}
             <div className="bg-slate-50/80 rounded-[8px] p-4 border border-slate-200 flex items-center gap-3.5 shadow-2xs">
@@ -187,7 +163,7 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
         {/* Footer info in graphic */}
         <div className="pt-4 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-400 font-medium">
           <span>LTMS Enterprise • Logistics Task & Monitoring System</span>
-          <span>Target Kota: {targetKota}</span>
+          <span>Waktu Generate: {generateTime}</span>
         </div>
       </div>
     );
