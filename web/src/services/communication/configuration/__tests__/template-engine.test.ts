@@ -140,6 +140,89 @@ describe('Phase 2.6.2 Communication Center Single Source Compiler & Mentions', (
       assert.ok(elementsStr.includes('@Rian Hidayat'));
     });
 
+    it('should NOT mention a Drop Point whose hasPending is false (all AWB already Clear TTD), but still list the row', () => {
+      const incPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_inc')!;
+      const context = {
+        pickup_dp: 'BATANG01',
+        target_city: 'KOTA BATANG',
+        subdistricts: [
+          { name: 'BATANG', count: '10 AWB', hasPending: true },
+          { name: 'WARUNGASEM', count: '8 AWB', hasPending: false },
+        ],
+      };
+
+      const mentionMap: Record<string, MentionMappingRecord> = {
+        BATANG: {
+          id: '1',
+          scope_type: 'kecamatan',
+          scope_key: 'BATANG',
+          pic_name: 'Agus Supriyanto',
+          feishu_open_id: 'ou_agus_batang_123',
+          feishu_user_id: null,
+          role: 'Admin DP Batang',
+          phone: null,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        WARUNGASEM: {
+          id: '3',
+          scope_type: 'kecamatan',
+          scope_key: 'WARUNGASEM',
+          pic_name: 'Dimas Prasetyo',
+          feishu_open_id: 'ou_dimas_warungasem',
+          feishu_user_id: null,
+          role: 'Admin DP Warungasem',
+          phone: null,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      };
+
+      const card = CardCompilerService.compileCard(incPreset.blocksConfig, context, undefined, mentionMap);
+      const elementsStr = JSON.stringify(card.elements);
+
+      // BATANG masih ada AWB pending -> tetap di-mention.
+      assert.ok(elementsStr.includes('<at id=\\"ou_agus_batang_123\\">Agus Supriyanto</at>'));
+      // WARUNGASEM sudah Clear TTD semua -> baris tetap tampil (nama DP & count-nya)...
+      assert.ok(elementsStr.includes('WARUNGASEM'));
+      assert.ok(elementsStr.includes('8 AWB'));
+      // ...tapi TIDAK boleh ada mention Dimas sama sekali di kartu ini.
+      assert.ok(!elementsStr.includes('Dimas Prasetyo'), 'DP yang sudah Clear TTD semua tidak boleh di-mention');
+      assert.ok(!elementsStr.includes('ou_dimas_warungasem'), 'Open ID DP yang sudah Clear TTD semua tidak boleh muncul di kartu');
+    });
+
+    it('should still mention a Drop Point when hasPending is omitted (backward-compat with old callers)', () => {
+      const incPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_inc')!;
+      const context = {
+        pickup_dp: 'BATANG01',
+        target_city: 'KOTA BATANG',
+        subdistricts: [{ name: 'TULIS', count: '3 AWB' }], // tanpa field hasPending sama sekali
+      };
+
+      const mentionMap: Record<string, MentionMappingRecord> = {
+        TULIS: {
+          id: '4',
+          scope_type: 'kecamatan',
+          scope_key: 'TULIS',
+          pic_name: 'Budi Hartono',
+          feishu_open_id: 'ou_budi_tulis',
+          feishu_user_id: null,
+          role: 'Admin DP Tulis',
+          phone: null,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      };
+
+      const card = CardCompilerService.compileCard(incPreset.blocksConfig, context, undefined, mentionMap);
+      const elementsStr = JSON.stringify(card.elements);
+
+      assert.ok(elementsStr.includes('<at id=\\"ou_budi_tulis\\">Budi Hartono</at>'));
+    });
+
     it('should compile Monitoring Delivery Assignment preset correctly (header, KPI grid, no assignment list)', () => {
       const deliveryPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_delivery')!;
       const context = {

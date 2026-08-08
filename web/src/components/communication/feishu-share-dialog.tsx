@@ -48,7 +48,7 @@ export interface ShareSummaryData {
   clear?: number;
   percent?: number;
   topKecamatan?: string[];
-  subdistricts?: Array<{ name: string; count: number | string; picName?: string; openId?: string }>;
+  subdistricts?: Array<{ name: string; count: number | string; picName?: string; openId?: string; kodeDp?: string; hasPending?: boolean }>;
   kurirList?: Array<{ name: string; count: number | string; picName?: string; openId?: string }>;
   metrics?: ReportMetricItem[];
   notes?: string;
