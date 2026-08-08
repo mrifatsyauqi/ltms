@@ -1,6 +1,7 @@
 export type TemplateModule =
   | 'monitoring_inc'
   | 'monitoring_delivery'
+  | 'laporan_harian'
   | 'longtail'
   | 'dashboard'
   | 'custom';

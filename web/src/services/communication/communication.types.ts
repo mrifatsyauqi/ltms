@@ -9,6 +9,7 @@ export type CommunicationMessageType =
 export type CommunicationModule =
   | 'monitoring_inc'
   | 'monitoring_delivery'
+  | 'laporan_harian'
   | 'longtail'
   | 'dashboard'
   | 'analytics'

@@ -315,6 +315,48 @@ export const STARTER_PRESETS: StarterPreset[] = [
     },
   },
   {
+    id: 'preset_laporan_harian',
+    module: 'laporan_harian',
+    name: 'Laporan Harian Operasional [Kode DP]',
+    badge: 'Laporan Harian',
+    description: 'Ringkasan laporan harian operasional DP (setoran kurir, absensi, indikasi) dengan lampiran tabel Rincian COD Kurir.',
+    blocksConfig: {
+      theme: 'dark',
+      header: {
+        title: 'LAPORAN HARIAN {{pickup_dp}}',
+        updateLabel: 'Waktu Generate',
+        updateValue: '{{generated_at}}',
+        showPickupDp: false,
+        showTargetCity: false,
+        showUpdate: true,
+      },
+      kpiGrid: {
+        title: '📊 Ringkasan Operasional',
+        layout: '2_column',
+        items: [
+          { id: '1', label: '💰 Total Setoran Kurir', valueTemplate: '{{total_setoran_kurir}}', color: 'green' },
+          { id: '2', label: '✅ Status Setoran', valueTemplate: '{{ok_indicator}}', color: 'default' },
+          { id: '3', label: '📦 Total Scan Delivery', valueTemplate: '{{total_scan_delivery}}', color: 'default' },
+          { id: '4', label: '📈 % Delivery', valueTemplate: '{{pct_delivery}}%', color: 'green' },
+        ],
+      },
+      screenshot: {
+        show: true,
+        title: '🖼 Lampiran Rincian COD Kurir',
+        hdQuality: true,
+      },
+      actionButton: {
+        label: '🚀 Buka LTMS Dashboard',
+        url: '{{dashboard_url}}',
+        enabled: false,
+      },
+      footer: {
+        text: 'Generated Automatically by LTMS\nLong Tail Monitoring System • Laporan Harian Operasional DP',
+        show: true,
+      },
+    },
+  },
+  {
     id: 'preset_longtail',
     module: 'longtail',
     name: 'Operational Assignment Card — Long Tail Alert',

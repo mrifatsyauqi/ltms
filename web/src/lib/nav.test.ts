@@ -61,7 +61,7 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
     const groups = navForRole('Admin DP', acc);
     const filtered = filterNavByAccess(groups, acc);
     const labels = filtered.flatMap((g) => g.items.map((i) => i.label));
-    assert.deepEqual(labels, ['Monitoring Delivery', 'Monitoring INC', 'Feedback Long Tail', 'Riwayat Feedback', 'Profil Saya']);
+    assert.deepEqual(labels, ['Monitoring Delivery', 'Monitoring INC', 'Laporan Harian', 'Feedback Long Tail', 'Riwayat Feedback', 'Profil Saya']);
   });
 
   // --------------------------------------------------------------------------

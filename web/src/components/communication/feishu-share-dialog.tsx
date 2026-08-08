@@ -58,6 +58,12 @@ export interface FeishuShareDialogProps {
   isOpen: boolean;
   onClose: () => void;
   moduleName?: string; // Default: 'Monitoring INC'
+  /** Module key eksplisit utk filter Card Templates & preview compile
+   *  (mis. 'laporan_harian') - kalau tak diisi, di-infer dari `moduleName`
+   *  (perilaku lama, HANYA mengenali "delivery" -> monitoring_delivery,
+   *  selain itu -> monitoring_inc). WAJIB diisi utk module BARU di luar
+   *  Monitoring INC/Delivery supaya tidak salah ke-infer. */
+  moduleKey?: string;
   targetScopeName?: string;
   targetScopeType?: 'all' | 'cabang' | 'kota' | 'drop_point';
   generateTime?: string;
@@ -144,6 +150,7 @@ export function FeishuShareDialog({
   isOpen,
   onClose,
   moduleName = 'Monitoring INC',
+  moduleKey,
   targetScopeName,
   targetScopeType,
   targetKota,
@@ -167,7 +174,7 @@ export function FeishuShareDialog({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const effectiveScopeName = targetScopeName || targetKota || 'Cabang';
-  const modKey = moduleName.toLowerCase().includes('delivery') ? 'monitoring_delivery' : 'monitoring_inc';
+  const modKey = moduleKey || (moduleName.toLowerCase().includes('delivery') ? 'monitoring_delivery' : 'monitoring_inc');
 
   const { data: rawGroups = [], isLoading: isLoadingGroups } = useQuery({
     queryKey: ['communication-groups'],
