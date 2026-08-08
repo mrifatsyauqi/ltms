@@ -89,22 +89,31 @@ export function ResultsView({
    *  tidak fallback ke nama Kecamatan mentah. `kodeDp` ikut disertakan per
    *  baris (kalau ter-resolve) supaya pipeline mention di server TIDAK perlu
    *  menebak ulang DP dari label yang ambigu (Nama DP vs Kecamatan mentah,
-   *  keduanya sama-sama string biasa dari sudut pandang server). */
+   *  keduanya sama-sama string biasa dari sudut pandang server). `hasPending`
+   *  = true kalau DP itu MASIH punya AWB berstatus BELUM/LATE (belum Clear
+   *  TTD) - dipakai server utk memutuskan apakah baris ini perlu di-mention
+   *  sama sekali (DP yg semua AWB-nya sudah Clear TTD TIDAK perlu di-mention,
+   *  lihat card-compiler.service.ts). */
   function buildSubdistrictBreakdown(
     rows: IncRow[],
     limit: number
-  ): Array<{ name: string; count: string; kodeDp?: string }> {
-    const countMap = new Map<string, { count: number; kodeDp?: string }>();
+  ): Array<{ name: string; count: string; kodeDp?: string; hasPending: boolean }> {
+    const countMap = new Map<string, { count: number; kodeDp?: string; hasPending: boolean }>();
     for (const r of rows) {
       const match = resolveDpForRow(r);
       const label = match ? match.namaDp : (r.tempatTujuan?.trim() || 'Lainnya');
       const existing = countMap.get(label);
-      countMap.set(label, { count: (existing?.count || 0) + 1, kodeDp: match?.kodeDp });
+      const isPendingRow = r.status !== 'CLEAR';
+      countMap.set(label, {
+        count: (existing?.count || 0) + 1,
+        kodeDp: match?.kodeDp,
+        hasPending: (existing?.hasPending ?? false) || isPendingRow,
+      });
     }
     return Array.from(countMap.entries())
       .sort((a, b) => b[1].count - a[1].count)
       .slice(0, limit)
-      .map(([name, v]) => ({ name, count: `${v.count} AWB`, kodeDp: v.kodeDp }));
+      .map(([name, v]) => ({ name, count: `${v.count} AWB`, kodeDp: v.kodeDp, hasPending: v.hasPending }));
   }
 
   // Auto Caption Generator (Clean format, WhatsApp/Feishu ready, NO dashboard links)

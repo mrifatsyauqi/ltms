@@ -58,7 +58,7 @@ export interface GenericReportData {
   percent?: number;
   metrics?: ReportMetricItem[];
   topKecamatan?: string[];
-  subdistricts?: Array<{ name: string; count: number | string; picName?: string; openId?: string }>;
+  subdistricts?: Array<{ name: string; count: number | string; picName?: string; openId?: string; kodeDp?: string; hasPending?: boolean }>;
   kurirList?: Array<{ name: string; count: number | string; picName?: string; openId?: string }>;
   kecamatanStats?: KecamatanStat[];
   details?: Array<{ label: string; value: string }>;

@@ -152,6 +152,11 @@ export interface SubdistrictItemContext {
    *  scope_type 'drop_point', tanpa menebak ulang dari `name` (yang bisa
    *  berisi Nama DP ATAU Kecamatan mentah, keduanya ambigu di sisi server). */
   kodeDp?: string;
+  /** false kalau SEMUA AWB tujuan DP ini sudah Clear TTD - dipakai compiler
+   *  utk melewati mention sama sekali (DP yang sudah beres tidak perlu
+   *  ditag lagi). undefined/true = tetap di-mention seperti biasa (default,
+   *  backward-compatible utk caller yang belum kirim field ini). */
+  hasPending?: boolean;
 }
 
 export interface KurirItemContext {

@@ -225,7 +225,7 @@ export class CardCompilerService {
     // 5. OPERATIONAL ASSIGNMENT: 📍 Kecamatan Tujuan (Monitoring INC)
     const showSubdistricts = config.subdistricts ? config.subdistricts.show : (config.showTopKecamatan ?? true);
     if (showSubdistricts) {
-      const subdistrictItems: Array<{ name: string; count: number | string; pic?: string; openId?: string }> = [];
+      const subdistrictItems: Array<{ name: string; count: number | string; pic?: string; openId?: string; hasPending?: boolean }> = [];
 
       // Parse from structured array or destination_subdistricts string
       if (Array.isArray(variables.subdistricts)) {
@@ -236,6 +236,7 @@ export class CardCompilerService {
               count: item.count || 0,
               pic: item.picName,
               openId: item.openId,
+              hasPending: item.hasPending,
             });
           }
         });
@@ -293,8 +294,11 @@ export class CardCompilerService {
             // Lookup mentions from map - TANPA icon orang di depan tag
             // mention (dihapus dari compiler, berlaku utk semua baris Drop
             // Point Tujuan terlepas dari config mentionPrefix tersimpan).
+            // hasPending === false -> DP ini SEMUA AWB-nya sudah Clear TTD,
+            // TIDAK di-mention sama sekali (skip total, bukan cuma ganti ke
+            // placeholder generik) - baris tetap tampil apa adanya.
             let mentionText = '';
-            if (config.subdistricts?.showMention !== false) {
+            if (config.subdistricts?.showMention !== false && item.hasPending !== false) {
               let mappings: MentionMappingRecord[] = [];
 
               if (mentionMap instanceof Map) {
