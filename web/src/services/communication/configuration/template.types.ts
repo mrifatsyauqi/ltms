@@ -58,6 +58,11 @@ export interface CardFreeTextConfig {
   show?: boolean;
   text?: string;
   placeholder?: string;
+  /** 'before_screenshot' (default, backward-compat - Monitoring INC minta
+   *  diposisikan tepat setelah "Drop Point Tujuan", sebelum lampiran
+   *  gambar) atau 'after_screenshot' (mis. Laporan Harian: Header -> gambar
+   *  -> teks bebas -> footer). */
+  position?: 'before_screenshot' | 'after_screenshot';
 }
 
 export interface CardKurirFollowUpConfig {
@@ -112,7 +117,9 @@ export interface VisualCardBlocksConfig {
   theme: CardTheme;
   header: CardHeaderConfig;
   lastScan?: CardLastScanConfig;
-  kpiGrid: CardKpiGridConfig;
+  /** Opsional - `showKpiGrid: false` di level atas + `kpiGrid` dihilangkan
+   *  sepenuhnya adalah cara menyembunyikan blok ini (mis. Laporan Harian). */
+  kpiGrid?: CardKpiGridConfig;
   subdistricts?: CardSubdistrictsConfig;
   /** Blok teks bebas, diisi manual oleh admin saat build/edit kartu (bukan
    *  data otomatis) - diposisikan tepat setelah blok "Drop Point Tujuan". */

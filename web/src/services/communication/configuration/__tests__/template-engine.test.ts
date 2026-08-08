@@ -415,6 +415,37 @@ describe('Phase 2.6.2 Communication Center Single Source Compiler & Mentions', (
       );
     });
 
+    it('should render freeText AFTER the screenshot image when position is "after_screenshot" (Laporan Harian: Header -> gambar -> teks bebas -> footer)', () => {
+      const laporanPreset = STARTER_PRESETS.find((p) => p.id === 'preset_laporan_harian')!;
+      assert.equal(laporanPreset.blocksConfig.freeText?.position, 'after_screenshot');
+
+      const config: VisualCardBlocksConfig = {
+        ...laporanPreset.blocksConfig,
+        freeText: { ...laporanPreset.blocksConfig.freeText, show: true, text: 'Catatan harian.' },
+      };
+      const card = CardCompilerService.compileCard(config, { pickup_dp: 'BATANG01' }, 'img_key_123');
+      const elements = card.elements as Array<Record<string, any>>;
+
+      const imgIdx = elements.findIndex((el) => el.tag === 'img');
+      const freeTextIdx = elements.findIndex(
+        (el) => el.tag === 'div' && el.text?.content?.includes('Catatan harian.')
+      );
+
+      assert.ok(imgIdx >= 0, 'screenshot image should be present');
+      assert.ok(freeTextIdx >= 0, 'freeText block should be present');
+      assert.ok(freeTextIdx > imgIdx, 'freeText must come AFTER the screenshot image');
+    });
+
+    it('should hide the KPI grid entirely when showKpiGrid is false and kpiGrid is omitted (Laporan Harian: no KPI cards)', () => {
+      const laporanPreset = STARTER_PRESETS.find((p) => p.id === 'preset_laporan_harian')!;
+      assert.equal(laporanPreset.blocksConfig.kpiGrid, undefined, 'preset should not define kpiGrid at all');
+      assert.equal(laporanPreset.blocksConfig.showKpiGrid, false);
+
+      const card = CardCompilerService.compileCard(laporanPreset.blocksConfig, { pickup_dp: 'BATANG01' }, 'img_key_123');
+      const elementsStr = JSON.stringify(card.elements);
+      assert.ok(!elementsStr.includes('Ringkasan'), 'no KPI grid title should render');
+    });
+
     it('should render footer.text VERBATIM as a single field (no more split title+description)', () => {
       const incPreset = STARTER_PRESETS.find((p) => p.id === 'preset_monitoring_inc')!;
       const config: VisualCardBlocksConfig = {

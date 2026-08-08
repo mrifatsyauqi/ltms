@@ -332,6 +332,7 @@ export default function CardTemplatesPage() {
         blocks_config: {
           ...prev.blocks_config,
           kpiGrid: {
+            layout: '2_column',
             ...prev.blocks_config.kpiGrid,
             items,
           },
@@ -354,6 +355,7 @@ export default function CardTemplatesPage() {
         blocks_config: {
           ...prev.blocks_config,
           kpiGrid: {
+            layout: '2_column',
             ...prev.blocks_config.kpiGrid,
             items,
           },
@@ -371,6 +373,7 @@ export default function CardTemplatesPage() {
         blocks_config: {
           ...prev.blocks_config,
           kpiGrid: {
+            layout: '2_column',
             ...prev.blocks_config.kpiGrid,
             items,
           },
@@ -866,7 +869,7 @@ export default function CardTemplatesPage() {
                               ...prev,
                               blocks_config: {
                                 ...prev.blocks_config,
-                                kpiGrid: { ...prev.blocks_config.kpiGrid, title: e.target.value },
+                                kpiGrid: { layout: '2_column', items: [], ...prev.blocks_config.kpiGrid, title: e.target.value },
                               },
                             }))
                           }
