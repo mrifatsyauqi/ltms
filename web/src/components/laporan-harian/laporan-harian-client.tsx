@@ -258,6 +258,8 @@ export function LaporanHarianClient({ userRole, userDropPoint }: LaporanHarianCl
           }
           manualNumeric={manualNumeric}
           manualText={manualText}
+          sisaSetoranH1={sisaSetoranH1}
+          photos={photos}
           totalSetoranKurir={setoran}
           ttdCodSistem={ttdCod}
           okIndicator={okIndicator}

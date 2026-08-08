@@ -351,20 +351,25 @@ export class CardCompilerService {
     }
 
     // 5b. BLOK TEKS BEBAS: diisi manual oleh admin saat build/edit kartu
-    // (BUKAN data otomatis dari sistem) - diposisikan tepat setelah "Drop
-    // Point Tujuan". Kosong = blok tidak dirender sama sekali, supaya tidak
-    // ada ruang kosong aneh di Feishu kalau memang tidak diisi.
+    // (BUKAN data otomatis dari sistem). Posisi default = tepat setelah
+    // "Drop Point Tujuan" (Monitoring INC) - config.freeText.position bisa
+    // diubah ke 'after_screenshot' (mis. Laporan Harian: Header -> gambar
+    // -> teks bebas -> footer). Kosong = blok tidak dirender sama sekali,
+    // supaya tidak ada ruang kosong aneh di Feishu kalau memang tidak diisi.
     const freeTextValue = config.freeText?.text?.trim();
-    if (config.freeText?.show !== false && freeTextValue) {
+    const freeTextEnabled = config.freeText?.show !== false && Boolean(freeTextValue);
+    const freeTextAfterScreenshot = config.freeText?.position === 'after_screenshot';
+    const emitFreeText = () => {
       if (elements.length > 0) elements.push({ tag: 'hr' });
       elements.push({
         tag: 'div',
         text: {
           tag: 'lark_md',
-          content: MessageTemplateEngine.render(freeTextValue, ctx),
+          content: MessageTemplateEngine.render(freeTextValue!, ctx),
         },
       });
-    }
+    };
+    if (freeTextEnabled && !freeTextAfterScreenshot) emitFreeText();
 
     // 6. OPERATIONAL ASSIGNMENT: 🛵 Kurir Perlu Follow Up (Monitoring Delivery)
     if (config.kurirFollowUp && config.kurirFollowUp.show) {
@@ -474,6 +479,8 @@ export class CardCompilerService {
         preview: true,
       });
     }
+
+    if (freeTextEnabled && freeTextAfterScreenshot) emitFreeText();
 
     // 8. Tombol Action Dashboard
     const btnEnabled = config.actionButton ? config.actionButton.enabled : (config.actionButton === 'open_dashboard');

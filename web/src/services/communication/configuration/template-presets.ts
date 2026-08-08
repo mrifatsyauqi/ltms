@@ -330,19 +330,18 @@ export const STARTER_PRESETS: StarterPreset[] = [
         showTargetCity: false,
         showUpdate: true,
       },
-      kpiGrid: {
-        title: '📊 Ringkasan Operasional',
-        layout: '2_column',
-        items: [
-          { id: '1', label: '💰 Total Setoran Kurir', valueTemplate: '{{total_setoran_kurir}}', color: 'green' },
-          { id: '2', label: '✅ Status Setoran', valueTemplate: '{{ok_indicator}}', color: 'default' },
-          { id: '3', label: '📦 Total Scan Delivery', valueTemplate: '{{total_scan_delivery}}', color: 'default' },
-          { id: '4', label: '📈 % Delivery', valueTemplate: '{{pct_delivery}}%', color: 'green' },
-        ],
+      // Struktur kartu Laporan Harian SENGAJA sederhana (Header -> gambar
+      // hasil render -> teks bebas -> footer), TANPA KPI grid - semua angka
+      // ringkasan sudah lengkap di gambar Rincian COD Kurir itu sendiri.
+      showKpiGrid: false,
+      freeText: {
+        show: true,
+        text: '',
+        placeholder: 'Tambahkan catatan di sini...',
+        position: 'after_screenshot',
       },
       screenshot: {
         show: true,
-        title: '🖼 Lampiran Rincian COD Kurir',
         hdQuality: true,
       },
       actionButton: {
