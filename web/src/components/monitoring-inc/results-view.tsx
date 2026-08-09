@@ -11,6 +11,7 @@ import {
   Percent,
   MapPin,
   Lock,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
@@ -56,6 +57,7 @@ export function ResultsView({
   // Feishu Communication Share Dialog state
   const [isFeishuShareOpen, setIsFeishuShareOpen] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [copyingImage, setCopyingImage] = useState(false);
 
   // Disambiguasi "Drop Point Tujuan": dp_delivery (dari kolom "DP Delivery"
   // di file JMS) sbg penentu UTAMA, cocokkan thd Kode DP ATAU Nama DP -
@@ -303,6 +305,38 @@ Terima kasih.`;
     }
   };
 
+  /**
+   * Fallback manual saat "Kirim ke Feishu" gagal (mis. 400) - salin GAMBAR
+   * saja (image/png), pola sama persis dgn handleCopyImage Monitoring
+   * Delivery (monitoring-client.tsx). Render dari hiddenCanvasRef yg SAMA &
+   * parameter toPng yg SAMA (quality/pixelRatio/backgroundColor) dgn
+   * handleExecuteFeishuSend di atas, supaya gambar hasil salin identik dgn
+   * lampiran Feishu - bukan render terpisah.
+   */
+  const handleCopyImage = async () => {
+    const node = hiddenCanvasRef.current;
+    if (!node) return;
+    try {
+      setCopyingImage(true);
+      const imagePromise = (async () => {
+        await new Promise((r) => setTimeout(r, 20)); // beri main-thread merender "Menyalin…"
+        const dataUrl = await toPng(node, {
+          quality: 1,
+          pixelRatio: 2,
+          backgroundColor: '#FFFFFF',
+        });
+        return (await fetch(dataUrl)).blob();
+      })();
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': imagePromise })]);
+      toast.success('Gambar laporan disalin — tempel di chat (Feishu/WA).');
+    } catch (error) {
+      console.error('Gagal copy gambar', error);
+      toast.error('Gagal menyalin gambar. Pastikan bukan mode Incognito & browser mendukung Clipboard API.');
+    } finally {
+      setCopyingImage(false);
+    }
+  };
+
   return (
     <div className="space-y-4 animate-in fade-in-50 duration-300">
       {/* Hidden Offscreen Canvas for Generating Crisp Formal Image */}
@@ -391,6 +425,18 @@ Terima kasih.`;
           >
             <Send className="size-3.5" />
             Kirim ke Feishu
+          </button>
+
+          {/* Salin Gambar - fallback manual kalau Kirim ke Feishu gagal (mis. 400) */}
+          <button
+            type="button"
+            onClick={handleCopyImage}
+            disabled={copyingImage}
+            title="Salin gambar laporan (sama persis dgn lampiran Kirim ke Feishu) - tempel manual (Ctrl+V) di chat Feishu"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs font-medium shadow-2xs transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <ImageIcon className="size-3.5 text-slate-500" />
+            {copyingImage ? 'Menyalin…' : 'Salin Gambar'}
           </button>
 
           {/* Export Excel */}

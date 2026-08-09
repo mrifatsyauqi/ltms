@@ -77,6 +77,7 @@ export function LaporanHarianClient({ userRole, userDropPoint }: LaporanHarianCl
 
   const [isFeishuShareOpen, setIsFeishuShareOpen] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [copyingImage, setCopyingImage] = useState(false);
   const hiddenCanvasRef = useRef<HTMLDivElement>(null);
 
   const setoran = totals ? totalSetoranKurir(totals) : null;
@@ -245,6 +246,37 @@ export function LaporanHarianClient({ userRole, userDropPoint }: LaporanHarianCl
     }
   };
 
+  /**
+   * Fallback manual saat "Kirim ke Feishu" gagal (mis. 400) - salin GAMBAR
+   * saja (image/png), pola sama persis dgn handleCopyImage Monitoring
+   * Delivery (monitoring-client.tsx). Render dari hiddenCanvasRef yg SAMA &
+   * parameter toPng yg SAMA dgn handleExecuteFeishuSend di atas, supaya
+   * gambar hasil salin identik dgn lampiran Feishu - bukan render terpisah.
+   */
+  const handleCopyImage = async () => {
+    if (!totals) {
+      toast.error('Belum ada data Rincian COD - upload file JMS Detail terlebih dahulu.');
+      return;
+    }
+    const node = hiddenCanvasRef.current;
+    if (!node) return;
+    try {
+      setCopyingImage(true);
+      const imagePromise = (async () => {
+        await new Promise((r) => setTimeout(r, 20)); // beri main-thread merender "Menyalin…"
+        const dataUrl = await toPng(node, { quality: 1, pixelRatio: 2, backgroundColor: '#FFFFFF' });
+        return (await fetch(dataUrl)).blob();
+      })();
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': imagePromise })]);
+      toast.success('Gambar laporan disalin — tempel di chat (Feishu/WA).');
+    } catch (error) {
+      console.error('Gagal copy gambar', error);
+      toast.error('Gagal menyalin gambar. Pastikan bukan mode Incognito & browser mendukung Clipboard API.');
+    } finally {
+      setCopyingImage(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="fixed -left-[9999px] top-0 pointer-events-none opacity-0">
@@ -342,6 +374,15 @@ export function LaporanHarianClient({ userRole, userDropPoint }: LaporanHarianCl
           >
             <Send className="size-4" />
             <span>Kirim ke Feishu</span>
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleCopyImage}
+            disabled={copyingImage}
+            title="Salin gambar laporan (sama persis dgn lampiran Kirim ke Feishu) - tempel manual (Ctrl+V) di chat Feishu"
+          >
+            <ImageIcon className="size-4" />
+            {copyingImage ? 'Menyalin…' : 'Salin Gambar'}
           </Button>
         </div>
       </div>
