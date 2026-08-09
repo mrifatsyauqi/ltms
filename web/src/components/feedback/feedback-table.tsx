@@ -52,11 +52,14 @@ import { PivotSprinterDialog } from './pivot-sprinter-dialog';
  *  penegak batas yang sesungguhnya (validasi di sini murni UX). */
 const BULK_FEEDBACK_MAX_ITEMS = 50;
 
-/** Kolom mana yang di-pin & ke sisi mana (offset kanan disetel via kelas). */
+/** Kolom mana yang di-pin & ke sisi mana (offset kanan disetel via kelas).
+ *  'select' adalah kolom paling kanan (lihat urutan di `columns` useMemo) -
+ *  offset 'aksi' & 'feedback' digeser sejauh lebar kolom select (~3rem). */
 const STICKY_POS: Record<string, string> = {
   waybill: 'sticky left-0 z-10',
-  feedback: 'sticky right-12 z-10',
-  aksi: 'sticky right-0 z-10',
+  feedback: 'sticky right-24 z-10',
+  aksi: 'sticky right-12 z-10',
+  select: 'sticky right-0 z-10',
 };
 
 /** LongTailRow + kunci sort Umur yg dibekukan (lihat komentar `rows` di FeedbackTable). */
@@ -309,7 +312,6 @@ export function FeedbackTable({
           },
         ];
     return [
-      ...selectColumn,
       {
         id: 'waybill',
         // Header + tombol salin SEMUA No. Waybill di halaman ini (mengikuti
@@ -435,6 +437,7 @@ export function FeedbackTable({
           );
         },
       },
+      ...selectColumn,
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readOnly]);
