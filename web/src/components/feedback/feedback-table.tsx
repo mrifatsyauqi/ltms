@@ -62,6 +62,17 @@ const STICKY_POS: Record<string, string> = {
   select: 'sticky right-0 z-10',
 };
 
+/** Lebar TETAP utk kolom sticky kanan 'aksi' & 'select' - WAJIB persis sama
+ *  dgn offset di STICKY_POS di atas (right-12 = lebar 'select', right-24 =
+ *  lebar 'aksi'+'select'). Tanpa ini lebar kolom mengikuti konten (checkbox
+ *  native ukurannya beda2 antar browser) sehingga offset di STICKY_POS bisa
+ *  meleset dari lebar sungguhan -> celah kosong antar kolom sticky yg
+ *  menampakkan konten non-sticky di baliknya saat discroll horizontal. */
+const STICKY_WIDTH: Record<string, string> = {
+  aksi: 'w-12',
+  select: 'w-12',
+};
+
 /** LongTailRow + kunci sort Umur yg dibekukan (lihat komentar `rows` di FeedbackTable). */
 type RowWithSort = LongTailRow & { __sortUmur: number };
 
@@ -306,23 +317,27 @@ export function FeedbackTable({
           {
             id: 'select',
             header: ({ table: t }) => (
-              <input
-                type="checkbox"
-                aria-label="Pilih semua baris di halaman ini"
-                checked={t.getIsAllPageRowsSelected()}
-                ref={(el) => {
-                  if (el) el.indeterminate = !t.getIsAllPageRowsSelected() && t.getIsSomePageRowsSelected();
-                }}
-                onChange={t.getToggleAllPageRowsSelectedHandler()}
-              />
+              <div className="flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  aria-label="Pilih semua baris di halaman ini"
+                  checked={t.getIsAllPageRowsSelected()}
+                  ref={(el) => {
+                    if (el) el.indeterminate = !t.getIsAllPageRowsSelected() && t.getIsSomePageRowsSelected();
+                  }}
+                  onChange={t.getToggleAllPageRowsSelectedHandler()}
+                />
+              </div>
             ),
             cell: ({ row }) => (
-              <input
-                type="checkbox"
-                aria-label={`Pilih ${row.original['No. Waybill']}`}
-                checked={row.getIsSelected()}
-                onChange={row.getToggleSelectedHandler()}
-              />
+              <div className="flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  aria-label={`Pilih ${row.original['No. Waybill']}`}
+                  checked={row.getIsSelected()}
+                  onChange={row.getToggleSelectedHandler()}
+                />
+              </div>
             ),
           },
         ];
@@ -723,6 +738,7 @@ export function FeedbackTable({
                         'bg-muted text-muted-foreground h-7 border-b px-2 text-left font-medium whitespace-nowrap',
                         h.column.getCanSort() && 'cursor-pointer select-none',
                         sticky && `${sticky} !z-30`,
+                        STICKY_WIDTH[h.column.id],
                       )}
                       onClick={h.column.getToggleSortingHandler()}
                     >
@@ -759,6 +775,7 @@ export function FeedbackTable({
                           // Sel sticky butuh latar solid supaya kolom lain tidak
                           // tembus di baliknya saat scroll horizontal.
                           sticky && `${sticky} ${stickyBg}`,
+                          STICKY_WIDTH[cell.column.id],
                         )}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
