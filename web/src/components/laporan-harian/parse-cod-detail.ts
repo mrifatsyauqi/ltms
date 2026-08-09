@@ -35,7 +35,9 @@ function isBlank(v: unknown): boolean {
  * (bukan bug di sini), direplikasi apa adanya sesuai instruksi.
  *
  * Sprinter dgn total "Semua Nominal COD" = 0 DIKECUALIKAN dari hasil
- * (sprinter yang tak pernah pegang paket COD tak perlu muncul).
+ * (sprinter yang tak pernah pegang paket COD tak perlu muncul). Sprinter
+ * dgn "% Clear Jumlah Paket" = 0% (suksesTtd = 0, tak ada satu pun paket
+ * yg sukses TTD) JUGA DIKECUALIKAN dari hasil.
  */
 export function computeCodTable(rows: CodDetailRawRow[]): { rows: SprinterCodRow[]; totals: CodTableTotals } {
   const sprinterNames = new Set<string>();
@@ -68,6 +70,9 @@ export function computeCodTable(rows: CodDetailRawRow[]): { rows: SprinterCodRow
     const totalResiSisa = resiSisaNonCod + resiSisaCod;
     const suksesTtd = semuaDeliv - totalResiSisa;
     const pctClearPaket = semuaDeliv > 0 ? suksesTtd / semuaDeliv : 0;
+
+    if (pctClearPaket === 0) continue; // sprinter dgn % Clear Jumlah Paket 0% tidak ditampilkan
+
     const pctClearNominalCod = semuaNominalCod !== 0 ? (semuaNominalCod - nominalSisaCod) / semuaNominalCod : null;
     const pctSelisih = pctClearNominalCod !== null ? pctClearPaket - pctClearNominalCod : null;
 

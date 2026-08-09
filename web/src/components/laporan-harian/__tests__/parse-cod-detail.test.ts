@@ -81,6 +81,24 @@ describe('computeCodTable', () => {
     assert.equal(a.semuaNominalCod, 1000);
     assert.equal(a.nominalSisaCod, 1000);
   });
+
+  it('sprinter dgn % Clear Jumlah Paket = 0% (tak ada satu pun paket sukses TTD) dikecualikan dari hasil & TOTAL', () => {
+    const rows: CodDetailRawRow[] = [
+      // Mtr Zero: 2 paket ber-COD, KEDUANYA belum TTD -> suksesTtd=0 -> 0% -> harus dikecualikan.
+      { sprinterDelivery: 'Mtr Zero', dpTtd: '', sprinterDeliveryTtd: '', cod: 1000 },
+      { sprinterDelivery: 'Mtr Zero', dpTtd: '', sprinterDeliveryTtd: '', cod: 500 },
+      // Mtr Budi: 1 paket sukses TTD -> tetap tampil sbg pembanding.
+      { sprinterDelivery: 'Mtr Budi', dpTtd: 'BATANG01', sprinterDeliveryTtd: 'Mtr Budi', cod: 1000 },
+    ];
+    const { rows: table, totals } = computeCodTable(rows);
+
+    assert.equal(table.length, 1, 'Mtr Zero harus dikecualikan, hanya Mtr Budi yang tampil');
+    assert.equal(table[0].idSprinter, 'Mtr Budi');
+
+    // TOTAL ikut mengecualikan kontribusi Mtr Zero (bukan cuma disembunyikan di tabel per-sprinter).
+    assert.equal(totals.semuaDeliv, 1);
+    assert.equal(totals.semuaNominalCod, 1000);
+  });
 });
 
 describe('extractCodDetailRows', () => {
