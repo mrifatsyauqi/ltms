@@ -34,10 +34,16 @@ export function pctDelivery(fields: ManualNumericFields): number | null {
   return fields.totalScanDelivery / fields.totalScanSampai;
 }
 
-/** "Total Karyawan Masuk" = Jumlah Admin + Jumlah Sprinter (formula asli
- *  Excel: D15=D16+D17) - AUTO, bukan input manual terpisah, meski
- *  komponen-komponennya (Admin/Sprinter/Sortir/Peakseason) tetap manual. */
+/** "Total Karyawan Masuk" = Jumlah Admin + Jumlah Sprinter + Jumlah Sortir +
+ *  Penambahan Peakseason - AUTO, bukan input manual terpisah (dikonfirmasi
+ *  user: SEMUA 4 komponen ikut dijumlahkan - file Excel asli cuma
+ *  menjumlahkan Admin+Sprinter (D15=D16+D17), tapi user secara eksplisit
+ *  meng-override itu utk sistem ini). Komponen-komponennya sendiri
+ *  (Admin/Sprinter/Sortir/Peakseason) tetap input manual terpisah. */
 export function totalKaryawanMasuk(fields: ManualNumericFields): number | null {
-  if (fields.jumlahAdmin === null && fields.jumlahSprinter === null) return null;
-  return (fields.jumlahAdmin ?? 0) + (fields.jumlahSprinter ?? 0);
+  const { jumlahAdmin, jumlahSprinter, jumlahSortir, penambahanPeakseason } = fields;
+  if (jumlahAdmin === null && jumlahSprinter === null && jumlahSortir === null && penambahanPeakseason === null) {
+    return null;
+  }
+  return (jumlahAdmin ?? 0) + (jumlahSprinter ?? 0) + (jumlahSortir ?? 0) + (penambahanPeakseason ?? 0);
 }
