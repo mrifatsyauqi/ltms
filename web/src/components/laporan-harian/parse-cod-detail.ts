@@ -12,37 +12,10 @@ export interface CodDetailRawRow {
    *  BUKAN selalu sama dgn sprinterDelivery (lihat catatan di bawah). */
   sprinterDeliveryTtd: unknown;
   cod: number;
-  /** kolom "TTD Retur" - baris hanya "diambil" (lihat passesRowFilter) bila
-   *  nilainya persis 0 (paket tidak retur). */
-  ttdRetur: unknown;
 }
 
 function isBlank(v: unknown): boolean {
   return v === null || v === undefined || String(v).trim() === '';
-}
-
-/**
- * Baris "diambil" utk tabel Rincian Nominal COD Kurir (dipakai membangun
- * daftar sprinter & hitung Total Pengiriman/Semua Nominal COD per sprinter) -
- * REVISI: sebelumnya nama sprinter & pengelompokan baris memakai kolom
- * "Sprinter Delivery", sekarang memakai "Sprinter Delivery TTD" (siapa yg
- * BENAR2 TTD paket ini, bukan siapa yg ditugaskan mengantar). Ketiga syarat
- * berikut WAJIB terpenuhi sekaligus per baris:
- *  1. "Sprinter Delivery TTD" berkode MTR di depan (mis. "Mtr Budi").
- *  2. "TTD Retur" = 0 (paket tidak retur).
- *  3. "COD" != 0 (hanya paket ber-COD).
- * CATATAN: formula "Nominal Sisa COD" (codViaSprinterTtd, di computeCodTable
- * bawah) SENGAJA TIDAK ikut direvisi - tetap dihitung dari SELURUH baris
- * mentah (parameter `rows`, bukan hasil filter ini), persis seperti semula.
- */
-function passesRowFilter(r: CodDetailRawRow): boolean {
-  const name = String(r.sprinterDeliveryTtd ?? '').trim();
-  if (!name.toLowerCase().startsWith('mtr')) return false;
-  // Number('') === 0 (quirk JS) - blank BUKAN "bernilai 0", jadi dicek eksplisit
-  // via isBlank dulu supaya sel kosong tidak lolos sebagai "TTD Retur = 0".
-  if (isBlank(r.ttdRetur) || Number(r.ttdRetur) !== 0) return false;
-  if (!r.cod) return false; // cod !== 0 (r.cod bertipe number, 0 falsy)
-  return true;
 }
 
 /**
@@ -65,25 +38,21 @@ function passesRowFilter(r: CodDetailRawRow): boolean {
  * (sprinter yang tak pernah pegang paket COD tak perlu muncul).
  */
 export function computeCodTable(rows: CodDetailRawRow[]): { rows: SprinterCodRow[]; totals: CodTableTotals } {
-  // Baris yg "diambil" utk tabel ini - lihat passesRowFilter di atas.
-  const filteredRows = rows.filter(passesRowFilter);
-
   const sprinterNames = new Set<string>();
-  for (const r of filteredRows) {
-    sprinterNames.add(String(r.sprinterDeliveryTtd ?? '').trim());
+  for (const r of rows) {
+    const name = r.sprinterDelivery.trim();
+    if (name.toLowerCase().startsWith('mtr')) sprinterNames.add(name);
   }
 
   const sorted = [...sprinterNames].sort((a, b) => a.localeCompare(b, 'id'));
 
   const result: SprinterCodRow[] = [];
   for (const name of sorted) {
-    const matched = filteredRows.filter((r) => String(r.sprinterDeliveryTtd ?? '').trim() === name);
+    const matched = rows.filter((r) => r.sprinterDelivery.trim() === name);
     const semuaDeliv = matched.length;
     const semuaNominalCod = matched.reduce((sum, r) => sum + (r.cod || 0), 0);
 
-    // Safety net (harusnya tak pernah kejadian): passesRowFilter mewajibkan
-    // cod!=0 per baris, jadi semuaNominalCod cuma bisa 0 kalau `matched` kosong.
-    if (semuaNominalCod === 0) continue;
+    if (semuaNominalCod === 0) continue; // exclude sprinter tanpa paket COD
 
     const resiSisaNonCod = matched.filter((r) => isBlank(r.dpTtd) && (r.cod || 0) <= 0).length;
     const resiSisaCod = matched.filter((r) => isBlank(r.dpTtd) && (r.cod || 0) > 0).length;
@@ -185,7 +154,6 @@ export function extractCodDetailRows(rawData: Record<string, unknown>[]): CodDet
       dpTtd: getCol('DP TTD'),
       sprinterDeliveryTtd: getCol('Sprinter Delivery TTD'),
       cod,
-      ttdRetur: getCol('TTD Retur'),
     });
   }
   return out;
