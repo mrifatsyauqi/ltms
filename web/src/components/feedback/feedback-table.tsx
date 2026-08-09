@@ -69,8 +69,8 @@ const STICKY_POS: Record<string, string> = {
  *  meleset dari lebar sungguhan -> celah kosong antar kolom sticky yg
  *  menampakkan konten non-sticky di baliknya saat discroll horizontal. */
 const STICKY_WIDTH: Record<string, string> = {
-  aksi: 'w-12',
-  select: 'w-12',
+  aksi: 'w-12 min-w-12 max-w-12',
+  select: 'w-12 min-w-12 max-w-12',
 };
 
 /** LongTailRow + kunci sort Umur yg dibekukan (lihat komentar `rows` di FeedbackTable). */
