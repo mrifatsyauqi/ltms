@@ -137,7 +137,7 @@ export async function submitFeedback(
 /** Batas jumlah baris per bulk action - cegah request/timeout kegedean di
  *  jalur serverless (tiap baris = beberapa round-trip DB berurutan lewat
  *  submitFeedback). Diusulkan (belum ada angka eksplisit dari user). */
-export const BULK_FEEDBACK_MAX_ITEMS = 50;
+export const BULK_FEEDBACK_MAX_ITEMS = 100;
 
 /**
  * Terapkan SATU feedback ke BANYAK waybill sekaligus - WAJIB memanggil

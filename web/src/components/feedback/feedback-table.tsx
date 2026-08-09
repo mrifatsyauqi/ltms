@@ -50,7 +50,7 @@ import { PivotSprinterDialog } from './pivot-sprinter-dialog';
  *  duplikasi angka sengaja, bukan import: modul server itu membawa client
  *  Supabase (`db()`), tidak aman di-bundle ke client. Server tetap jadi
  *  penegak batas yang sesungguhnya (validasi di sini murni UX). */
-const BULK_FEEDBACK_MAX_ITEMS = 50;
+const BULK_FEEDBACK_MAX_ITEMS = 100;
 
 /** Kolom mana yang di-pin & ke sisi mana (offset kanan disetel via kelas).
  *  'select' adalah kolom paling kanan (lihat urutan di `columns` useMemo) -
@@ -227,6 +227,21 @@ export function FeedbackTable({
   useEffect(() => {
     setPagination((p) => (p.pageIndex === 0 ? p : { ...p, pageIndex: 0 }));
   }, [dpFilter, umurFilter, alasanFilter, sprinterFilter, onlyBelum, globalFilter]);
+
+  // Bulk Feedback (Bagian A) - seleksi checkbox di-reset saat "data per
+  // halaman" diganti. Tanpa ini, mis. pilih 100 baris via select-all pas
+  // 100/halaman lalu ganti ke 50/halaman: rowSelection (key by waybill) TETAP
+  // berisi 100 waybill lama walau tak lagi cocok dgn apa yg tampil/dicentang
+  // di layar - "terkunci" sampai user sadar & klik Batal pilih manual.
+  // Sengaja TIDAK direset saat pindah halaman (pageIndex) atau ganti filter -
+  // itu justru fitur (pilih baris lintas halaman/filter utk satu aksi bulk).
+  const prevPageSizeRef = useRef(pagination.pageSize);
+  useEffect(() => {
+    if (prevPageSizeRef.current !== pagination.pageSize) {
+      prevPageSizeRef.current = pagination.pageSize;
+      setRowSelection({});
+    }
+  }, [pagination.pageSize]);
 
   const aging = useMemo(() => ringkasanAging(rows), [rows]);
 
