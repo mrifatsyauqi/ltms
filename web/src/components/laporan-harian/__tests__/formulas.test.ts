@@ -62,8 +62,25 @@ describe('Laporan Harian formulas (verified against LAPORAN_HARIAN_BGG16.xlsx ta
     assert.equal(pctDelivery(fields), null);
   });
 
-  it('Total Karyawan Masuk = Jumlah Admin + Jumlah Sprinter (contoh target: 2 + 29 = 31)', () => {
-    const fields = { ...emptyManualNumericFields(), jumlahAdmin: 2, jumlahSprinter: 29 };
-    assert.equal(totalKaryawanMasuk(fields), 31);
+  it('Total Karyawan Masuk = Jumlah Admin + Jumlah Sprinter + Jumlah Sortir + Penambahan Peakseason (contoh laporan: 3 + 33 + 1 + 0 = 37)', () => {
+    const fields = {
+      ...emptyManualNumericFields(),
+      jumlahAdmin: 3,
+      jumlahSprinter: 33,
+      jumlahSortir: 1,
+      penambahanPeakseason: 0,
+    };
+    assert.equal(totalKaryawanMasuk(fields), 37);
+  });
+
+  it('Total Karyawan Masuk ikut menjumlahkan Penambahan Peakseason kalau terisi', () => {
+    const fields = {
+      ...emptyManualNumericFields(),
+      jumlahAdmin: 2,
+      jumlahSprinter: 29,
+      jumlahSortir: 1,
+      penambahanPeakseason: 5,
+    };
+    assert.equal(totalKaryawanMasuk(fields), 37);
   });
 });

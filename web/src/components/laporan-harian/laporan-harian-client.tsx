@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { DropPointRow } from '@/lib/data/types';
 import { formatDisplayDateTime } from '@/lib/excel-date';
+import { normalizeKecamatan } from '@/lib/kecamatan';
 import { CodTable } from './cod-table';
 import { ReportImageCanvas } from './report-image-canvas';
 import { extractCodDetailRows, computeCodTable } from './parse-cod-detail';
@@ -48,10 +49,20 @@ export function LaporanHarianClient({ userRole, userDropPoint }: LaporanHarianCl
   });
 
   const [selectedKodeDp, setSelectedKodeDp] = useState<string>(isDpFixed ? userDropPoint || '' : '');
-  const dp = useMemo(
-    () => dropPoints.find((d) => d['Kode DP'] === selectedKodeDp) || null,
-    [dropPoints, selectedKodeDp]
-  );
+  // session.user.dropPoint (Admin DP/SPV Drop Point) menyimpan NAMA DP
+  // (mis. "BATANG01"), BUKAN Kode DP (mis. "BGG16") - sementara dropdown DP
+  // (full access) memilih via Kode DP. Cocokkan thd KEDUANYA (dinormalisasi
+  // sama seperti resolveDpForRow di Monitoring INC), supaya konteks DP dari
+  // sesi login tetap ter-resolve dgn benar apa pun bentuknya.
+  const dp = useMemo(() => {
+    const needle = normalizeKecamatan(selectedKodeDp);
+    if (!needle) return null;
+    return (
+      dropPoints.find(
+        (d) => normalizeKecamatan(d['Kode DP']) === needle || normalizeKecamatan(d['Nama DP']) === needle
+      ) || null
+    );
+  }, [dropPoints, selectedKodeDp]);
   const dpLabel = dp ? `${dp['Kode DP']} - ${dp['Nama DP']}` : selectedKodeDp || '-';
   const namaSpv = dp?.['SPV Drop Point Nama'] || '';
 
