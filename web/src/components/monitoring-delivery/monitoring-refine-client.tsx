@@ -34,6 +34,7 @@ export function MonitoringRefineClient() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [isGenerated, setIsGenerated] = useState(false);
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
+  const [namaKota, setNamaKota] = useState('');
   const [copying, setCopying] = useState<null | 'img' | 'table'>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -63,12 +64,18 @@ export function MonitoringRefineClient() {
     // teksnya memang sudah berupa kode.
     const kodeDpByNamaDp = new Map<string, string>();
     const kodeDpByKodeDp = new Map<string, string>();
+    // Nama Kota utk judul tabel - diambil dari DP yang cocok (lihat di
+    // bawah), BUKAN diketik manual, supaya otomatis benar siapa pun yang
+    // upload & DP apa pun yang muncul di file.
+    const namaKotaByNamaDp = new Map<string, string>();
     for (const dp of dropPoints ?? []) {
       kodeDpByNamaDp.set(normalize(dp['Nama DP']), dp['Kode DP']);
       kodeDpByKodeDp.set(normalize(dp['Kode DP']), dp['Kode DP']);
+      if (dp['Nama Kota']) namaKotaByNamaDp.set(normalize(dp['Nama DP']), dp['Nama Kota']);
     }
     const lookupKodeDp = (dpDelivery: string) =>
       kodeDpByNamaDp.get(normalize(dpDelivery)) ?? kodeDpByKodeDp.get(normalize(dpDelivery)) ?? '';
+    const lookupNamaKota = (dpDelivery: string) => namaKotaByNamaDp.get(normalize(dpDelivery)) ?? '';
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -83,6 +90,7 @@ export function MonitoringRefineClient() {
 
         const groupMap = new Map<string, RefineRow>();
         const unmatched = new Set<string>();
+        const namaKotaCount = new Map<string, number>();
 
         for (const row of dataRows) {
           if (!row || row.length < 15) continue;
@@ -127,6 +135,8 @@ export function MonitoringRefineClient() {
           } else {
             const kodeDp = lookupKodeDp(dpDelivery);
             if (!kodeDp) unmatched.add(dpDelivery);
+            const namaKota = lookupNamaKota(dpDelivery);
+            if (namaKota) namaKotaCount.set(namaKota, (namaKotaCount.get(namaKota) ?? 0) + 1);
             groupMap.set(dpDelivery, { kodeDp, dpDelivery, ...parsed });
           }
         }
@@ -137,6 +147,19 @@ export function MonitoringRefineClient() {
           const rb = b.totalDelivery > 0 ? (b.ttdNormalTotal + b.scanRetorTotal) / b.totalDelivery : 0;
           return rb - ra;
         });
+
+        // Kota terbanyak di antara DP yang cocok (biasanya seragam - satu
+        // cabang = satu kota, lihat master_cabang - tapi diambil mode-nya
+        // buat jaga-jaga kalau ada campuran).
+        let dominantNamaKota = '';
+        let dominantCount = 0;
+        for (const [nama, count] of namaKotaCount) {
+          if (count > dominantCount) {
+            dominantNamaKota = nama;
+            dominantCount = count;
+          }
+        }
+        setNamaKota(dominantNamaKota);
 
         setStagedData(parsedData);
         if (parsedData.length === 0) {
@@ -290,7 +313,9 @@ export function MonitoringRefineClient() {
             </div>
           </CardHeader>
           <CardContent className="overflow-x-auto">
-            {generatedAt && <MonitoringRefineTable ref={tableRef} data={stagedData} generatedAt={generatedAt} />}
+            {generatedAt && (
+              <MonitoringRefineTable ref={tableRef} data={stagedData} generatedAt={generatedAt} namaKota={namaKota} />
+            )}
           </CardContent>
         </Card>
       )}

@@ -22,6 +22,10 @@ export type RefineRow = {
 interface MonitoringRefineTableProps {
   data: RefineRow[];
   generatedAt: Date;
+  /** Nama kota (mis. "BATANG") - dihitung di MonitoringRefineClient dari Nama
+   *  Kota milik DP yang cocok, BUKAN diketik manual. Kosong kalau tak ada
+   *  satu pun DP yang cocok ke Master Drop Point. */
+  namaKota?: string;
 }
 
 const MONTHS_FULL = [
@@ -68,7 +72,7 @@ function rasioTtd(row: { ttdNormalTotal: number; scanRetorTotal: number; totalDe
   return row.totalDelivery > 0 ? ((row.ttdNormalTotal + row.scanRetorTotal) / row.totalDelivery) * 100 : 0;
 }
 
-export const MonitoringRefineTable = forwardRef<HTMLTableElement, MonitoringRefineTableProps>(({ data, generatedAt }, ref) => {
+export const MonitoringRefineTable = forwardRef<HTMLTableElement, MonitoringRefineTableProps>(({ data, generatedAt, namaKota }, ref) => {
   const totals = data.reduce(
     (acc, row) => ({
       totalDelivery: acc.totalDelivery + row.totalDelivery,
@@ -110,7 +114,7 @@ export const MonitoringRefineTable = forwardRef<HTMLTableElement, MonitoringRefi
         <thead>
           <tr className="bg-[#4f6272] text-white">
             <th colSpan={16} className="border border-gray-400 px-3 py-2.5 text-center align-middle text-lg font-bold tracking-wide uppercase whitespace-nowrap">
-              MONITORING DELIVERY {formatGeneratedAt(generatedAt)}
+              MONITORING DELIVERY {namaKota ? `(${namaKota}) ` : ''}| {formatGeneratedAt(generatedAt)}
             </th>
           </tr>
           <tr className="bg-gray-100">
