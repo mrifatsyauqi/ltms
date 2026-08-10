@@ -19,10 +19,12 @@ async function fetchDropPoints(): Promise<DropPointRow[]> {
   return body.data;
 }
 
-const normalize = (s: string) => s.trim().toLowerCase();
+// Underscore & spasi disamakan (mis. "GRINGSING_LAMA" vs "Gringsing Lama")
+// supaya pencocokan tetap kena walau ejaan sumbernya tak seragam.
+const normalize = (s: string) => s.trim().toLowerCase().replace(/[\s_]+/g, '_');
 
 export function MonitoringRefineClient() {
-  const { data: dropPoints } = useQuery({
+  const { data: dropPoints, isLoading: dropPointsLoading } = useQuery({
     queryKey: ['drop-points'],
     queryFn: fetchDropPoints,
     staleTime: SLOW_STALE_TIME,
@@ -42,13 +44,31 @@ export function MonitoringRefineClient() {
     const file = fileList[0];
     if (!file) return;
 
+    // Master Drop Point (dipakai lookup Kode DP di bawah) diambil lewat React
+    // Query - kalau file di-upload SEBELUM query itu selesai (mis. langsung
+    // setelah halaman dibuka), dropPoints masih undefined -> SEMUA baris bakal
+    // gagal cocok. Tolak upload dulu & minta coba lagi drpd diam-diam
+    // menghasilkan Kode DP kosong semua.
+    if (dropPointsLoading) {
+      toast.error('Data Master Drop Point masih dimuat, coba lagi sesaat lagi.');
+      return;
+    }
+
     setFileName(file.name);
     setIsGenerated(false);
 
-    const kodeDpByNormalized = new Map<string, string>();
+    // Kode DP ("BGG09", dst) TIDAK sama dgn teks "DP Delivery" di file JMS
+    // ("GRINGSING_LAMA", dst) - itu cocok dgn "Nama DP" master. Cocokkan ke
+    // Nama DP dulu (kasus utama), "Kode DP" jadi fallback kalau kebetulan
+    // teksnya memang sudah berupa kode.
+    const kodeDpByNamaDp = new Map<string, string>();
+    const kodeDpByKodeDp = new Map<string, string>();
     for (const dp of dropPoints ?? []) {
-      kodeDpByNormalized.set(normalize(dp['Kode DP']), dp['Kode DP']);
+      kodeDpByNamaDp.set(normalize(dp['Nama DP']), dp['Kode DP']);
+      kodeDpByKodeDp.set(normalize(dp['Kode DP']), dp['Kode DP']);
     }
+    const lookupKodeDp = (dpDelivery: string) =>
+      kodeDpByNamaDp.get(normalize(dpDelivery)) ?? kodeDpByKodeDp.get(normalize(dpDelivery)) ?? '';
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -105,7 +125,7 @@ export function MonitoringRefineClient() {
               belumInputAwb: existing.belumInputAwb + parsed.belumInputAwb,
             });
           } else {
-            const kodeDp = kodeDpByNormalized.get(normalize(dpDelivery)) ?? '';
+            const kodeDp = lookupKodeDp(dpDelivery);
             if (!kodeDp) unmatched.add(dpDelivery);
             groupMap.set(dpDelivery, { kodeDp, dpDelivery, ...parsed });
           }
@@ -210,7 +230,15 @@ export function MonitoringRefineClient() {
               <p className="text-muted-foreground text-xs">
                 Gunakan laporan JMS Refine Total (16 kolom: TTD Normal, Scan TTD Retur, Belum TTD, Rasio TTD).
               </p>
-              <Button type="button" variant="outline" onClick={() => inputRef.current?.click()}>
+              {dropPointsLoading && (
+                <p className="text-muted-foreground text-xs">Memuat data Master Drop Point…</p>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => inputRef.current?.click()}
+                disabled={dropPointsLoading}
+              >
                 Pilih File Excel
               </Button>
               <input
@@ -218,6 +246,7 @@ export function MonitoringRefineClient() {
                 type="file"
                 accept=".xlsx,.xls,.csv"
                 className="hidden"
+                disabled={dropPointsLoading}
                 onChange={(e) => {
                   if (e.target.files) handleFileUpload(e.target.files);
                   e.target.value = '';

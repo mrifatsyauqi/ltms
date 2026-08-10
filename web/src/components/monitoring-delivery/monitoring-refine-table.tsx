@@ -24,10 +24,29 @@ interface MonitoringRefineTableProps {
   generatedAt: Date;
 }
 
-const BRANCH_LABEL = 'BATANG (BGG)';
+const MONTHS_FULL = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+];
 
+// "d MMMM yyyy, HH.mm" di zona Jakarta (UTC+7 tetap, tanpa DST) - format
+// TETAP dipakai (bukan Intl.toLocaleString) supaya hasilnya presisi sama
+// persis lintas browser, mis. "30 Juli 2026, 12.00".
 function formatGeneratedAt(d: Date) {
-  return d.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' });
+  const j = new Date(d.getTime() + 7 * 3600 * 1000);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${j.getUTCDate()} ${MONTHS_FULL[j.getUTCMonth()]} ${j.getUTCFullYear()}, ${p(j.getUTCHours())}.${p(j.getUTCMinutes())}`;
+}
+
+/** Ikon filter kecil ala AutoFilter Excel - murni dekoratif (tabel ini bukan
+ *  data interaktif), dipasang di tiap kolom PALING BAWAH (leaf), bukan di
+ *  baris judul grup (TTD Normal/Scan TTD Retur/Belum Diterima). */
+function FilterIcon() {
+  return (
+    <span className="ml-1 inline-block align-middle text-[9px] leading-none opacity-60" aria-hidden>
+      ▾
+    </span>
+  );
 }
 
 // Ambang beda dari tabel Rekap Standar: hijau >=95%, kuning 85-94,99%, merah <85%.
@@ -91,31 +110,31 @@ export const MonitoringRefineTable = forwardRef<HTMLTableElement, MonitoringRefi
         <thead>
           <tr className="bg-[#4f6272] text-white">
             <th colSpan={16} className="border border-gray-400 px-3 py-2.5 text-center align-middle text-lg font-bold tracking-wide uppercase whitespace-nowrap">
-              MONITORING DELIVERY {BRANCH_LABEL} {formatGeneratedAt(generatedAt)}
+              MONITORING DELIVERY {formatGeneratedAt(generatedAt)}
             </th>
           </tr>
           <tr className="bg-gray-100">
-            <th rowSpan={2} className={`${cell} text-center align-middle font-semibold`}>NO</th>
-            <th rowSpan={2} className={`${cell} text-left align-middle font-semibold`}>Kode DP</th>
-            <th rowSpan={2} className={`${cell} text-left align-middle font-semibold`}>DP Delivery</th>
-            <th rowSpan={2} className={`${cell} text-center align-middle font-semibold`}>Total<br />Delivery</th>
+            <th rowSpan={2} className={`${cell} text-center align-middle font-semibold`}>NO<FilterIcon /></th>
+            <th rowSpan={2} className={`${cell} text-left align-middle font-semibold`}>Kode DP<FilterIcon /></th>
+            <th rowSpan={2} className={`${cell} text-left align-middle font-semibold`}>DP Delivery<FilterIcon /></th>
+            <th rowSpan={2} className={`${cell} text-center align-middle font-semibold`}>Total<br />Delivery<FilterIcon /></th>
             <th colSpan={3} className={`${cell} text-center font-semibold`}>TTD Normal</th>
             <th colSpan={3} className={`${cell} text-center font-semibold`}>Scan TTD Retur</th>
             <th colSpan={5} className={`${cell} text-center font-semibold`}>Belum Diterima</th>
-            <th rowSpan={2} className={`${cell} text-center align-middle font-semibold`}>Rasio<br />TTD</th>
+            <th rowSpan={2} className={`${cell} text-center align-middle font-semibold`}>Rasio<br />TTD<FilterIcon /></th>
           </tr>
           <tr className="bg-gray-100">
-            <th className={`${cell} text-center font-semibold`}>Total</th>
-            <th className={`${cell} text-center font-semibold`}>Ada Foto<br />TTD</th>
-            <th className={`${cell} text-center font-semibold`}>Tidak Ada<br />Foto TTD</th>
-            <th className={`${cell} text-center font-semibold`}>Total</th>
-            <th className={`${cell} text-center font-semibold`}>Ada Foto<br />TTD</th>
-            <th className={`${cell} text-center font-semibold`}>Tidak Ada<br />Foto TTD</th>
-            <th className={`${cell} text-center font-semibold`}>Jumlah<br />AWB</th>
-            <th className={`${cell} text-center font-semibold`}>Jumlah<br />Inventory</th>
-            <th className={`${cell} text-center font-semibold`}>Tinggal<br />Gudang</th>
-            <th className={`${cell} text-center font-semibold`}>Paket<br />Bermasalah</th>
-            <th className={`${cell} text-center font-semibold`}>Belum Input<br />AWB</th>
+            <th className={`${cell} text-center font-semibold`}>Total<FilterIcon /></th>
+            <th className={`${cell} text-center font-semibold`}>Ada Foto<br />TTD<FilterIcon /></th>
+            <th className={`${cell} text-center font-semibold`}>Tidak Ada<br />Foto TTD<FilterIcon /></th>
+            <th className={`${cell} text-center font-semibold`}>Total<FilterIcon /></th>
+            <th className={`${cell} text-center font-semibold`}>Ada Foto<br />TTD<FilterIcon /></th>
+            <th className={`${cell} text-center font-semibold`}>Tidak Ada<br />Foto TTD<FilterIcon /></th>
+            <th className={`${cell} text-center font-semibold`}>Jumlah<FilterIcon /></th>
+            <th className={`${cell} text-center font-semibold`}>Jumlah<br />Inventory<FilterIcon /></th>
+            <th className={`${cell} text-center font-semibold`}>Tinggal<br />Gudang<FilterIcon /></th>
+            <th className={`${cell} text-center font-semibold`}>Paket<br />Bermasalah<FilterIcon /></th>
+            <th className={`${cell} text-center font-semibold`}>Belum Input<br />AWB<FilterIcon /></th>
           </tr>
         </thead>
         <tbody>
