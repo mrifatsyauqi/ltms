@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Toaster } from '@/components/ui/sonner';
+import { ThemeProvider } from '@/components/theme-provider';
 
 /**
  * Default global: 30 detik. Cukup pendek utk data yang perlu terasa live
@@ -24,9 +25,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }),
   );
   return (
-    <QueryClientProvider client={client}>
-      {children}
-      <Toaster />
-    </QueryClientProvider>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <QueryClientProvider client={client}>
+        {children}
+        <Toaster />
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }

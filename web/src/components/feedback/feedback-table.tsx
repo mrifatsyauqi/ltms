@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   type ColumnDef,
+  type RowSelectionState,
   type SortingState,
   flexRender,
   getCoreRowModel,
@@ -12,11 +13,12 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { toast } from 'sonner';
-import { Download, History, Loader2, RefreshCw, Search, Users } from 'lucide-react';
+import { CheckCircle2, Download, History, Loader2, RefreshCw, Search, Users, XCircle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -29,24 +31,46 @@ import { TruncatedText } from '@/components/ui/truncated-text';
 import { CopyButton } from '@/components/ui/copy-button';
 import { AGING_ROW_CLASS, AGING_STICKY_BG, AgingBadge, agingLevel } from '@/components/ui/aging-badge';
 import { cn } from '@/lib/utils';
-import type { LongTailRow } from '@/lib/data/longtail';
+import type { BulkFeedbackResult, LongTailRow } from '@/lib/data/longtail';
 import { formatWaktuSampai, umurValue } from '@/lib/feedback-format';
 import { ALL_SCOPE, useDashboardScope } from '@/components/dashboard/scope-context';
 import { downloadLongTailExcel } from '@/lib/export-longtail-excel';
 import {
+  useBulkSubmitFeedback,
   useFeedbackOptions,
   useLongTail,
   useSubmitFeedback,
+  type BulkSubmitFeedbackError,
   type SubmitFeedbackError,
 } from './feedback-hooks';
 import { FeedbackCell } from './feedback-cell';
 import { PivotSprinterDialog } from './pivot-sprinter-dialog';
 
-/** Kolom mana yang di-pin & ke sisi mana (offset kanan disetel via kelas). */
+/** HARUS sama dgn BULK_FEEDBACK_MAX_ITEMS (lib/data/supabase/longtail.ts) -
+ *  duplikasi angka sengaja, bukan import: modul server itu membawa client
+ *  Supabase (`db()`), tidak aman di-bundle ke client. Server tetap jadi
+ *  penegak batas yang sesungguhnya (validasi di sini murni UX). */
+const BULK_FEEDBACK_MAX_ITEMS = 100;
+
+/** Kolom mana yang di-pin & ke sisi mana (offset kanan disetel via kelas).
+ *  'select' adalah kolom paling kanan (lihat urutan di `columns` useMemo) -
+ *  offset 'aksi' & 'feedback' digeser sejauh lebar kolom select (~3rem). */
 const STICKY_POS: Record<string, string> = {
   waybill: 'sticky left-0 z-10',
-  feedback: 'sticky right-12 z-10',
-  aksi: 'sticky right-0 z-10',
+  feedback: 'sticky right-24 z-10',
+  aksi: 'sticky right-12 z-10',
+  select: 'sticky right-0 z-10',
+};
+
+/** Lebar TETAP utk kolom sticky kanan 'aksi' & 'select' - WAJIB persis sama
+ *  dgn offset di STICKY_POS di atas (right-12 = lebar 'select', right-24 =
+ *  lebar 'aksi'+'select'). Tanpa ini lebar kolom mengikuti konten (checkbox
+ *  native ukurannya beda2 antar browser) sehingga offset di STICKY_POS bisa
+ *  meleset dari lebar sungguhan -> celah kosong antar kolom sticky yg
+ *  menampakkan konten non-sticky di baliknya saat discroll horizontal. */
+const STICKY_WIDTH: Record<string, string> = {
+  aksi: 'w-12 min-w-12 max-w-12',
+  select: 'w-12 min-w-12 max-w-12',
 };
 
 /** LongTailRow + kunci sort Umur yg dibekukan (lihat komentar `rows` di FeedbackTable). */
@@ -90,7 +114,17 @@ export function FeedbackTable({
   const { scope } = useDashboardScope();
   const options = useFeedbackOptions();
   const submit = useSubmitFeedback();
+  const bulkSubmit = useBulkSubmitFeedback();
   const [exporting, setExporting] = useState(false);
+
+  // Bulk Feedback (Bagian A) - checkbox HANYA relevan di mode edit
+  // (!readOnly, sama seperti kolom Feedback yang bisa diisi). rowSelection
+  // di-key by waybill (getRowId di bawah), BUKAN index baris - supaya
+  // seleksi tetap benar walau tabel disortir/difilter ulang di antara klik.
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [bulkFeedback, setBulkFeedback] = useState('');
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkResult, setBulkResult] = useState<BulkFeedbackResult | null>(null);
 
   const [sorting, setSorting] = useState<SortingState>([{ id: 'umur', desc: true }]); // umur tertua di atas (Bagian 9.1)
   const [globalFilter, setGlobalFilter] = useState('');
@@ -205,6 +239,21 @@ export function FeedbackTable({
     setPagination((p) => (p.pageIndex === 0 ? p : { ...p, pageIndex: 0 }));
   }, [dpFilter, umurFilter, alasanFilter, sprinterFilter, onlyBelum, globalFilter]);
 
+  // Bulk Feedback (Bagian A) - seleksi checkbox di-reset saat "data per
+  // halaman" diganti. Tanpa ini, mis. pilih 100 baris via select-all pas
+  // 100/halaman lalu ganti ke 50/halaman: rowSelection (key by waybill) TETAP
+  // berisi 100 waybill lama walau tak lagi cocok dgn apa yg tampil/dicentang
+  // di layar - "terkunci" sampai user sadar & klik Batal pilih manual.
+  // Sengaja TIDAK direset saat pindah halaman (pageIndex) atau ganti filter -
+  // itu justru fitur (pilih baris lintas halaman/filter utk satu aksi bulk).
+  const prevPageSizeRef = useRef(pagination.pageSize);
+  useEffect(() => {
+    if (prevPageSizeRef.current !== pagination.pageSize) {
+      prevPageSizeRef.current = pagination.pageSize;
+      setRowSelection({});
+    }
+  }, [pagination.pageSize]);
+
   const aging = useMemo(() => ringkasanAging(rows), [rows]);
 
   function registerRef(waybill: string, el: HTMLInputElement | null) {
@@ -262,6 +311,36 @@ export function FeedbackTable({
   }
 
   const columns = useMemo<ColumnDef<RowWithSort>[]>(() => {
+    const selectColumn: ColumnDef<RowWithSort>[] = readOnly
+      ? []
+      : [
+          {
+            id: 'select',
+            header: ({ table: t }) => (
+              <div className="flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  aria-label="Pilih semua baris di halaman ini"
+                  checked={t.getIsAllPageRowsSelected()}
+                  ref={(el) => {
+                    if (el) el.indeterminate = !t.getIsAllPageRowsSelected() && t.getIsSomePageRowsSelected();
+                  }}
+                  onChange={t.getToggleAllPageRowsSelectedHandler()}
+                />
+              </div>
+            ),
+            cell: ({ row }) => (
+              <div className="flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  aria-label={`Pilih ${row.original['No. Waybill']}`}
+                  checked={row.getIsSelected()}
+                  onChange={row.getToggleSelectedHandler()}
+                />
+              </div>
+            ),
+          },
+        ];
     return [
       {
         id: 'waybill',
@@ -388,6 +467,7 @@ export function FeedbackTable({
           );
         },
       },
+      ...selectColumn,
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readOnly]);
@@ -395,7 +475,10 @@ export function FeedbackTable({
   const table = useReactTable({
     data: filtered,
     columns,
-    state: { sorting, globalFilter, pagination },
+    state: { sorting, globalFilter, pagination, rowSelection },
+    getRowId: (row) => row['No. Waybill'],
+    enableRowSelection: !readOnly,
+    onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onPaginationChange: setPagination,
@@ -438,6 +521,39 @@ export function FeedbackTable({
     } finally {
       setExporting(false);
     }
+  }
+
+  // Bulk Feedback (Bagian A) - selectedWaybills dari rowSelection (key by
+  // waybill, lihat getRowId), baseVersion diambil dari `data` (dataset PENUH,
+  // bukan `filtered`) supaya baris yang sempat kesaring filter/pindah
+  // halaman tetap terkirim versi terkininya kalau kebetulan masih terpilih.
+  const selectedWaybills = useMemo(() => Object.keys(rowSelection).filter((k) => rowSelection[k]), [rowSelection]);
+  const versionByWaybill = useMemo(() => new Map((data ?? []).map((r) => [r['No. Waybill'], r.__version])), [data]);
+  const selectedCount = selectedWaybills.length;
+  const overLimit = selectedCount > BULK_FEEDBACK_MAX_ITEMS;
+
+  function handleBulkApply() {
+    if (!bulkFeedback.trim() || selectedCount === 0 || overLimit) return;
+    setBulkConfirmOpen(true);
+  }
+
+  function handleBulkConfirm() {
+    const items = selectedWaybills.map((waybill) => ({ waybill, baseVersion: versionByWaybill.get(waybill) }));
+    bulkSubmit.mutate(
+      { items, feedback: bulkFeedback.trim() },
+      {
+        onSuccess: (result) => {
+          setBulkConfirmOpen(false);
+          setBulkResult(result);
+          setRowSelection({});
+          setBulkFeedback('');
+        },
+        onError: (err: BulkSubmitFeedbackError) => {
+          setBulkConfirmOpen(false);
+          toast.error(`Gagal menerapkan feedback massal: ${err.message}`);
+        },
+      },
+    );
   }
 
   if (isLoading) {
@@ -576,6 +692,37 @@ export function FeedbackTable({
         </span>
       </div>
 
+      {/* Bulk Feedback (Bagian A) - action bar hanya muncul saat ada baris
+          terpilih. "Terapkan" TIDAK langsung eksekusi — buka dialog konfirmasi
+          dulu (handleBulkApply), sesuai permintaan eksplisit anti-salah-massal. */}
+      {!readOnly && selectedCount > 0 && (
+        <div className="bg-brand-muted border-brand/30 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2">
+          <span className="text-brand text-xs font-medium">{selectedCount} baris terpilih</span>
+          {overLimit && (
+            <span className="text-destructive text-[11px] font-medium">
+              Maksimal {BULK_FEEDBACK_MAX_ITEMS} baris per aksi massal — kurangi pilihan.
+            </span>
+          )}
+          <SelectFilter
+            label="Pilih feedback"
+            value={bulkFeedback}
+            onChange={setBulkFeedback}
+            options={[{ value: '', label: 'Pilih feedback…' }, ...options.map((o) => ({ value: o, label: o }))]}
+          />
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleBulkApply}
+            disabled={!bulkFeedback.trim() || overLimit || bulkSubmit.isPending}
+          >
+            Terapkan ke Baris Terpilih
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setRowSelection({})}>
+            Batal pilih
+          </Button>
+        </div>
+      )}
+
       {/* Area tabel scroll (flex-1) -> pagination di bawah selalu terlihat */}
       <div className="min-h-0 flex-1 overflow-auto rounded-lg border">
         <table className="w-full border-collapse text-xs">
@@ -591,6 +738,7 @@ export function FeedbackTable({
                         'bg-muted text-muted-foreground h-7 border-b px-2 text-left font-medium whitespace-nowrap',
                         h.column.getCanSort() && 'cursor-pointer select-none',
                         sticky && `${sticky} !z-30`,
+                        STICKY_WIDTH[h.column.id],
                       )}
                       onClick={h.column.getToggleSortingHandler()}
                     >
@@ -627,6 +775,7 @@ export function FeedbackTable({
                           // Sel sticky butuh latar solid supaya kolom lain tidak
                           // tembus di baliknya saat scroll horizontal.
                           sticky && `${sticky} ${stickyBg}`,
+                          STICKY_WIDTH[cell.column.id],
                         )}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -683,6 +832,72 @@ export function FeedbackTable({
               <li className="text-muted-foreground text-xs">Belum ada riwayat.</li>
             )}
           </ol>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Feedback (Bagian A) - konfirmasi eksplisit sebelum eksekusi */}
+      <Dialog open={bulkConfirmOpen} onOpenChange={(o) => !o && setBulkConfirmOpen(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Konfirmasi Feedback Massal</DialogTitle>
+            <DialogDescription>
+              Terapkan status &quot;{bulkFeedback}&quot; ke {selectedCount} paket? Tindakan ini akan tercatat untuk
+              masing-masing paket.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setBulkConfirmOpen(false)}
+              disabled={bulkSubmit.isPending}
+            >
+              Batal
+            </Button>
+            <Button type="button" size="sm" onClick={handleBulkConfirm} disabled={bulkSubmit.isPending}>
+              {bulkSubmit.isPending && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
+              Terapkan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Feedback (Bagian A) - ringkasan hasil, termasuk daftar baris yg
+          gagal (mis. konflik optimistic locking) agar admin tahu apa yg perlu
+          diulang manual. Sukses TIDAK di-rollback walau ada yg gagal. */}
+      <Dialog open={!!bulkResult} onOpenChange={(o) => !o && setBulkResult(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Hasil Feedback Massal</DialogTitle>
+            <DialogDescription>
+              {bulkResult?.successCount ?? 0} berhasil, {bulkResult?.failCount ?? 0} gagal.
+            </DialogDescription>
+          </DialogHeader>
+          {bulkResult && bulkResult.failCount > 0 && (
+            <ol className="max-h-72 space-y-1.5 overflow-auto">
+              {bulkResult.results
+                .filter((r) => !r.ok)
+                .map((r) => (
+                  <li key={r.waybill} className="border-border flex items-start gap-2 border-b pb-1.5 text-xs last:border-0">
+                    <XCircle className="text-destructive mt-0.5 size-3.5 shrink-0" aria-hidden />
+                    <span>
+                      <span className="font-medium tabular-nums">{r.waybill}</span>: {r.error}
+                    </span>
+                  </li>
+                ))}
+            </ol>
+          )}
+          {bulkResult && bulkResult.failCount === 0 && (
+            <p className="flex items-center gap-1.5 text-xs">
+              <CheckCircle2 className="size-3.5 text-emerald-600" aria-hidden /> Semua baris berhasil diperbarui.
+            </p>
+          )}
+          <DialogFooter>
+            <Button type="button" size="sm" onClick={() => setBulkResult(null)}>
+              Tutup
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -134,6 +134,66 @@ export async function submitFeedback(
   return decorateLongTailRow(updatedRows[0] as LongtailDbRow);
 }
 
+/** Batas jumlah baris per bulk action - cegah request/timeout kegedean di
+ *  jalur serverless (tiap baris = beberapa round-trip DB berurutan lewat
+ *  submitFeedback). Diusulkan (belum ada angka eksplisit dari user). */
+export const BULK_FEEDBACK_MAX_ITEMS = 100;
+
+/**
+ * Terapkan SATU feedback ke BANYAK waybill sekaligus - WAJIB memanggil
+ * submitFeedback() PERSIS SAMA per baris (loop berurutan), BUKAN logic
+ * terpisah, supaya freeze/resume aging, optimistic locking (baseVersion
+ * per baris), dan entry Activity_Log per waybill TETAP mengikuti aturan
+ * yang sama persis dengan submit satu-per-satu. Sebagian gagal (mis.
+ * VERSION_CONFLICT di satu baris) TIDAK membatalkan baris lain yang sudah
+ * berhasil - setiap baris punya transaksi/lock sendiri di submitFeedback.
+ */
+export async function bulkSubmitFeedback(
+  actorEmail: string,
+  items: { waybill: string; baseVersion?: string }[],
+  feedback: string,
+): Promise<{
+  results: Array<
+    | { waybill: string; ok: true; data: LongTailRow }
+    | { waybill: string; ok: false; error: string; code?: string }
+  >;
+  successCount: number;
+  failCount: number;
+}> {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new ApiError('VALIDATION_ERROR', 'Pilih minimal 1 waybill');
+  }
+  if (items.length > BULK_FEEDBACK_MAX_ITEMS) {
+    throw new ApiError(
+      'VALIDATION_ERROR',
+      `Maksimal ${BULK_FEEDBACK_MAX_ITEMS} waybill per aksi massal (dipilih: ${items.length})`,
+    );
+  }
+
+  const results: Array<
+    | { waybill: string; ok: true; data: LongTailRow }
+    | { waybill: string; ok: false; error: string; code?: string }
+  > = [];
+
+  for (const item of items) {
+    try {
+      const data = await submitFeedback(actorEmail, item.waybill, feedback, item.baseVersion);
+      results.push({ waybill: item.waybill, ok: true, data });
+    } catch (err) {
+      const apiErr = err instanceof ApiError ? err : null;
+      results.push({
+        waybill: item.waybill,
+        ok: false,
+        error: apiErr?.message || (err as Error)?.message || 'Gagal menyimpan',
+        code: apiErr?.code,
+      });
+    }
+  }
+
+  const successCount = results.filter((r) => r.ok).length;
+  return { results, successCount, failCount: results.length - successCount };
+}
+
 export async function createLongTail(
   actorEmail: string,
   data: CreateLongTailInput,

@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDashboardScope, ALL_SCOPE } from '@/components/dashboard/scope-context';
 import { SLOW_STALE_TIME } from '@/lib/query-config';
-import type { LongTailRow } from '@/lib/data/longtail';
+import type { BulkFeedbackItem, BulkFeedbackResult, LongTailRow } from '@/lib/data/longtail';
 import type { MasterFeedbackRow } from '@/lib/data/master-feedback';
 import type { FavoriteFeedbackRow } from '@/lib/data/favorite-feedback';
 
@@ -126,6 +126,50 @@ export function useSubmitFeedback() {
           qc.setQueryData<LongTailRow[]>(key, data);
         });
       }
+    },
+  });
+}
+
+export type BulkSubmitFeedbackError = Error & { code?: string };
+
+/**
+ * Terapkan satu feedback ke banyak waybill sekaligus (/api/feedback/bulk).
+ * TIDAK pakai optimistic update seperti useSubmitFeedback (hasilnya baru
+ * pasti setelah SEMUA baris diproses server, bisa sebagian gagal) - cache
+ * di-patch per baris yang BENAR-BENAR berhasil begitu respons datang.
+ */
+export function useBulkSubmitFeedback() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { items: BulkFeedbackItem[]; feedback: string }) => {
+      const res = await fetch('/api/feedback/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(vars),
+      });
+      const body = await res.json();
+      if (!body.ok) {
+        const err: BulkSubmitFeedbackError = Object.assign(new Error(body.message || body.error), {
+          code: body.error as string,
+        });
+        throw err;
+      }
+      return body.data as BulkFeedbackResult;
+    },
+    onSuccess: (result) => {
+      const queryKeys = qc.getQueriesData<LongTailRow[]>({ queryKey: ['longtail'] });
+      const updatedByWaybill = new Map(
+        result.results.filter((r) => r.ok).map((r) => [r.waybill, r.data]),
+      );
+      if (updatedByWaybill.size === 0) return;
+      queryKeys.forEach(([key, old]) => {
+        if (old) {
+          qc.setQueryData<LongTailRow[]>(
+            key,
+            old.map((r) => updatedByWaybill.get(r['No. Waybill']) ?? r),
+          );
+        }
+      });
     },
   });
 }

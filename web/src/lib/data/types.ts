@@ -186,6 +186,20 @@ export type UpdateLongTailInput = Partial<{
 export type ResetPreview = { dryRun: true; counts: Record<string, number> };
 export type ResetResult = { cleared: Record<string, number> };
 
+// ---- Bulk Feedback ------------------------------------------------------
+/** `baseVersion` per waybill = LongTailRow['__version'] yang dimiliki
+ *  client SAAT tabel di-load/checkbox dicentang - dipakai optimistic
+ *  locking yang SAMA seperti submit satu-per-satu (submitFeedback). */
+export type BulkFeedbackItem = { waybill: string; baseVersion?: string };
+export type BulkFeedbackResultRow =
+  | { waybill: string; ok: true; data: LongTailRow }
+  | { waybill: string; ok: false; error: string; code?: string };
+export type BulkFeedbackResult = {
+  results: BulkFeedbackResultRow[];
+  successCount: number;
+  failCount: number;
+};
+
 // ---- Import -----------------------------------------------------------------
 export type ImportResult = {
   batchId: string;
