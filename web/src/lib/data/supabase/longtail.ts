@@ -1,5 +1,5 @@
 import { db } from './client';
-import { attributionName, requireActor, requireRole, resolveScopedDps, type Actor } from './helpers';
+import { attributionName, expandDpMatchValues, requireActor, requireRole, resolveScopedDps, type Actor } from './helpers';
 import { requirePermission } from './permissions';
 import { ApiError } from '@/lib/errors';
 import { FULL_ACCESS_ROLES } from '@/lib/roles';
@@ -28,7 +28,9 @@ const sameDp = (a: string | null, b: string) =>
  *  Admin DP = boleh kalau DP-nya sendiri (perilaku sama seperti sebelumnya). */
 async function assertCanAccessDp(actor: Actor, dpSampai: string | null): Promise<void> {
   const scopedDps = await resolveScopedDps(actor);
-  if (scopedDps && !scopedDps.some((dp) => sameDp(dpSampai, dp))) {
+  if (!scopedDps) return; // full access
+  const matchValues = await expandDpMatchValues(scopedDps);
+  if (!matchValues.some((dp) => sameDp(dpSampai, dp))) {
     throw new ApiError('FORBIDDEN', 'Tidak punya akses ke waybill ini');
   }
 }
