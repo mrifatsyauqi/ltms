@@ -133,9 +133,43 @@ export async function getSupervisedDPs(actorId: string): Promise<string[]> {
  * access - Super Admin/Admin Cabang/Manager Kota/Asisten Manager Kota).
  * SPV Drop Point: array 0/1/banyak DP (getSupervisedDPs). Admin DP: array
  * berisi 1 elemen (actor.dropPoint), perilaku sama seperti sebelum Langkah 3.
+ *
+ * SENGAJA TETAP kode_dp murni (BUKAN diekspansi ke Nama DP di sini) - dipakai
+ * beberapa caller utk CARDINALITY (mis. getDashboardSnapshot: "actor ini
+ * disupervisi TEPAT 1 DP?"), bukan cuma keanggotaan. Utk memfilter/mencocokkan
+ * kolom dp_sampai/activity_log.dp, panggil expandDpMatchValues() TERPISAH di
+ * titik query-nya - lihat komentar fungsi itu.
  */
 export async function resolveScopedDps(actor: Actor): Promise<string[] | null> {
   if (hasFullAccess(actor.role)) return null;
   if (actor.role === 'SPV Drop Point') return getSupervisedDPs(actor.id);
   return actor.dropPoint ? [actor.dropPoint] : [];
+}
+
+/**
+ * Nilai dp_sampai/activity_log.dp yang SAH utk satu/lebih Kode DP - termasuk
+ * Nama DP-nya juga, BUKAN cuma Kode DP. Konvensi "Kode DP harus sama persis
+ * dgn 'DP Sampai' di data JMS" (lihat master/drop-point-client.tsx) TERNYATA
+ * tidak selalu diikuti saat Kode DP dibuat - beberapa DP (mis. WARUNGASEM,
+ * BLADO01, GRINGSING_LAMA, BANDAR01) punya Kode DP master yang BEDA dari teks
+ * "DP Sampai" asli yang sudah terlanjur ter-import ke tabel longtail.
+ * Tanpa ekspansi ini, SEMUA filter/otorisasi berbasis dp_sampai (Dashboard,
+ * Feedback Long Tail, Riwayat Feedback, assertCanAccessDp) menghasilkan 0
+ * baris / FORBIDDEN utk DP-DP itu meskipun datanya ADA (ditemukan dari bug
+ * report: filter Cakupan ke DP tsb -> Dashboard kosong total, padahal
+ * "Progress per Drop Point" versi tak difilter menunjukkan datanya ada).
+ * Nilai input tetap disertakan sbg fallback (DP yang tak ada di master tetap
+ * cocok ke dirinya sendiri, bukan malah 0 hasil).
+ */
+export async function expandDpMatchValues(kodeDpList: string[]): Promise<string[]> {
+  const list = kodeDpList.filter(Boolean);
+  if (list.length === 0) return [];
+  const { data, error } = await db().from('master_drop_point').select('kode_dp, nama_dp').in('kode_dp', list);
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  const out = new Set<string>(list);
+  for (const row of (data ?? []) as { kode_dp: string; nama_dp: string }[]) {
+    if (row.kode_dp) out.add(row.kode_dp);
+    if (row.nama_dp) out.add(row.nama_dp);
+  }
+  return [...out];
 }

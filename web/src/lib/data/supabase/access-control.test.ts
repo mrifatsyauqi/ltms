@@ -164,4 +164,41 @@ describe('Akses per DP: batas keamanan data antar Drop Point (eksekusi nyata, fu
       'Admin Cabang melihat log lintas-DP',
     );
   });
+
+  it('5. Kode DP master BEDA dari teks dp_sampai asli (mis. Kode DP "BGG06" utk DP "WARUNGASEM") tetap match, bukan 0 hasil', async () => {
+    // Bug ditemukan production: Kode DP master TIDAK SELALU sama persis dgn
+    // teks "DP Sampai" JMS yang terlanjur ter-import (konvensi di
+    // master/drop-point-client.tsx cuma dokumentasi, tak pernah divalidasi
+    // kode) - scoping/filter berbasis Kode DP mentah jadi 0 hasil/FORBIDDEN
+    // meski datanya ADA. Ditambal via expandDpMatchValues (helpers.ts).
+    store.set('master_drop_point', [{ kode_dp: 'BGG06', nama_dp: 'WARUNGASEM' }]);
+    store.set('users', [
+      ...store.get('users')!,
+      { email: 'admindp.warungasem@ltms.test', nama: 'Admin DP Warungasem', role: 'Admin DP', drop_point: 'BGG06', status_aktif: true },
+    ]);
+    store.set('longtail', [
+      ...store.get('longtail')!,
+      { no_waybill: 'WB-WARUNGASEM', status_terakhir: 'DELIVERY', alasan_bermasalah: '', dp_sampai: 'WARUNGASEM', waktu_sampai: '2026-07-28 10:00:00', umur_frozen: null, sprinter_delivery: '', cod: 'NONCOD', delivery_attempt: 0, feedback: '', log_feedback: '', perlu_review: false, version: 1 },
+    ]);
+    const ADMIN_DP_WARUNGASEM = 'admindp.warungasem@ltms.test';
+
+    // listLongTail (Feedback Long Tail): Admin DP dgn Kode DP 'BGG06' tetap
+    // menemukan baris dp_sampai='WARUNGASEM'.
+    const rows = await longtail.listLongTail(ADMIN_DP_WARUNGASEM);
+    assert.deepEqual(rows.map((r) => r['No. Waybill']), ['WB-WARUNGASEM']);
+
+    // assertCanAccessDp (getLongTail/submitFeedback) tidak FORBIDDEN thd baris miliknya sendiri.
+    const got = await longtail.getLongTail(ADMIN_DP_WARUNGASEM, 'WB-WARUNGASEM');
+    assert.equal(got['No. Waybill'], 'WB-WARUNGASEM');
+    const updated = await longtail.submitFeedback(ADMIN_DP_WARUNGASEM, 'WB-WARUNGASEM', 'On Delivery');
+    assert.equal(updated.Feedback, 'On Delivery');
+
+    // Dashboard - agregat Admin DP itu sendiri (lewat resolveScopedDps).
+    const dash = await dashboard.getDashboard(ADMIN_DP_WARUNGASEM);
+    assert.equal(dash.summary.total, 1, 'Dashboard Admin DP Warungasem HARUS lihat 1 baris miliknya, bukan 0');
+
+    // Dashboard - Admin Cabang filter CAKUPAN manual ke Kode DP 'BGG06'.
+    const dashScoped = await dashboard.getDashboard(ADMIN_CABANG, 'BGG06');
+    assert.equal(dashScoped.summary.total, 1, 'Filter Cakupan ke Kode DP BGG06 HARUS ketemu baris dp_sampai=WARUNGASEM, bukan 0');
+  });
 });
