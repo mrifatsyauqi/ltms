@@ -39,20 +39,15 @@ export function FeedbackCell({ row, options, saving, onCommit, registerRef, onEn
   // willBeClearTTD di submitFeedback, longtail.ts). Status beku/Clear TTD-nya
   // sendiri sudah terlihat dari badge Umur (agingLevel frozen=__isClearTTD).
 
-  // Rekomendasi: cocok di MANA PUN dalam teks (bukan cuma prefix) - dulu
-  // hanya startsWith(), jadi kalau admin ngetik kata di tengah nama feedback
-  // (mis. "waktu" utk "Reschedule waktu pengiriman") dropdown-nya KOSONG
-  // sama sekali, kelihatan spt "Master Feedback tidak ada" padahal cuma soal
-  // cara cari. Prefix match tetap diprioritaskan di urutan teratas (stable
-  // sort thd urutan options: favorit dulu, lalu master) - substring match
-  // menyusul di bawahnya.
+  // Rekomendasi: cocok dari huruf pertama (prefix), urut sesuai options.
+  // Dropdown SENGAJA tidak langsung menampilkan semua opsi begitu sel
+  // difokus/diklik (pernah dicoba - secara UX mengganggu, kelihatan penuh
+  // sebelum admin sempat mengetik apa2) - baru muncul setelah mulai mengetik
+  // & match huruf pertama.
   const q = value.trim().toLowerCase();
   const suggestions = q
-    ? options
-        .filter((o) => o.toLowerCase() !== q && o.toLowerCase().includes(q))
-        .sort((a, b) => Number(!a.toLowerCase().startsWith(q)) - Number(!b.toLowerCase().startsWith(q)))
-        .slice(0, MAX_SUGGEST)
-    : options.slice(0, MAX_SUGGEST); // cell kosong -> tampilkan daftar rekomendasi begitu difokus, bukan nunggu diketik dulu
+    ? options.filter((o) => o.toLowerCase().startsWith(q) && o.toLowerCase() !== q).slice(0, MAX_SUGGEST)
+    : [];
 
   function openMenu() {
     if (inputRef.current) setRect(inputRef.current.getBoundingClientRect());
@@ -100,21 +95,11 @@ export function FeedbackCell({ row, options, saving, onCommit, registerRef, onEn
           dirtyRef.current = true;
           setValue(v);
           const vv = v.trim().toLowerCase();
-          const hasMatch = vv
-            ? options.some((o) => o.toLowerCase() !== vv && o.toLowerCase().includes(vv))
-            : options.length > 0;
-          if (hasMatch) {
+          if (vv && options.some((o) => o.toLowerCase().startsWith(vv) && o.toLowerCase() !== vv)) {
             openMenu();
           } else {
             setOpen(false);
           }
-        }}
-        onFocus={() => {
-          // Klik/fokus ke sel kosong langsung menampilkan daftar rekomendasi
-          // (favorit + master aktif) - sebelumnya dropdown baru muncul
-          // SETELAH mulai mengetik, jadi admin yg cuma klik lalu tak lihat
-          // apa-apa mengira Master Feedback-nya kosong.
-          if (options.length > 0) openMenu();
         }}
         onBlur={() => {
           setOpen(false);
