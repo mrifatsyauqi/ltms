@@ -239,6 +239,16 @@ export type ImportBatchRow = {
   Gagal: number;
   Status: string;
   Keterangan: string;
+  /** File ASLI (bukan hasil parse) yang tersimpan di Storage utk batch ini -
+   *  kosong kalau upload file gagal/dilewati atau sudah lewat retensi 7 hari
+   *  (baris import_batch_file-nya sudah dihapus cron, tapi baris
+   *  import_batch sendiri tetap ada sbg riwayat). */
+  Files: ImportBatchFileRow[];
+};
+export type ImportBatchFileRow = {
+  id: string;
+  namaFile: string;
+  sizeBytes: number;
 };
 export type MappingTemplate = {
   namaTemplate: string;

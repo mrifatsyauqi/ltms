@@ -1,23 +1,16 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { MapPin, Lock } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { isCityMatch, resolveCityFromDropPoint } from '@/lib/city-matcher';
 import { parseExcelDate, formatDisplayDateTime } from '@/lib/excel-date';
-import {
-  IncRow,
-  IncStats,
-  UploadedFileInfo,
-  RecentUploadHistoryItem,
-  AVAILABLE_CITIES,
-} from './types';
+import { IncRow, IncStats, UploadedFileInfo, AVAILABLE_CITIES } from './types';
 import { UploadCard } from './upload-card';
 import { UploadedFileCard } from './uploaded-file-card';
 import { GenerateSection } from './generate-section';
-import { RecentHistoryCard } from './recent-history-card';
 import { ResultsView } from './results-view';
 import type { DropPointRow } from '@/lib/data/drop-points';
 
@@ -32,9 +25,6 @@ interface MonitoringIncClientProps {
   userRole?: string;
   userDropPoint?: string;
 }
-
-const STORAGE_KEY_RECENT_LIST = 'ltms_recent_inc_upload_list';
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function MonitoringIncClient({
   userRole,
@@ -57,7 +47,6 @@ export function MonitoringIncClient({
   const [parsedRows, setParsedRows] = useState<IncRow[] | null>(null);
   const [generateTimestamp, setGenerateTimestamp] = useState<string>('');
   const [viewMode, setViewMode] = useState<'workflow' | 'results'>('workflow');
-  const [historyList, setHistoryList] = useState<RecentUploadHistoryItem[]>([]);
 
   // Dipakai utk disambiguasi "DP Delivery"/Kecamatan -> DP (lihat resolveDp
   // di results-view.tsx) - jarang berubah (data master), staleTime panjang.
@@ -66,52 +55,6 @@ export function MonitoringIncClient({
     queryFn: () => api<DropPointRow[]>('/api/drop-points'),
     staleTime: 5 * 60 * 1000,
   });
-
-  // 7-Day Auto Retention: Load & Cleanup expired items
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_RECENT_LIST);
-      if (saved) {
-        const parsed: RecentUploadHistoryItem[] = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const now = Date.now();
-          const validList = parsed.filter(
-            (item) => item.createdAt && now - item.createdAt <= SEVEN_DAYS_MS
-          );
-          setHistoryList(validList);
-          if (validList.length !== parsed.length) {
-            localStorage.setItem(STORAGE_KEY_RECENT_LIST, JSON.stringify(validList));
-          }
-          return;
-        }
-      }
-
-      // Fallback check legacy single key
-      const legacy = localStorage.getItem('ltms_recent_inc_upload');
-      if (legacy) {
-        const single = JSON.parse(legacy);
-        const item: RecentUploadHistoryItem = {
-          ...single,
-          createdAt: single.createdAt || Date.now(),
-        };
-        setHistoryList([item]);
-        localStorage.setItem(STORAGE_KEY_RECENT_LIST, JSON.stringify([item]));
-        localStorage.removeItem('ltms_recent_inc_upload');
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  // Helper untuk menyimpan history list ke localStorage
-  const saveHistoryList = (list: RecentUploadHistoryItem[]) => {
-    setHistoryList(list);
-    try {
-      localStorage.setItem(STORAGE_KEY_RECENT_LIST, JSON.stringify(list));
-    } catch {
-      // ignore
-    }
-  };
 
   // Format ukuran file
   const formatFileSize = (bytes: number) => {
@@ -298,21 +241,6 @@ export function MonitoringIncClient({
       const nowStr = formatDisplayDateTime();
       setGenerateTimestamp(nowStr);
 
-      // Simpan ke riwayat (maksimal 7 hari)
-      const newHistory: RecentUploadHistoryItem = {
-        id: String(Date.now()),
-        fileName: fileInfo.name,
-        targetKota,
-        totalResi: mappedRows.length,
-        rawTotalResi: fileInfo.rawTotalResi,
-        uploadTimestamp: nowStr,
-        createdAt: Date.now(),
-        status: 'Success',
-      };
-
-      const updatedHistory = [newHistory, ...historyList.filter((h) => h.fileName !== fileInfo.name)].slice(0, 10);
-      saveHistoryList(updatedHistory);
-
       // Berikan jeda halus sebelum beralih ke tampilan hasil
       setTimeout(() => {
         setViewMode('results');
@@ -366,48 +294,6 @@ export function MonitoringIncClient({
     };
   }, [parsedRows]);
 
-  // Actions for Recent History Card
-  const handleViewDetail = (item: RecentUploadHistoryItem) => {
-    if (parsedRows && parsedRows.length > 0) {
-      setViewMode('results');
-    } else {
-      toast.info(`Memuat data ${item.fileName}... Silakan upload/generate ulang jika data belum tersimpan.`);
-    }
-  };
-
-  const handleRegenerate = (item: RecentUploadHistoryItem) => {
-    if (fileInfo) {
-      handleExecuteGenerate();
-    } else {
-      toast.info(`Silakan upload file ${item.fileName} untuk melakukan generate ulang.`);
-    }
-  };
-
-  const handleDownloadOriginal = (item: RecentUploadHistoryItem) => {
-    if (fileInfo?.file && fileInfo.name === item.fileName) {
-      const url = URL.createObjectURL(fileInfo.file);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileInfo.file.name;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success('File asli berhasil diunduh.');
-    } else {
-      toast.info('File asli hanya dapat diunduh pada sesi aktif saat ini.');
-    }
-  };
-
-  const handleDeleteHistoryItem = (id: string) => {
-    const updated = historyList.filter((h) => h.id !== id);
-    saveHistoryList(updated);
-    toast.success('Riwayat berhasil dihapus.');
-  };
-
-  const handleClearAllHistory = () => {
-    saveHistoryList([]);
-    toast.success('Semua riwayat upload telah dibersihkan.');
-  };
-
   // Mode Tampilan Laporan Hasil
   if (viewMode === 'results' && parsedRows) {
     return (
@@ -429,33 +315,33 @@ export function MonitoringIncClient({
   return (
     <div className="space-y-3.5 max-w-7xl mx-auto animate-in fade-in-50 duration-300">
       {/* 1. Header Ringkas + Selector Target Kota */}
-      <div className="flex items-center justify-between gap-3 pb-2 border-b border-[#E5E7EB]">
+      <div className="flex items-center justify-between gap-3 pb-2 border-b border-border">
         <div>
-          <h1 className="text-lg md:text-xl font-semibold tracking-tight text-slate-900">
+          <h1 className="text-lg md:text-xl font-semibold tracking-tight text-foreground">
             Monitoring INC
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Monitoring pengiriman Inter City (INC) dengan batas SLA maksimal 24 jam.
           </p>
         </div>
 
         {/* Target Kota Dropdown */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-slate-500 hidden sm:inline">
+          <span className="text-xs font-medium text-muted-foreground hidden sm:inline">
             Target Kota
           </span>
-          <div className="flex items-center gap-1.5 bg-white border border-[#E5E7EB] rounded-[8px] px-2.5 py-1.5 shadow-2xs text-xs font-medium text-slate-800">
+          <div className="flex items-center gap-1.5 bg-card border border-border rounded-[8px] px-2.5 py-1.5 shadow-2xs text-xs font-medium text-foreground">
             <MapPin className="size-3.5 text-[#E2231A]" />
             {isCityLocked ? (
               <div className="flex items-center gap-1">
                 <span>{targetKota}</span>
-                <Lock className="size-3 text-slate-400" />
+                <Lock className="size-3 text-muted-foreground" />
               </div>
             ) : (
               <select
                 value={targetKota}
                 onChange={(e) => setTargetKota(e.target.value)}
-                className="bg-transparent font-semibold text-slate-900 focus:outline-none cursor-pointer"
+                className="bg-transparent font-semibold text-foreground focus:outline-none cursor-pointer"
               >
                 {AVAILABLE_CITIES.map((c) => (
                   <option key={c} value={c}>
@@ -489,16 +375,6 @@ export function MonitoringIncClient({
       <GenerateSection
         hasFile={!!fileInfo}
         onGenerate={handleExecuteGenerate}
-      />
-
-      {/* 4. Step 4: Riwayat File (Maks 7 Hari) */}
-      <RecentHistoryCard
-        history={historyList}
-        onViewDetail={handleViewDetail}
-        onRegenerate={handleRegenerate}
-        onDownloadOriginal={handleDownloadOriginal}
-        onDeleteHistoryItem={handleDeleteHistoryItem}
-        onClearHistory={handleClearAllHistory}
       />
     </div>
   );

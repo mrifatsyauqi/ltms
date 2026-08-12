@@ -51,10 +51,36 @@ type FileEntry = {
   rawRowCount?: number;
   error?: string;
   raw?: ParsedFile;
+  /** File asli (byte apa adanya) - disimpan di memori supaya bisa diupload
+   *  ke Storage (retensi 7 hari) SETELAH import data sukses, lihat
+   *  handleImportAll. Bukan dikirim sbg baris JSON — itu terpisah (raw). */
+  originalFile?: File;
 };
 
 function computeMapped(parsed: ParsedFile, mapping: HeaderMapping) {
   return mergeAndDedup([applyMapping(parsed, mapping)]).rows;
+}
+
+/**
+ * Upload file ASLI (retensi 7 hari, bisa diunduh ulang di Riwayat Import) —
+ * dipanggil SETELAH import data sukses, best-effort/non-blocking: kegagalan
+ * di sini TIDAK dianggap kegagalan import (datanya sudah tersimpan di
+ * LongTail), hanya tombol "Unduh File Asli" yang tidak akan tersedia.
+ */
+async function uploadOriginalFiles(batchId: string, ready: FileEntry[]) {
+  const files = ready.map((e) => e.originalFile).filter((f): f is File => !!f);
+  if (files.length === 0) return;
+  try {
+    const form = new FormData();
+    form.set('batchId', batchId);
+    for (const f of files) form.append('files', f);
+    const res = await fetch('/api/import/files', { method: 'POST', body: form });
+    const body = await res.json();
+    if (!body.ok) throw new Error(body.message || body.error);
+  } catch (err) {
+    console.error('Gagal menyimpan file asli import (retensi 7 hari):', err);
+    toast.warning('File asli tidak tersimpan untuk diunduh ulang (data Long Tail tetap tersimpan normal).');
+  }
 }
 
 function formatSize(bytes: number): string {
@@ -176,6 +202,7 @@ export function ImportClient() {
           mappedRows,
           rawRowCount: result.file.rows.length,
           status: isMappingComplete(mapping) ? 'ready' : 'needs-mapping',
+          originalFile: file,
         };
         return next;
       });
@@ -233,6 +260,7 @@ export function ImportClient() {
       toast.success(
         `${fileNames.length} file (${combined.rows.length} waybill unik): ${r.inserted} baru, ${r.updated} update, ${r.koreksiOtomatis} koreksi otomatis, ${r.skipped} dilewati${closeInfo}`,
       );
+      void uploadOriginalFiles(r.batchId, ready);
     } catch (err) {
       const aborted = err instanceof DOMException && err.name === 'AbortError';
       const message = aborted ? 'Import dibatalkan oleh user' : err instanceof Error ? err.message : 'Gagal import';

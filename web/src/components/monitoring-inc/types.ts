@@ -47,18 +47,6 @@ export type UploadedFileInfo = {
   file?: File;
 };
 
-export type RecentUploadHistoryItem = {
-  id: string;
-  fileName: string;
-  targetKota: string;
-  totalResi: number; // Filtered count
-  rawTotalResi?: number;
-  uploadTimestamp: string;
-  createdAt: number; // Unix timestamp in milliseconds for 7-day retention
-  status: 'Processing' | 'Success' | 'Failed' | 'Berhasil' | 'Gagal';
-  dataUrl?: string;
-};
-
 export type ProcessingStep = {
   id: number;
   label: string;

@@ -343,7 +343,7 @@ export default function MentionMappingPage() {
       {toast && (
         <div
           className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 text-sm font-semibold transition-all ${
-            toast.type === 'success' ? 'bg-slate-900 text-white' : 'bg-red-600 text-white'
+            toast.type === 'success' ? 'bg-foreground text-background' : 'bg-red-600 text-white'
           }`}
         >
           {toast.type === 'success' ? (
@@ -363,10 +363,10 @@ export default function MentionMappingPage() {
               <AtSign className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
                 Mention Mapping PIC
               </h1>
-              <p className="text-xs sm:text-sm text-slate-500 font-medium">
+              <p className="text-xs sm:text-sm text-muted-foreground font-medium">
                 Kelola pemetaan PIC & Feishu Open ID untuk penugasan operasional otomatis pada Interactive Card.
               </p>
             </div>
@@ -377,17 +377,17 @@ export default function MentionMappingPage() {
           <button
             type="button"
             onClick={() => setIsGuideOpen(true)}
-            className="px-3 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 flex items-center gap-1.5 transition-colors shadow-sm"
+            className="px-3 py-2 text-xs font-semibold text-muted-foreground bg-card border border-border rounded-xl hover:bg-muted flex items-center gap-1.5 transition-colors shadow-sm"
           >
-            <HelpCircle className="w-4 h-4 text-slate-400" />
+            <HelpCircle className="w-4 h-4 text-muted-foreground" />
             <span>Panduan Open ID</span>
           </button>
           <button
             type="button"
             onClick={() => setIsBulkModalOpen(true)}
-            className="px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 flex items-center gap-1.5 transition-colors shadow-sm"
+            className="px-3 py-2 text-xs font-semibold text-foreground bg-card border border-border rounded-xl hover:bg-muted flex items-center gap-1.5 transition-colors shadow-sm"
           >
-            <Upload className="w-4 h-4 text-slate-500" />
+            <Upload className="w-4 h-4 text-muted-foreground" />
             <span>Impor Bulk</span>
           </button>
           <button
@@ -402,16 +402,16 @@ export default function MentionMappingPage() {
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+      <div className="bg-card p-4 rounded-2xl border border-border shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
         {/* Scope Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100/80 rounded-xl w-full md:w-auto">
+        <div className="flex items-center gap-1.5 p-1 bg-muted/80 rounded-xl w-full md:w-auto">
           <button
             type="button"
             onClick={() => setScopeFilter('all')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
               scopeFilter === 'all'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Semua ({mentions.length})
@@ -421,8 +421,8 @@ export default function MentionMappingPage() {
             onClick={() => setScopeFilter('kecamatan')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
               scopeFilter === 'kecamatan'
-                ? 'bg-white text-red-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-card text-red-600 shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <MapPin className="w-3.5 h-3.5" />
@@ -433,8 +433,8 @@ export default function MentionMappingPage() {
             onClick={() => setScopeFilter('drop_point')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
               scopeFilter === 'drop_point'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Building className="w-3.5 h-3.5" />
@@ -445,8 +445,8 @@ export default function MentionMappingPage() {
             onClick={() => setScopeFilter('kurir')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
               scopeFilter === 'kurir'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-card text-blue-600 shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Truck className="w-3.5 h-3.5" />
@@ -457,20 +457,20 @@ export default function MentionMappingPage() {
         {/* Search & Refresh */}
         <div className="flex items-center gap-2.5 w-full md:w-auto">
           <div className="relative flex-1 md:w-72">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Cari wilayah, nama PIC, Open ID..."
-              className="w-full pl-9 pr-3.5 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
+              className="w-full pl-9 pr-3.5 py-1.5 text-xs rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
             />
           </div>
           <button
             type="button"
             onClick={() => refetch()}
             disabled={loading}
-            className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-50 border border-slate-200 rounded-xl transition-colors"
+            className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted border border-border rounded-xl transition-colors"
             title="Refresh Data"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -479,16 +479,16 @@ export default function MentionMappingPage() {
       </div>
 
       {/* Main Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center text-slate-400 space-y-2">
-            <RefreshCw className="w-6 h-6 animate-spin mx-auto text-slate-300" />
+          <div className="p-12 text-center text-muted-foreground space-y-2">
+            <RefreshCw className="w-6 h-6 animate-spin mx-auto text-muted-foreground/60" />
             <p className="text-xs font-medium">Memuat data mapping mention...</p>
           </div>
         ) : error ? (
           <div className="p-8 text-center space-y-2">
             <AlertCircle className="w-8 h-8 text-red-500 mx-auto" />
-            <p className="text-sm font-semibold text-slate-800">{error}</p>
+            <p className="text-sm font-semibold text-foreground">{error}</p>
             <button
               onClick={() => refetch()}
               className="text-xs font-bold text-red-600 hover:underline"
@@ -497,11 +497,11 @@ export default function MentionMappingPage() {
             </button>
           </div>
         ) : filteredMentions.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 space-y-3">
-            <UserCheck className="w-10 h-10 text-slate-300 mx-auto" />
+          <div className="p-12 text-center text-muted-foreground space-y-3">
+            <UserCheck className="w-10 h-10 text-muted-foreground/60 mx-auto" />
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-slate-700">Belum ada data mention mapping</p>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              <p className="text-sm font-semibold text-foreground">Belum ada data mention mapping</p>
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
                 Tambahkan mapping wilayah atau kurir ke PIC Feishu agar Interactive Card dapat otomatis menyebut (@mention) penanggung jawab operasional.
               </p>
             </div>
@@ -515,7 +515,7 @@ export default function MentionMappingPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider">
+              <thead className="bg-muted/80 border-b border-border text-muted-foreground font-semibold uppercase tracking-wider">
                 <tr>
                   <th className="py-3.5 px-4">Tipe & Wilayah / Key</th>
                   <th className="py-3.5 px-4">Nama PIC & Role</th>
@@ -524,16 +524,16 @@ export default function MentionMappingPage() {
                   <th className="py-3.5 px-4 text-right">Aksi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-border">
                 {filteredMentions.map((item) => {
                   const hasOpenId = !!item.feishu_open_id && item.feishu_open_id.trim().length > 0;
 
                   return (
-                    <tr key={item.id} className="hover:bg-slate-50/60 transition-colors group">
+                    <tr key={item.id} className="hover:bg-muted/60 transition-colors group">
                       {/* Scope & Key */}
                       <td className="py-3.5 px-4">
                         <div className="space-y-1">
-                          <span className="font-extrabold text-slate-900 text-sm tracking-tight block">
+                          <span className="font-extrabold text-foreground text-sm tracking-tight block">
                             {item.scope_key}
                           </span>
                           <span
@@ -542,7 +542,7 @@ export default function MentionMappingPage() {
                                 ? 'bg-red-50 text-[#E2231A] border border-red-100'
                                 : item.scope_type === 'kurir'
                                 ? 'bg-blue-50 text-blue-700 border border-blue-100'
-                                : 'bg-slate-100 text-slate-700 border border-slate-200'
+                                : 'bg-muted text-foreground border border-border'
                             }`}
                           >
                             {item.scope_type === 'kecamatan' && <MapPin className="w-2.5 h-2.5" />}
@@ -560,8 +560,8 @@ export default function MentionMappingPage() {
                       {/* PIC Name & Role */}
                       <td className="py-3.5 px-4">
                         <div className="space-y-0.5">
-                          <span className="font-bold text-slate-800 text-xs block">{item.pic_name}</span>
-                          <span className="text-[11px] text-slate-500 font-medium">
+                          <span className="font-bold text-foreground text-xs block">{item.pic_name}</span>
+                          <span className="text-[11px] text-muted-foreground font-medium">
                             {item.role || 'Admin DP'}
                           </span>
                         </div>
@@ -572,7 +572,7 @@ export default function MentionMappingPage() {
                         <div className="space-y-1">
                           {hasOpenId ? (
                             <div className="flex items-center gap-2">
-                              <span className="font-mono text-[11px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                              <span className="font-mono text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded border border-border">
                                 {item.feishu_open_id}
                               </span>
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
@@ -585,7 +585,7 @@ export default function MentionMappingPage() {
                               <span className="text-[11px] text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
                                 Tanpa Open ID (Fallback Text)
                               </span>
-                              <span className="text-[11px] text-slate-500">@{item.pic_name}</span>
+                              <span className="text-[11px] text-muted-foreground">@{item.pic_name}</span>
                             </div>
                           )}
                         </div>
@@ -599,7 +599,7 @@ export default function MentionMappingPage() {
                           className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-colors ${
                             item.is_active
                               ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
-                              : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                              : 'bg-muted text-muted-foreground hover:bg-accent'
                           }`}
                         >
                           {item.is_active ? 'Aktif' : 'Non-Aktif'}
@@ -612,7 +612,7 @@ export default function MentionMappingPage() {
                           <button
                             type="button"
                             onClick={() => handleOpenEdit(item)}
-                            className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
                             title="Edit Mapping"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
@@ -620,7 +620,7 @@ export default function MentionMappingPage() {
                           <button
                             type="button"
                             onClick={() => handleDelete(item.id, item.pic_name)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Hapus"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -639,20 +639,20 @@ export default function MentionMappingPage() {
       {/* Add / Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+          <div className="bg-popover rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-border animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 bg-red-50 rounded-lg text-[#E2231A]">
                   <AtSign className="w-4 h-4" />
                 </div>
-                <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                <h3 className="text-sm sm:text-base font-bold text-foreground">
                   {editingId ? 'Edit Mapping Mention' : 'Tambah Mapping Mention PIC'}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                className="p-1 text-muted-foreground hover:text-foreground rounded-lg"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -661,7 +661,7 @@ export default function MentionMappingPage() {
             <form onSubmit={handleSave} className="p-4 sm:p-5 space-y-4 text-xs">
               {/* Scope Type */}
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700 block">Tipe Cakupan (Scope)</label>
+                <label className="font-semibold text-foreground block">Tipe Cakupan (Scope)</label>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
@@ -669,7 +669,7 @@ export default function MentionMappingPage() {
                     className={`py-2 px-3 rounded-xl border text-center font-semibold transition-all ${
                       formData.scope_type === 'kecamatan'
                         ? 'border-red-500 bg-red-50 text-[#E2231A]'
-                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                        : 'border-border hover:bg-muted text-foreground'
                     }`}
                   >
                     Kecamatan (INC)
@@ -680,7 +680,7 @@ export default function MentionMappingPage() {
                     className={`py-2 px-3 rounded-xl border text-center font-semibold transition-all ${
                       formData.scope_type === 'kurir'
                         ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                        : 'border-border hover:bg-muted text-foreground'
                     }`}
                   >
                     Kurir Delivery
@@ -690,8 +690,8 @@ export default function MentionMappingPage() {
                     onClick={() => setFormData({ ...formData, scope_type: 'drop_point' })}
                     className={`py-2 px-3 rounded-xl border text-center font-semibold transition-all ${
                       formData.scope_type === 'drop_point'
-                        ? 'border-slate-800 bg-slate-100 text-slate-900'
-                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                        ? 'border-foreground bg-muted text-foreground'
+                        : 'border-border hover:bg-muted text-foreground'
                     }`}
                   >
                     Drop Point
@@ -701,7 +701,7 @@ export default function MentionMappingPage() {
 
               {/* Scope Key */}
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700 block">
+                <label className="font-semibold text-foreground block">
                   {formData.scope_type === 'kecamatan'
                     ? 'Nama Kecamatan Target (cth: BATANG, WARUNGASEM)'
                     : formData.scope_type === 'kurir'
@@ -720,31 +720,31 @@ export default function MentionMappingPage() {
                       ? 'Andi'
                       : 'BATANG01'
                   }
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 font-semibold uppercase tracking-wide"
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 font-semibold uppercase tracking-wide"
                 />
               </div>
 
               {/* PIC Name & Role */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-700 block">Nama Lengkap PIC</label>
+                  <label className="font-semibold text-foreground block">Nama Lengkap PIC</label>
                   <input
                     type="text"
                     required
                     value={formData.pic_name}
                     onChange={(e) => setFormData({ ...formData, pic_name: e.target.value })}
                     placeholder="Agus Supriyanto"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 font-medium"
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 font-medium"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-700 block">Jabatan / Role</label>
+                  <label className="font-semibold text-foreground block">Jabatan / Role</label>
                   <input
                     type="text"
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                     placeholder="Admin DP Batang"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 font-medium"
+                    className="w-full px-3 py-2 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 font-medium"
                   />
                 </div>
               </div>
@@ -752,18 +752,18 @@ export default function MentionMappingPage() {
               {/* Nomor HP & Cari Open ID */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className="font-semibold text-slate-700 block">Nomor HP (utk cari Open ID otomatis)</label>
-                  <span className="text-[10px] text-slate-400">Format bebas, cth: 081234567890</span>
+                  <label className="font-semibold text-foreground block">Nomor HP (utk cari Open ID otomatis)</label>
+                  <span className="text-[10px] text-muted-foreground">Format bebas, cth: 081234567890</span>
                 </div>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
-                    <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                     <input
                       type="tel"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                       placeholder="081234567890"
-                      className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 font-medium"
+                      className="w-full pl-8 pr-3 py-2 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 font-medium"
                     />
                   </div>
                   <button
@@ -780,7 +780,7 @@ export default function MentionMappingPage() {
                     <span>Cari Open ID</span>
                   </button>
                 </div>
-                <p className="text-[10px] text-slate-400">
+                <p className="text-[10px] text-muted-foreground">
                   Mencari Open ID resmi via Feishu Contact API berdasarkan nomor HP - hasilnya otomatis mengisi field Open ID di bawah.
                 </p>
               </div>
@@ -788,8 +788,8 @@ export default function MentionMappingPage() {
               {/* Feishu Open ID & Validation */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className="font-semibold text-slate-700 block">Feishu Open ID (Wajib untuk @tag aktif)</label>
-                  <span className="text-[10px] text-slate-400 font-mono">Format: ou_xxxxxxxxxxxx</span>
+                  <label className="font-semibold text-foreground block">Feishu Open ID (Wajib untuk @tag aktif)</label>
+                  <span className="text-[10px] text-muted-foreground font-mono">Format: ou_xxxxxxxxxxxx</span>
                 </div>
                 <div className="flex gap-2">
                   <input
@@ -800,13 +800,13 @@ export default function MentionMappingPage() {
                       setValidationResult(null);
                     }}
                     placeholder="ou_1234567890abcdef1234"
-                    className="flex-1 px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 font-mono text-xs"
+                    className="flex-1 px-3 py-2 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 font-mono text-xs"
                   />
                   <button
                     type="button"
                     onClick={handleValidateOpenId}
                     disabled={validatingOpenId || !formData.feishu_open_id.trim()}
-                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1"
+                    className="px-3 py-2 bg-muted hover:bg-accent text-foreground font-bold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1"
                   >
                     {validatingOpenId ? (
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -836,22 +836,22 @@ export default function MentionMappingPage() {
               </div>
 
               {/* Status Toggle */}
-              <div className="pt-2 flex items-center justify-between border-t border-slate-100">
-                <span className="font-semibold text-slate-700">Aktifkan untuk Penugasan</span>
+              <div className="pt-2 flex items-center justify-between border-t border-border">
+                <span className="font-semibold text-foreground">Aktifkan untuk Penugasan</span>
                 <input
                   type="checkbox"
                   checked={formData.is_active}
                   onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500 cursor-pointer"
+                  className="w-4 h-4 text-red-600 rounded border-border focus:ring-red-500 cursor-pointer"
                 />
               </div>
 
               {/* Footer Actions */}
-              <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
+              <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-border">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                  className="px-4 py-2 font-semibold text-muted-foreground hover:bg-muted rounded-xl transition-colors"
                 >
                   Batal
                 </button>
@@ -870,30 +870,30 @@ export default function MentionMappingPage() {
       {/* Bulk Import Modal */}
       {isBulkModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+          <div className="bg-popover rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden border border-border animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-slate-100 rounded-lg text-slate-800">
+                <div className="p-1.5 bg-muted rounded-lg text-foreground">
                   <Upload className="w-4 h-4" />
                 </div>
-                <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                <h3 className="text-sm sm:text-base font-bold text-foreground">
                   Impor Bulk Mention Mapping
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsBulkModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                className="p-1 text-muted-foreground hover:text-foreground rounded-lg"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="p-4 sm:p-5 space-y-3 text-xs">
-              <p className="text-slate-600 leading-relaxed">
+              <p className="text-muted-foreground leading-relaxed">
                 Tempel data dari Excel atau CSV. Format baris (pisahkan dengan koma atau tab):
                 <br />
-                <code className="block mt-1.5 p-2 bg-slate-100 rounded-lg text-[11px] font-mono text-slate-800">
+                <code className="block mt-1.5 p-2 bg-muted rounded-lg text-[11px] font-mono text-foreground">
                   Wilayah / Key, Nama PIC, Open ID (opsional), Role, Scope (kecamatan / kurir / drop_point)
                 </code>
               </p>
@@ -903,14 +903,14 @@ export default function MentionMappingPage() {
                 value={bulkInput}
                 onChange={(e) => setBulkInput(e.target.value)}
                 placeholder="BATANG, Agus Supriyanto, ou_demo_batang_01, Admin DP Batang, kecamatan&#10;WARUNGASEM, Dimas Prasetyo, ou_demo_warungasem_01, Admin DP Warungasem, kecamatan&#10;Andi, Andi Setiawan, ou_demo_kurir_andi, Sprinter, kurir"
-                className="w-full p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 font-mono text-xs"
+                className="w-full p-3 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 font-mono text-xs"
               />
 
               <div className="pt-2 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsBulkModalOpen(false)}
-                  className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  className="px-4 py-2 font-semibold text-muted-foreground hover:bg-muted rounded-xl"
                 >
                   Batal
                 </button>
@@ -931,26 +931,26 @@ export default function MentionMappingPage() {
       {/* Open ID Guide Modal */}
       {isGuideOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+          <div className="bg-popover rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-border animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600">
                   <HelpCircle className="w-4 h-4" />
                 </div>
-                <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                <h3 className="text-sm sm:text-base font-bold text-foreground">
                   Cara Mendapatkan Feishu Open ID
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsGuideOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                className="p-1 text-muted-foreground hover:text-foreground rounded-lg"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-4 sm:p-5 space-y-3.5 text-xs text-slate-600 leading-relaxed">
+            <div className="p-4 sm:p-5 space-y-3.5 text-xs text-muted-foreground leading-relaxed">
               <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 text-blue-900 space-y-1">
                 <span className="font-bold block">Apa itu Feishu Open ID?</span>
                 <p className="text-[11px]">
@@ -966,23 +966,23 @@ export default function MentionMappingPage() {
               </div>
 
               <div className="space-y-2">
-                <span className="font-bold text-slate-800 block">Cara Mendapatkan Open ID (Direkomendasikan):</span>
-                <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-slate-700 pl-1">
+                <span className="font-bold text-foreground block">Cara Mendapatkan Open ID (Direkomendasikan):</span>
+                <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-muted-foreground pl-1">
                   <li>Isi kolom <strong>Nomor HP</strong> PIC di form mapping (nomor yang terdaftar di akun Feishu-nya).</li>
                   <li>Klik tombol <strong>&quot;Cari Open ID&quot;</strong> di sebelah kolom itu.</li>
                   <li>Sistem mencari langsung ke Feishu (Contact API resmi) dan mengisi Open ID otomatis kalau ketemu.</li>
                 </ol>
               </div>
 
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-600 space-y-1 text-[11px]">
-                <span className="font-bold text-slate-800 block">Kalau nomor HP tidak ditemukan?</span>
+              <div className="p-3 bg-muted rounded-xl border border-border text-muted-foreground space-y-1 text-[11px]">
+                <span className="font-bold text-foreground block">Kalau nomor HP tidak ditemukan?</span>
                 <p>
                   Berarti nomor itu belum terdaftar di tenant Feishu perusahaan, atau formatnya beda dengan yang tercatat di Feishu. Administrator IT bisa mengecek lewat Feishu Admin Console &gt; Contacts &gt; Member List untuk memastikan nomor yang benar.
                 </p>
               </div>
 
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-600 space-y-1 text-[11px]">
-                <span className="font-bold text-slate-800 block">Bagaimana jika Open ID belum ada?</span>
+              <div className="p-3 bg-muted rounded-xl border border-border text-muted-foreground space-y-1 text-[11px]">
+                <span className="font-bold text-foreground block">Bagaimana jika Open ID belum ada?</span>
                 <p>
                   Sistem tetap berjalan normal! Jika Open ID kosong, kartu akan otomatis menampilkan nama sebagai teks mention standar (cth: <code className="font-mono">@Agus</code>) tanpa merusak tampilan kartu.
                 </p>
@@ -992,7 +992,7 @@ export default function MentionMappingPage() {
                 <button
                   type="button"
                   onClick={() => setIsGuideOpen(false)}
-                  className="px-4 py-2 font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800"
+                  className="px-4 py-2 font-bold text-background bg-foreground rounded-xl hover:bg-foreground/90"
                 >
                   Saya Mengerti
                 </button>

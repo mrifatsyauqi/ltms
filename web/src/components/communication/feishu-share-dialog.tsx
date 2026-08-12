@@ -343,18 +343,18 @@ export function FeishuShareDialog({
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-        <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
+        <div className="bg-popover rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-border">
           {/* Header */}
-          <div className="p-4 sm:px-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+          <div className="p-4 sm:px-6 border-b border-border flex items-center justify-between bg-muted/70">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-50 rounded-xl text-[#E2231A] border border-red-100">
+              <div className="p-2 bg-red-50 dark:bg-red-500/10 rounded-xl text-[#E2231A] border border-red-100 dark:border-red-500/20">
                 <Share2 className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-slate-900 tracking-tight">
+                <h3 className="text-base font-bold text-foreground tracking-tight">
                   Bagikan {moduleName} ke Feishu
                 </h3>
-                <p className="text-xs text-slate-500 font-medium">
+                <p className="text-xs text-muted-foreground font-medium">
                   Kirim Interactive Assignment Card operasional real-time ke Group Feishu.
                 </p>
               </div>
@@ -364,16 +364,16 @@ export function FeishuShareDialog({
               <button
                 type="button"
                 onClick={() => setIsHistoryOpen(true)}
-                className="px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl border border-slate-200 flex items-center gap-1"
+                className="px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-muted rounded-xl border border-border flex items-center gap-1"
               >
-                <History className="w-3.5 h-3.5 text-slate-400" />
+                <History className="w-3.5 h-3.5 text-muted-foreground" />
                 <span>Riwayat</span>
               </button>
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isProcessing}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-xl"
+                className="p-1 text-muted-foreground hover:text-foreground rounded-xl"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -381,14 +381,14 @@ export function FeishuShareDialog({
           </div>
 
           {/* Navigation Tabs */}
-          <div className="px-4 sm:px-6 pt-3 flex items-center gap-2 border-b border-slate-100 text-xs">
+          <div className="px-4 sm:px-6 pt-3 flex items-center gap-2 border-b border-border text-xs">
             <button
               type="button"
               onClick={() => setActiveTab('group')}
               className={`px-3 py-2 font-bold rounded-xl transition-all ${
                 activeTab === 'group'
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100'
+                  ? 'bg-foreground text-background shadow-sm'
+                  : 'text-muted-foreground hover:bg-muted'
               }`}
             >
               1. Pilih Group & Desain
@@ -399,7 +399,7 @@ export function FeishuShareDialog({
               className={`px-3 py-2 font-bold rounded-xl flex items-center gap-1.5 transition-all ${
                 activeTab === 'preview_card'
                   ? 'bg-[#E2231A] text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100'
+                  : 'text-muted-foreground hover:bg-muted'
               }`}
             >
               <LayoutTemplate className="w-3.5 h-3.5" />
@@ -411,7 +411,7 @@ export function FeishuShareDialog({
               className={`px-3 py-2 font-bold rounded-xl flex items-center gap-1.5 transition-all ${
                 activeTab === 'preview_image'
                   ? 'bg-[#E2231A] text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100'
+                  : 'text-muted-foreground hover:bg-muted'
               }`}
             >
               <ImageIcon className="w-3.5 h-3.5" />
@@ -424,14 +424,14 @@ export function FeishuShareDialog({
             {/* Progress Overlay */}
             {isProcessing ? (
               <div className="p-8 text-center space-y-4">
-                <div className="w-12 h-12 rounded-2xl bg-red-50 text-[#E2231A] flex items-center justify-center mx-auto animate-pulse">
+                <div className="w-12 h-12 rounded-2xl bg-red-50 dark:bg-red-500/10 text-[#E2231A] flex items-center justify-center mx-auto animate-pulse">
                   <Loader2 className="w-6 h-6 animate-spin" />
                 </div>
                 <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-slate-900">{STAGE_CONFIG[stage].label}</h4>
-                  <p className="text-xs text-slate-500">{STAGE_CONFIG[stage].description}</p>
+                  <h4 className="text-sm font-bold text-foreground">{STAGE_CONFIG[stage].label}</h4>
+                  <p className="text-xs text-muted-foreground">{STAGE_CONFIG[stage].description}</p>
                 </div>
-                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden max-w-sm mx-auto">
+                <div className="w-full bg-muted h-2 rounded-full overflow-hidden max-w-sm mx-auto">
                   <div
                     className="bg-[#E2231A] h-full transition-all duration-300 rounded-full"
                     style={{ width: `${progress}%` }}
@@ -441,25 +441,25 @@ export function FeishuShareDialog({
             ) : activeTab === 'group' ? (
               <div className="space-y-4">
                 {/* Scope & Template Selector */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200/80">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-muted rounded-2xl border border-border">
                   <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase block">
                       Cakupan Operasional
                     </span>
-                    <div className="flex items-center gap-1.5 font-extrabold text-slate-900 text-sm">
+                    <div className="flex items-center gap-1.5 font-extrabold text-foreground text-sm">
                       <Building2 className="w-4 h-4 text-[#E2231A]" />
                       <span>{effectiveScopeName}</span>
                     </div>
                   </div>
 
                   <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase block">
                       Desain Interactive Card
                     </span>
                     <select
                       value={selectedCardTemplateId}
                       onChange={(e) => setSelectedCardTemplateId(e.target.value)}
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                      className="w-full px-3 py-1.5 bg-background border border-border rounded-xl font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-red-500/20"
                     >
                       {moduleCardTemplates.map((t: any) => (
                         <option key={t.id} value={t.id}>
@@ -473,20 +473,20 @@ export function FeishuShareDialog({
                 {/* Group Search & Sync */}
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                     <input
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Cari group Feishu..."
-                      className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 font-medium"
+                      className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-red-500/20 font-medium"
                     />
                   </div>
                   <button
                     type="button"
                     onClick={handleSyncGroups}
                     disabled={isSyncing}
-                    className="px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
+                    className="px-3 py-2 bg-background border border-border hover:bg-muted text-foreground font-bold rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
                     <span>{isSyncing ? 'Sinkron...' : 'Sinkronkan'}</span>
@@ -496,12 +496,12 @@ export function FeishuShareDialog({
                 {/* Group Radio List */}
                 <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                   {isLoadingGroups ? (
-                    <div className="p-8 text-center text-slate-400">
+                    <div className="p-8 text-center text-muted-foreground">
                       <Loader2 className="w-5 h-5 animate-spin mx-auto mb-1" />
                       <span>Memuat group...</span>
                     </div>
                   ) : filteredGroups.length === 0 ? (
-                    <div className="p-8 text-center text-slate-400 border border-dashed border-slate-200 rounded-2xl">
+                    <div className="p-8 text-center text-muted-foreground border border-dashed border-border rounded-2xl">
                       Tidak ada group yang cocok
                     </div>
                   ) : (
@@ -513,8 +513,8 @@ export function FeishuShareDialog({
                           onClick={() => setSelectedChatId(g.chatId)}
                           className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
                             isSelected
-                              ? 'border-red-500 bg-red-50/50 shadow-sm ring-1 ring-red-500'
-                              : 'border-slate-200 bg-white hover:bg-slate-50'
+                              ? 'border-red-500 bg-red-50/50 dark:bg-red-500/10 shadow-sm ring-1 ring-red-500'
+                              : 'border-border bg-background hover:bg-muted'
                           }`}
                         >
                           <div className="flex items-center gap-3">
@@ -527,20 +527,20 @@ export function FeishuShareDialog({
                             />
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className="font-bold text-slate-900 text-xs">{g.groupName}</span>
+                                <span className="font-bold text-foreground text-xs">{g.groupName}</span>
                                 {g.isDefault && (
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800">
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
                                     Default
                                   </span>
                                 )}
                               </div>
-                              <span className="text-[10px] font-mono text-slate-400 block">{g.chatId}</span>
+                              <span className="text-[10px] font-mono text-muted-foreground block">{g.chatId}</span>
                             </div>
                           </div>
 
                           {(g.memberCount ?? 0) > 0 && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold">
-                              <Users className="w-3 h-3 text-slate-400" />
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] font-semibold">
+                              <Users className="w-3 h-3 text-muted-foreground" />
                               <span>{g.memberCount}</span>
                             </span>
                           )}
@@ -551,7 +551,7 @@ export function FeishuShareDialog({
                 </div>
               </div>
             ) : activeTab === 'preview_card' ? (
-              <div className="bg-slate-100 p-4 rounded-2xl flex justify-center">
+              <div className="bg-muted p-4 rounded-2xl flex justify-center">
                 <div className="w-full max-w-sm">
                   <InteractiveCardPreview
                     cardJson={sharePreviewResult?.cardJson}
@@ -571,7 +571,7 @@ export function FeishuShareDialog({
                   />
                 </div>
                 {!imagePreviewUrl && (
-                  <p className="text-center text-[11px] text-slate-400 font-medium">
+                  <p className="text-center text-[11px] text-muted-foreground font-medium">
                     Contoh tampilan - laporan sesungguhnya baru ter-render saat Anda menekan &quot;Kirim ke Feishu&quot;.
                   </p>
                 )}
@@ -580,10 +580,10 @@ export function FeishuShareDialog({
           </div>
 
           {/* Footer Actions */}
-          <div className="p-4 sm:px-6 border-t border-slate-100 flex items-center justify-between bg-slate-50/70">
-            <div className="text-xs text-slate-500 font-medium">
+          <div className="p-4 sm:px-6 border-t border-border flex items-center justify-between bg-muted/70">
+            <div className="text-xs text-muted-foreground font-medium">
               Tujuan:{' '}
-              <strong className="text-slate-900">
+              <strong className="text-foreground">
                 {selectedGroup ? selectedGroup.groupName : 'Belum dipilih'}
               </strong>
             </div>
@@ -593,7 +593,7 @@ export function FeishuShareDialog({
                 type="button"
                 onClick={onClose}
                 disabled={isProcessing}
-                className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                className="px-4 py-2 font-semibold text-muted-foreground hover:bg-muted rounded-xl transition-colors"
               >
                 Batal
               </button>

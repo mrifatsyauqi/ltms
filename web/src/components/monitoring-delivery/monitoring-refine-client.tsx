@@ -279,7 +279,7 @@ export function MonitoringRefineClient() {
             </div>
 
             {stagedData.length > 0 && (
-              <div className="p-4 border rounded-lg bg-slate-50">
+              <div className="p-4 border border-border rounded-lg bg-muted">
                 <Button
                   onClick={() => {
                     setGeneratedAt(new Date());

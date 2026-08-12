@@ -47,7 +47,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
         accessorKey: 'awb',
         header: 'AWB',
         cell: (info) => (
-          <span className="font-mono font-bold text-slate-900">
+          <span className="font-mono font-bold text-foreground">
             {info.getValue() as string}
           </span>
         ),
@@ -56,7 +56,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
         accessorKey: 'tempatTujuan',
         header: 'Tempat Tujuan',
         cell: (info) => (
-          <span className="font-medium text-slate-800">
+          <span className="font-medium text-foreground">
             {(info.getValue() as string) || '-'}
           </span>
         ),
@@ -65,7 +65,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
         accessorKey: 'dpDelivery',
         header: 'DP Delivery',
         cell: (info) => (
-          <span className="font-mono text-slate-700">
+          <span className="font-mono text-muted-foreground">
             {(info.getValue() as string) || '-'}
           </span>
         ),
@@ -74,7 +74,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
         accessorKey: 'namaPenerima',
         header: 'Nama Penerima',
         cell: (info) => (
-          <span className="text-slate-700">
+          <span className="text-muted-foreground">
             {(info.getValue() as string) || '-'}
           </span>
         ),
@@ -83,7 +83,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
         accessorKey: 'alamatPenerima',
         header: 'Alamat Penerima',
         cell: (info) => (
-          <span className="text-slate-600">
+          <span className="text-muted-foreground">
             {(info.getValue() as string) || '-'}
           </span>
         ),
@@ -100,7 +100,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
                   Rp {formatCurrency(val)}
                 </span>
               ) : (
-                <span className="font-mono text-slate-400">0</span>
+                <span className="font-mono text-muted-foreground">0</span>
               )}
             </div>
           );
@@ -110,7 +110,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
         accessorKey: 'waktuTtd',
         header: 'Waktu TTD',
         cell: (info) => (
-          <span className="font-mono text-slate-600">
+          <span className="font-mono text-muted-foreground">
             {(info.getValue() as string) || '-'}
           </span>
         ),
@@ -119,7 +119,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
         accessorKey: 'maksimalTtd',
         header: 'Maksimal TTD',
         cell: (info) => (
-          <span className="font-mono text-slate-700 font-medium">
+          <span className="font-mono text-foreground font-medium">
             {(info.getValue() as string) || '-'}
           </span>
         ),
@@ -128,7 +128,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
         accessorKey: 'waktuUploadSistem',
         header: 'Waktu Upload Sistem',
         cell: (info) => (
-          <span className="font-mono text-slate-600">
+          <span className="font-mono text-muted-foreground">
             {(info.getValue() as string) || '-'}
           </span>
         ),
@@ -187,7 +187,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
   // Warna title bar excel-style - REUSE persis dari MonitoringTable
   // (Monitoring Delivery), jangan definisikan warna baru.
   return (
-    <div className="bg-white rounded-[8px] border border-slate-200 shadow-xs overflow-hidden flex flex-col transition-all">
+    <div className="bg-card rounded-[8px] border border-border shadow-xs overflow-hidden flex flex-col transition-all">
       <div className="bg-[#4f6272] text-white px-3 py-2.5 text-center text-sm font-bold uppercase tracking-wide">
         MONITORING INC {title}
       </div>
@@ -196,14 +196,14 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
           yang terpotong jadi 2 baris); overflow-x-auto di wrapper menangani
           scroll horizontal kalau total lebar tabel > lebar container. */}
       <div className="overflow-x-auto overflow-y-auto max-h-[520px]">
-        <table className="w-full text-left text-xs border-collapse border border-gray-400">
-          <thead className="sticky top-0 z-10 bg-white border-b border-gray-400">
+        <table className="w-full text-left text-xs border-collapse border border-border">
+          <thead className="sticky top-0 z-10 bg-card border-b border-border">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr
                 key={headerGroup.id}
-                className="text-black font-bold uppercase text-[11px] tracking-wider"
+                className="text-foreground font-bold uppercase text-[11px] tracking-wider"
               >
-                <th className="py-2.5 px-3.5 border border-gray-400 text-center whitespace-nowrap">No</th>
+                <th className="py-2.5 px-3.5 border border-border text-center whitespace-nowrap">No</th>
                 {headerGroup.headers.map((header) => {
                   const canSort = header.column.getCanSort();
                   const isSorted = header.column.getIsSorted();
@@ -212,20 +212,20 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
                     <th
                       key={header.id}
                       onClick={header.column.getToggleSortingHandler()}
-                      className={`py-2.5 px-3.5 border border-gray-400 whitespace-nowrap select-none transition-colors ${
-                        canSort ? 'cursor-pointer hover:bg-slate-100/80' : ''
+                      className={`py-2.5 px-3.5 border border-border whitespace-nowrap select-none transition-colors ${
+                        canSort ? 'cursor-pointer hover:bg-accent/80' : ''
                       }`}
                     >
                       <div className="flex items-center gap-1.5">
                         {flexRender(header.column.columnDef.header, header.getContext())}
                         {canSort && (
-                          <span className="inline-flex items-center text-slate-400">
+                          <span className="inline-flex items-center text-muted-foreground">
                             {isSorted === 'asc' ? (
                               <ArrowUp className="size-3.5 text-[#E2231A] font-bold" />
                             ) : isSorted === 'desc' ? (
                               <ArrowDown className="size-3.5 text-[#E2231A] font-bold" />
                             ) : (
-                              <ArrowUpDown className="size-3 text-slate-300 opacity-70 hover:opacity-100" />
+                              <ArrowUpDown className="size-3 text-muted-foreground opacity-70 hover:opacity-100" />
                             )}
                           </span>
                         )}
@@ -239,7 +239,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
           <tbody>
             {table.getRowModel().rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + 1} className="py-8 text-center text-slate-400 font-medium border border-gray-400">
+                <td colSpan={columns.length + 1} className="py-8 text-center text-muted-foreground font-medium border border-border">
                   Tidak ada data yang ditemukan
                 </td>
               </tr>
@@ -247,13 +247,13 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
               table.getRowModel().rows.map((row, idx) => (
                 <tr
                   key={row.id}
-                  className="hover:bg-slate-50/70 transition-colors"
+                  className="hover:bg-muted/70 transition-colors"
                 >
-                  <td className="py-2.5 px-3.5 border border-gray-400 whitespace-nowrap text-center text-slate-500 font-medium">
+                  <td className="py-2.5 px-3.5 border border-border whitespace-nowrap text-center text-muted-foreground font-medium">
                     {startIndex + idx}
                   </td>
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="py-2.5 px-3.5 border border-gray-400 whitespace-nowrap">
+                    <td key={cell.id} className="py-2.5 px-3.5 border border-border whitespace-nowrap">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -265,12 +265,12 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
       </div>
 
       {/* Pagination Footer */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-2.5 border-t border-slate-100 bg-slate-50/50">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-2.5 border-t border-border bg-muted/50">
         {/* Record count info */}
-        <div className="text-xs text-slate-500">
-          Menampilkan <span className="font-semibold text-slate-700">{startIndex}</span> sampai{' '}
-          <span className="font-semibold text-slate-700">{endIndex}</span> dari{' '}
-          <span className="font-semibold text-slate-700">{totalRows}</span> total pengiriman
+        <div className="text-xs text-muted-foreground">
+          Menampilkan <span className="font-semibold text-foreground">{startIndex}</span> sampai{' '}
+          <span className="font-semibold text-foreground">{endIndex}</span> dari{' '}
+          <span className="font-semibold text-foreground">{totalRows}</span> total pengiriman
         </div>
 
         {/* Pagination Buttons */}
@@ -279,7 +279,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
             type="button"
             disabled={!table.getCanPreviousPage()}
             onClick={() => table.previousPage()}
-            className="size-7 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center text-slate-600 shadow-2xs active:scale-[0.98] transition-all cursor-pointer"
+            className="size-7 rounded-[6px] border border-border bg-card hover:bg-muted disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center text-muted-foreground shadow-2xs active:scale-[0.98] transition-all cursor-pointer"
           >
             <ChevronLeft className="size-4" />
           </button>
@@ -294,8 +294,8 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
                 onClick={() => table.setPageIndex(pageNum)}
                 className={`size-7 rounded-[6px] text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${
                   isActive
-                    ? 'bg-slate-900 text-white shadow-2xs'
-                    : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 active:scale-[0.98]'
+                    ? 'bg-foreground text-background shadow-2xs'
+                    : 'border border-border bg-card text-foreground hover:bg-muted active:scale-[0.98]'
                 }`}
               >
                 {pageNum + 1}
@@ -305,14 +305,14 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
 
           {totalPages > 5 && (
             <>
-              <span className="px-1 text-slate-400 text-xs">...</span>
+              <span className="px-1 text-muted-foreground text-xs">...</span>
               <button
                 type="button"
                 onClick={() => table.setPageIndex(totalPages - 1)}
                 className={`size-7 rounded-[6px] text-xs font-semibold flex items-center justify-center cursor-pointer ${
                   pageIndex === totalPages - 1
-                    ? 'bg-slate-900 text-white'
-                    : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 active:scale-[0.98]'
+                    ? 'bg-foreground text-background'
+                    : 'border border-border bg-card text-foreground hover:bg-muted active:scale-[0.98]'
                 }`}
               >
                 {totalPages}
@@ -324,7 +324,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
             type="button"
             disabled={!table.getCanNextPage()}
             onClick={() => table.nextPage()}
-            className="size-7 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center text-slate-600 shadow-2xs active:scale-[0.98] transition-all cursor-pointer"
+            className="size-7 rounded-[6px] border border-border bg-card hover:bg-muted disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center text-muted-foreground shadow-2xs active:scale-[0.98] transition-all cursor-pointer"
           >
             <ChevronRight className="size-4" />
           </button>
@@ -338,7 +338,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
               const newSize = Number(e.target.value);
               table.setPageSize(newSize);
             }}
-            className="px-2 py-1 rounded-[6px] border border-slate-200 bg-white text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-400 shadow-2xs cursor-pointer"
+            className="px-2 py-1 rounded-[6px] border border-border bg-card text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring shadow-2xs cursor-pointer"
           >
             <option value={10}>10 / halaman</option>
             <option value={25}>25 / halaman</option>

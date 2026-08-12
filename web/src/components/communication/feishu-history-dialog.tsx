@@ -98,16 +98,16 @@ export function FeishuHistoryDialog(props: FeishuHistoryDialogProps) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-0 overflow-hidden rounded-[10px]">
         {/* Header */}
-        <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div className="p-5 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-[8px] bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-300">
+            <div className="w-9 h-9 rounded-[8px] bg-muted flex items-center justify-center text-foreground">
               <History className="w-5 h-5" />
             </div>
             <div>
-              <DialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">
+              <DialogTitle className="text-base font-semibold text-foreground">
                 Riwayat Pengiriman Laporan
               </DialogTitle>
-              <DialogDescription className="text-xs text-slate-500">
+              <DialogDescription className="text-xs text-muted-foreground">
                 Audit log komunikasi pengiriman laporan ke Feishu Open Platform
               </DialogDescription>
             </div>
@@ -130,7 +130,7 @@ export function FeishuHistoryDialog(props: FeishuHistoryDialogProps) {
           {loading && logs.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center text-center">
               <Loader2 className="w-7 h-7 text-[#E2231A] animate-spin mb-3" />
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              <p className="text-sm font-medium text-foreground">
                 Memuat riwayat pengiriman...
               </p>
             </div>
@@ -143,19 +143,19 @@ export function FeishuHistoryDialog(props: FeishuHistoryDialogProps) {
               </div>
             </div>
           ) : logs.length === 0 ? (
-            <div className="py-16 flex flex-col items-center justify-center text-center text-slate-400">
-              <Send className="w-10 h-10 stroke-[1.2] mb-3 text-slate-300 dark:text-slate-600" />
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            <div className="py-16 flex flex-col items-center justify-center text-center text-muted-foreground">
+              <Send className="w-10 h-10 stroke-[1.2] mb-3 text-muted-foreground/60" />
+              <p className="text-sm font-medium text-foreground">
                 Belum ada riwayat pengiriman
               </p>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Laporan yang berhasil atau gagal dikirim ke Feishu akan tercatat di sini.
               </p>
             </div>
           ) : (
-            <div className="border border-slate-200 dark:border-slate-800 rounded-[8px] overflow-hidden">
+            <div className="border border-border rounded-[8px] overflow-hidden">
               <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-medium">
+                <thead className="bg-muted border-b border-border text-muted-foreground font-medium">
                   <tr>
                     <th className="py-2.5 px-3">Waktu (WIB)</th>
                     <th className="py-2.5 px-3">Target Scope</th>
@@ -166,7 +166,7 @@ export function FeishuHistoryDialog(props: FeishuHistoryDialogProps) {
                     <th className="py-2.5 px-3 text-right">Kartu</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y divide-border">
                   {logs.map((log) => {
                     const isSuccess = log.status === 'SUCCESS';
                     const targetKota =
@@ -175,14 +175,14 @@ export function FeishuHistoryDialog(props: FeishuHistoryDialogProps) {
 
                     return (
                       <React.Fragment key={log.id}>
-                        <tr className="hover:bg-slate-50/70 dark:hover:bg-slate-900/50 transition-colors">
-                          <td className="py-3 px-3 whitespace-nowrap text-slate-600 dark:text-slate-300 font-mono text-[11px]">
+                        <tr className="hover:bg-muted/70 transition-colors">
+                          <td className="py-3 px-3 whitespace-nowrap text-muted-foreground font-mono text-[11px]">
                             {formatDate(log.created_at)}
                           </td>
-                          <td className="py-3 px-3 font-medium text-slate-900 dark:text-slate-100">
+                          <td className="py-3 px-3 font-medium text-foreground">
                             {targetKota}
                           </td>
-                          <td className="py-3 px-3 font-mono text-[11px] text-slate-500 truncate max-w-[140px]" title={log.chat_id}>
+                          <td className="py-3 px-3 font-mono text-[11px] text-muted-foreground truncate max-w-[140px]" title={log.chat_id}>
                             {log.chat_id}
                           </td>
                           <td className="py-3 px-3 whitespace-nowrap">
@@ -199,10 +199,10 @@ export function FeishuHistoryDialog(props: FeishuHistoryDialogProps) {
                               </span>
                             )}
                           </td>
-                          <td className="py-3 px-3 whitespace-nowrap text-slate-500 font-mono text-[11px]">
+                          <td className="py-3 px-3 whitespace-nowrap text-muted-foreground font-mono text-[11px]">
                             {log.response_time_ms ? `${log.response_time_ms}ms` : '-'}
                           </td>
-                          <td className="py-3 px-3 whitespace-nowrap text-slate-500 text-[11px] truncate max-w-[120px]" title={log.sender_email || ''}>
+                          <td className="py-3 px-3 whitespace-nowrap text-muted-foreground text-[11px] truncate max-w-[120px]" title={log.sender_email || ''}>
                             {log.sender_email?.split('@')[0] || '-'}
                           </td>
                           <td className="py-3 px-3 text-right">
@@ -211,7 +211,7 @@ export function FeishuHistoryDialog(props: FeishuHistoryDialogProps) {
                               disabled={!log.card_json}
                               onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
                               title={log.card_json ? 'Lihat kartu yang dikirim' : 'Kartu tidak tersimpan untuk log ini'}
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                               {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                               {isExpanded ? 'Tutup' : 'Lihat'}
@@ -219,7 +219,7 @@ export function FeishuHistoryDialog(props: FeishuHistoryDialogProps) {
                           </td>
                         </tr>
                         {isExpanded && log.card_json && (
-                          <tr className="bg-slate-50/60 dark:bg-slate-900/40">
+                          <tr className="bg-muted/60">
                             <td colSpan={7} className="p-4">
                               <div className="max-w-sm mx-auto">
                                 <InteractiveCardPreview cardJson={log.card_json} />
@@ -237,7 +237,7 @@ export function FeishuHistoryDialog(props: FeishuHistoryDialogProps) {
         </div>
 
         {/* Footer */}
-        <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+        <div className="p-4 bg-muted/50 border-t border-border flex justify-end">
           <Button
             variant="outline"
             size="sm"

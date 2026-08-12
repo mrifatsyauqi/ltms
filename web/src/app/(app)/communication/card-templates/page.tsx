@@ -409,7 +409,7 @@ export default function CardTemplatesPage() {
       {toast && (
         <div
           className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 text-sm font-semibold transition-all ${
-            toast.type === 'success' ? 'bg-slate-900 text-white' : 'bg-red-600 text-white'
+            toast.type === 'success' ? 'bg-foreground text-background' : 'bg-red-600 text-white'
           }`}
         >
           {toast.type === 'success' ? (
@@ -429,10 +429,10 @@ export default function CardTemplatesPage() {
               <PanelsTopLeft className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
                 Card Templates (Interactive Card Builder)
               </h1>
-              <p className="text-xs sm:text-sm text-slate-500 font-medium">
+              <p className="text-xs sm:text-sm text-muted-foreground font-medium">
                 Desain kartu pengingat & penugasan operasional Feishu dengan Single Source of Truth compiler.
               </p>
             </div>
@@ -456,7 +456,7 @@ export default function CardTemplatesPage() {
         {STARTER_PRESETS.map((preset) => (
           <div
             key={preset.id}
-            className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-red-300 transition-all flex flex-col justify-between group"
+            className="bg-card p-4 rounded-2xl border border-border shadow-sm hover:border-red-300 transition-all flex flex-col justify-between group"
           >
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -465,10 +465,10 @@ export default function CardTemplatesPage() {
                 </span>
                 <Sparkles className="w-3.5 h-3.5 text-amber-500" />
               </div>
-              <h3 className="text-sm font-bold text-slate-900 group-hover:text-[#E2231A] transition-colors">
+              <h3 className="text-sm font-bold text-foreground group-hover:text-[#E2231A] transition-colors">
                 {preset.name}
               </h3>
-              <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">
+              <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
                 {preset.description}
               </p>
             </div>
@@ -487,15 +487,15 @@ export default function CardTemplatesPage() {
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100/80 rounded-xl w-full md:w-auto overflow-x-auto">
+      <div className="bg-card p-4 rounded-2xl border border-border shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 p-1 bg-muted/80 rounded-xl w-full md:w-auto overflow-x-auto">
           <button
             type="button"
             onClick={() => setSelectedModule('all')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
               selectedModule === 'all'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Semua Modul
@@ -505,8 +505,8 @@ export default function CardTemplatesPage() {
             onClick={() => setSelectedModule('monitoring_inc')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
               selectedModule === 'monitoring_inc'
-                ? 'bg-white text-red-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-card text-red-600 shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Monitoring INC
@@ -516,8 +516,8 @@ export default function CardTemplatesPage() {
             onClick={() => setSelectedModule('monitoring_delivery')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
               selectedModule === 'monitoring_delivery'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-card text-blue-600 shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Monitoring Delivery
@@ -527,8 +527,8 @@ export default function CardTemplatesPage() {
             onClick={() => setSelectedModule('longtail')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
               selectedModule === 'longtail'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Long Tail
@@ -537,20 +537,20 @@ export default function CardTemplatesPage() {
 
         <div className="flex items-center gap-2.5 w-full md:w-auto">
           <div className="relative flex-1 md:w-64">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Cari nama template..."
-              className="w-full pl-9 pr-3.5 py-1.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+              className="w-full pl-9 pr-3.5 py-1.5 text-xs rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
             />
           </div>
           <button
             type="button"
             onClick={() => refetchTemplates()}
             disabled={loading}
-            className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-50 border border-slate-200 rounded-xl"
+            className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted border border-border rounded-xl"
             title="Refresh"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -561,15 +561,15 @@ export default function CardTemplatesPage() {
       {/* Templates Grid List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {loading ? (
-          <div className="col-span-full p-12 text-center text-slate-400">
-            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-slate-300" />
+          <div className="col-span-full p-12 text-center text-muted-foreground">
+            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-muted-foreground" />
             <p className="text-xs">Memuat template kartu...</p>
           </div>
         ) : filteredTemplates.length === 0 ? (
-          <div className="col-span-full p-12 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
-            <PanelsTopLeft className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm font-semibold text-slate-700">Tidak ada template yang cocok</p>
-            <p className="text-xs text-slate-400 mt-1">
+          <div className="col-span-full p-12 text-center text-muted-foreground bg-card rounded-2xl border border-border">
+            <PanelsTopLeft className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm font-semibold text-foreground">Tidak ada template yang cocok</p>
+            <p className="text-xs text-muted-foreground mt-1">
               Gunakan salah satu preset resmi di atas untuk membuat template pertama Anda.
             </p>
           </div>
@@ -577,12 +577,12 @@ export default function CardTemplatesPage() {
           filteredTemplates.map((t) => (
             <div
               key={t.id}
-              className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 hover:border-red-300 transition-all flex flex-col justify-between"
+              className="bg-card rounded-2xl border border-border shadow-sm p-4 hover:border-red-300 transition-all flex flex-col justify-between"
             >
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 uppercase">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-muted text-foreground uppercase">
                       {t.module}
                     </span>
                     {t.is_default && (
@@ -592,27 +592,27 @@ export default function CardTemplatesPage() {
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] font-mono text-slate-400">
+                  <span className="text-[10px] font-mono text-muted-foreground">
                     v{(t as any).version || (t as any).current_version || '1.0'}
                   </span>
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">
+                  <h3 className="text-sm font-bold text-foreground">
                     {(t as any).template_name || (t as any).name}
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                     {(t as any).version_note || (t as any).description}
                   </p>
                 </div>
 
-                <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-[11px] text-slate-600 flex items-center justify-between">
+                <div className="p-2.5 bg-muted rounded-xl border border-border text-[11px] text-muted-foreground flex items-center justify-between">
                   <span>Tema Header:</span>
                   <span className="font-bold capitalize">{t.blocks_config?.theme || 'Red'}</span>
                 </div>
               </div>
 
-              <div className="pt-4 mt-2 border-t border-slate-100 flex items-center justify-between">
+              <div className="pt-4 mt-2 border-t border-border flex items-center justify-between">
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
@@ -620,7 +620,7 @@ export default function CardTemplatesPage() {
                     className={`p-1.5 rounded-lg text-xs transition-colors ${
                       t.is_default
                         ? 'text-amber-500 bg-amber-50'
-                        : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'
+                        : 'text-muted-foreground hover:text-amber-600 hover:bg-amber-50'
                     }`}
                     title={t.is_default ? 'Template Default Aktif' : 'Set Sebagai Default'}
                   >
@@ -629,7 +629,7 @@ export default function CardTemplatesPage() {
                   <button
                     type="button"
                     onClick={() => handleDelete(t)}
-                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-xs"
+                    className="p-1.5 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg text-xs"
                     title="Hapus Permanen"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -639,7 +639,7 @@ export default function CardTemplatesPage() {
                 <button
                   type="button"
                   onClick={() => handleOpenEdit(t)}
-                  className="px-3 py-1.5 text-xs font-bold text-slate-800 bg-slate-100 hover:bg-[#E2231A] hover:text-white rounded-xl transition-colors"
+                  className="px-3 py-1.5 text-xs font-bold text-foreground bg-muted hover:bg-[#E2231A] hover:text-white rounded-xl transition-colors"
                 >
                   Edit Desain & Konten
                 </button>
@@ -652,18 +652,18 @@ export default function CardTemplatesPage() {
       {/* Visual Content Card Builder Modal (Full-featured Split Screen) */}
       {isEditorOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl h-[92vh] flex flex-col overflow-hidden border border-slate-200">
+          <div className="bg-card rounded-3xl shadow-2xl w-full max-w-6xl h-[92vh] flex flex-col overflow-hidden border border-border">
             {/* Modal Header */}
-            <div className="p-4 sm:px-6 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
+            <div className="p-4 sm:px-6 border-b border-border flex items-center justify-between bg-muted/70">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-red-50 rounded-xl text-[#E2231A] border border-red-100">
                   <PanelsTopLeft className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-base sm:text-lg font-bold text-slate-900">
+                  <h2 className="text-base sm:text-lg font-bold text-foreground">
                     {editingTemplate ? `Edit Template: ${formData.name}` : 'Card Content Builder'}
                   </h2>
-                  <p className="text-xs text-slate-500 font-medium">
+                  <p className="text-xs text-muted-foreground font-medium">
                     Atur konten, warna, indikator KPI, dan konfigurasi mention secara visual.
                   </p>
                 </div>
@@ -673,7 +673,7 @@ export default function CardTemplatesPage() {
                 <button
                   type="button"
                   onClick={() => setIsTestSendOpen(true)}
-                  className="px-3.5 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 flex items-center gap-1.5 shadow-sm"
+                  className="px-3.5 py-2 text-xs font-bold text-foreground bg-card border border-border rounded-xl hover:bg-muted flex items-center gap-1.5 shadow-sm"
                 >
                   <Send className="w-3.5 h-3.5 text-blue-600" />
                   <span>Kirim Uji Coba</span>
@@ -681,7 +681,7 @@ export default function CardTemplatesPage() {
                 <button
                   type="button"
                   onClick={() => setIsEditorOpen(false)}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl"
+                  className="p-1.5 text-muted-foreground hover:text-muted-foreground rounded-xl"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -691,27 +691,27 @@ export default function CardTemplatesPage() {
             {/* Split Screen Body */}
             <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
               {/* Left Column: Form & Configuration Accordions (7 cols) */}
-              <div className="lg:col-span-7 overflow-y-auto p-4 sm:p-6 space-y-4 border-r border-slate-200 text-xs">
+              <div className="lg:col-span-7 overflow-y-auto p-4 sm:p-6 space-y-4 border-r border-border text-xs">
                 {/* 1. General & Theme */}
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                  <span className="font-bold text-slate-800 text-sm block">Informasi Umum & Tema</span>
+                <div className="p-4 bg-muted rounded-2xl border border-border space-y-3">
+                  <span className="font-bold text-foreground text-sm block">Informasi Umum & Tema</span>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="font-semibold text-slate-700">Nama Template</label>
+                      <label className="font-semibold text-foreground">Nama Template</label>
                       <input
                         type="text"
                         required
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 font-medium"
+                        className="w-full px-3 py-2 rounded-xl border border-border bg-card focus:outline-none focus:ring-2 focus:ring-red-500/20 font-medium"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="font-semibold text-slate-700">Modul</label>
+                      <label className="font-semibold text-foreground">Modul</label>
                       <select
                         value={formData.module}
                         onChange={(e) => setFormData({ ...formData, module: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20 font-medium"
+                        className="w-full px-3 py-2 rounded-xl border border-border bg-card focus:outline-none focus:ring-2 focus:ring-red-500/20 font-medium"
                       >
                         <option value="monitoring_inc">Monitoring INC</option>
                         <option value="monitoring_delivery">Monitoring Delivery</option>
@@ -723,7 +723,7 @@ export default function CardTemplatesPage() {
 
                   {/* Theme Selector */}
                   <div className="space-y-1.5">
-                    <label className="font-semibold text-slate-700 block">Warna Header Card</label>
+                    <label className="font-semibold text-foreground block">Warna Header Card</label>
                     <div className="grid grid-cols-4 gap-2">
                       {THEMES.map((th) => (
                         <button
@@ -738,7 +738,7 @@ export default function CardTemplatesPage() {
                           className={`p-2 rounded-xl border flex items-center gap-2 font-semibold text-[11px] transition-all ${
                             formData.blocks_config.theme === th.id
                               ? 'border-red-500 bg-red-50 text-[#E2231A]'
-                              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                              : 'border-border bg-card text-foreground hover:bg-muted'
                           }`}
                         >
                           <div className={`w-3.5 h-3.5 rounded-full ${th.bgClass}`} />
@@ -750,12 +750,12 @@ export default function CardTemplatesPage() {
                 </div>
 
                 {/* 2. Header & Sub-Header Section */}
-                <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
+                <div className="p-4 bg-card rounded-2xl border border-border space-y-3">
                   <div
                     className="flex items-center justify-between cursor-pointer"
                     onClick={() => setOpenSections({ ...openSections, header: !openSections.header })}
                   >
-                    <span className="font-bold text-slate-800 text-sm">Header & Informasi Operasional</span>
+                    <span className="font-bold text-foreground text-sm">Header & Informasi Operasional</span>
                     {openSections.header ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </div>
 
@@ -763,38 +763,38 @@ export default function CardTemplatesPage() {
                     <div className="space-y-3 pt-2">
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
-                          <label className="font-semibold text-slate-700">Judul Utama (Title)</label>
+                          <label className="font-semibold text-foreground">Judul Utama (Title)</label>
                           <input
                             type="text"
                             value={formData.blocks_config.header?.title || ''}
                             onChange={(e) => updateHeader({ title: e.target.value })}
                             placeholder="📦 LTMS • Monitoring INC"
-                            className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none font-bold"
+                            className="w-full px-3 py-2 rounded-xl border border-border focus:outline-none font-bold"
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="font-semibold text-slate-700">Sub-Judul (Subtitle)</label>
+                          <label className="font-semibold text-foreground">Sub-Judul (Subtitle)</label>
                           <input
                             type="text"
                             value={formData.blocks_config.header?.subtitle || ''}
                             onChange={(e) => updateHeader({ subtitle: e.target.value })}
                             placeholder="Intercity Outgoing Reminder"
-                            className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none font-medium"
+                            className="w-full px-3 py-2 rounded-xl border border-border focus:outline-none font-medium"
                           />
                         </div>
                       </div>
 
                       {/* Sub Header Information toggles & labels */}
-                      <div className="p-3 bg-slate-50 rounded-xl space-y-2.5">
-                        <span className="font-bold text-slate-700 block">Kolom Informasi Header</span>
+                      <div className="p-3 bg-muted rounded-xl space-y-2.5">
+                        <span className="font-bold text-foreground block">Kolom Informasi Header</span>
                         <div className="grid grid-cols-3 gap-2 text-[11px]">
                           <div className="space-y-1">
-                            <label className="text-slate-600 flex items-center gap-1.5">
+                            <label className="text-muted-foreground flex items-center gap-1.5">
                               <input
                                 type="checkbox"
                                 checked={formData.blocks_config.header?.showPickupDp ?? true}
                                 onChange={(e) => updateHeader({ showPickupDp: e.target.checked })}
-                                className="w-3.5 h-3.5 text-red-600 rounded border-slate-300"
+                                className="w-3.5 h-3.5 text-red-600 rounded border-border"
                               />
                               <span>Label Kolom 1</span>
                             </label>
@@ -803,16 +803,16 @@ export default function CardTemplatesPage() {
                               value={formData.blocks_config.header?.pickupDpLabel || 'Pickup DP'}
                               onChange={(e) => updateHeader({ pickupDpLabel: e.target.value })}
                               disabled={formData.blocks_config.header?.showPickupDp === false}
-                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white disabled:opacity-40"
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-border bg-card disabled:opacity-40"
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-slate-600 flex items-center gap-1.5">
+                            <label className="text-muted-foreground flex items-center gap-1.5">
                               <input
                                 type="checkbox"
                                 checked={formData.blocks_config.header?.showTargetCity ?? true}
                                 onChange={(e) => updateHeader({ showTargetCity: e.target.checked })}
-                                className="w-3.5 h-3.5 text-red-600 rounded border-slate-300"
+                                className="w-3.5 h-3.5 text-red-600 rounded border-border"
                               />
                               <span>Label Kolom 2</span>
                             </label>
@@ -821,16 +821,16 @@ export default function CardTemplatesPage() {
                               value={formData.blocks_config.header?.targetCityLabel || 'Kota Tujuan'}
                               onChange={(e) => updateHeader({ targetCityLabel: e.target.value })}
                               disabled={formData.blocks_config.header?.showTargetCity === false}
-                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white disabled:opacity-40"
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-border bg-card disabled:opacity-40"
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-slate-600 flex items-center gap-1.5">
+                            <label className="text-muted-foreground flex items-center gap-1.5">
                               <input
                                 type="checkbox"
                                 checked={formData.blocks_config.header?.showUpdate ?? true}
                                 onChange={(e) => updateHeader({ showUpdate: e.target.checked })}
-                                className="w-3.5 h-3.5 text-red-600 rounded border-slate-300"
+                                className="w-3.5 h-3.5 text-red-600 rounded border-border"
                               />
                               <span>Label Kolom 3</span>
                             </label>
@@ -839,7 +839,7 @@ export default function CardTemplatesPage() {
                               value={formData.blocks_config.header?.updateLabel || 'Generate'}
                               onChange={(e) => updateHeader({ updateLabel: e.target.value })}
                               disabled={formData.blocks_config.header?.showUpdate === false}
-                              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white disabled:opacity-40"
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-border bg-card disabled:opacity-40"
                             />
                           </div>
                         </div>
@@ -849,12 +849,12 @@ export default function CardTemplatesPage() {
                 </div>
 
                 {/* 3. Ringkasan KPI Grid Section */}
-                <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
+                <div className="p-4 bg-card rounded-2xl border border-border space-y-3">
                   <div
                     className="flex items-center justify-between cursor-pointer"
                     onClick={() => setOpenSections({ ...openSections, kpiGrid: !openSections.kpiGrid })}
                   >
-                    <span className="font-bold text-slate-800 text-sm">Grid Indikator KPI</span>
+                    <span className="font-bold text-foreground text-sm">Grid Indikator KPI</span>
                     {openSections.kpiGrid ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </div>
 
@@ -874,7 +874,7 @@ export default function CardTemplatesPage() {
                             }))
                           }
                           placeholder="📊 Ringkasan Monitoring"
-                          className="px-3 py-1.5 rounded-xl border border-slate-200 font-bold w-64"
+                          className="px-3 py-1.5 rounded-xl border border-border font-bold w-64"
                         />
                         <button
                           type="button"
@@ -891,7 +891,7 @@ export default function CardTemplatesPage() {
                         {(formData.blocks_config.kpiGrid?.items || []).map((item, idx) => (
                           <div
                             key={item.id || idx}
-                            className="p-3 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-12 gap-2 items-center"
+                            className="p-3 bg-muted rounded-xl border border-border grid grid-cols-12 gap-2 items-center"
                           >
                             <div className="col-span-4 space-y-1">
                               <input
@@ -899,7 +899,7 @@ export default function CardTemplatesPage() {
                                 value={item.label}
                                 onChange={(e) => updateKpiItem(idx, { label: e.target.value })}
                                 placeholder="Nama Metrik"
-                                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-medium"
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-border bg-card font-medium"
                               />
                             </div>
                             <div className="col-span-4 space-y-1">
@@ -908,14 +908,14 @@ export default function CardTemplatesPage() {
                                 value={item.valueTemplate}
                                 onChange={(e) => updateKpiItem(idx, { valueTemplate: e.target.value })}
                                 placeholder="{{total_inc}}"
-                                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white font-mono"
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-border bg-card font-mono"
                               />
                             </div>
                             <div className="col-span-3 space-y-1">
                               <select
                                 value={item.color || 'default'}
                                 onChange={(e) => updateKpiItem(idx, { color: e.target.value as any })}
-                                className="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-white font-medium"
+                                className="w-full px-2 py-1.5 rounded-lg border border-border bg-card font-medium"
                               >
                                 <option value="default">Default</option>
                                 <option value="red">Merah (Alert)</option>
@@ -926,7 +926,7 @@ export default function CardTemplatesPage() {
                               <button
                                 type="button"
                                 onClick={() => removeKpiItem(idx)}
-                                className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg"
+                                className="p-1.5 text-muted-foreground hover:text-red-600 rounded-lg"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -939,18 +939,18 @@ export default function CardTemplatesPage() {
                 </div>
 
                 {/* 4. Operational Assignment Section */}
-                <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
+                <div className="p-4 bg-card rounded-2xl border border-border space-y-3">
                   <div className="flex items-center justify-between">
                     <div
                       className="flex items-center gap-2 cursor-pointer flex-1"
                       onClick={() => setOpenSections({ ...openSections, assignment: !openSections.assignment })}
                     >
-                      <span className="font-bold text-slate-800 text-sm">
+                      <span className="font-bold text-foreground text-sm">
                         Penugasan Operasional & Mention PIC
                       </span>
                       {openSections.assignment ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </div>
-                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600" onClick={(e) => e.stopPropagation()}>
+                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={formData.blocks_config.subdistricts?.show ?? true}
@@ -963,7 +963,7 @@ export default function CardTemplatesPage() {
                             },
                           }))
                         }
-                        className="w-3.5 h-3.5 text-red-600 rounded border-slate-300"
+                        className="w-3.5 h-3.5 text-red-600 rounded border-border"
                       />
                       <span>Tampilkan</span>
                     </label>
@@ -971,7 +971,7 @@ export default function CardTemplatesPage() {
 
                   {openSections.assignment && (
                     <div className="space-y-3 pt-2">
-                      <div className="p-3 bg-red-50/60 rounded-xl border border-red-100 text-slate-700 leading-relaxed text-[11px]">
+                      <div className="p-3 bg-red-50/60 dark:bg-red-500/10 rounded-xl border border-red-100 dark:border-red-500/20 text-red-900 dark:text-red-200 leading-relaxed text-[11px]">
                         Bagian ini akan merender daftar wilayah / kurir secara dinamis dengan tag mention{' '}
                         <code className="font-mono font-bold text-red-600">&lt;at id="..."&gt;Nama PIC&lt;/at&gt;</code>{' '}
                         berdasarkan database Mention Mapping.
@@ -979,7 +979,7 @@ export default function CardTemplatesPage() {
 
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
-                          <label className="font-semibold text-slate-700">Judul Blok Penugasan</label>
+                          <label className="font-semibold text-foreground">Judul Blok Penugasan</label>
                           <input
                             type="text"
                             value={
@@ -999,11 +999,11 @@ export default function CardTemplatesPage() {
                                 },
                               }))
                             }
-                            className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium"
+                            className="w-full px-3 py-2 rounded-xl border border-border font-medium"
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="font-semibold text-slate-700">Batas Maksimal Baris</label>
+                          <label className="font-semibold text-foreground">Batas Maksimal Baris</label>
                           <select
                             value={formData.blocks_config.subdistricts?.maxItems || '10'}
                             onChange={(e) =>
@@ -1018,7 +1018,7 @@ export default function CardTemplatesPage() {
                                 },
                               }))
                             }
-                            className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium"
+                            className="w-full px-3 py-2 rounded-xl border border-border font-medium"
                           >
                             <option value="5">5 Item</option>
                             <option value="10">10 Item</option>
@@ -1027,7 +1027,7 @@ export default function CardTemplatesPage() {
                           </select>
                         </div>
                         <div className="space-y-1 col-span-2">
-                          <label className="font-semibold text-slate-700">Gaya Tampilan List</label>
+                          <label className="font-semibold text-foreground">Gaya Tampilan List</label>
                           <select
                             value={formData.blocks_config.subdistricts?.listStyle || 'divided'}
                             onChange={(e) =>
@@ -1042,7 +1042,7 @@ export default function CardTemplatesPage() {
                                 },
                               }))
                             }
-                            className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium"
+                            className="w-full px-3 py-2 rounded-xl border border-border font-medium"
                           >
                             <option value="divided">Terpisah Garis (default)</option>
                             <option value="numbered">Bernomor (1. Nama (jumlah) / mention di baris baru)</option>
@@ -1054,16 +1054,16 @@ export default function CardTemplatesPage() {
                 </div>
 
                 {/* 4b. Blok Teks Bebas */}
-                <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
+                <div className="p-4 bg-card rounded-2xl border border-border space-y-3">
                   <div className="flex items-center justify-between">
                     <div
                       className="flex items-center gap-2 cursor-pointer flex-1"
                       onClick={() => setOpenSections({ ...openSections, freeText: !openSections.freeText })}
                     >
-                      <span className="font-bold text-slate-800 text-sm">Teks Bebas</span>
+                      <span className="font-bold text-foreground text-sm">Teks Bebas</span>
                       {openSections.freeText ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </div>
-                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600" onClick={(e) => e.stopPropagation()}>
+                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={formData.blocks_config.freeText?.show ?? true}
@@ -1076,7 +1076,7 @@ export default function CardTemplatesPage() {
                             },
                           }))
                         }
-                        className="w-3.5 h-3.5 text-red-600 rounded border-slate-300"
+                        className="w-3.5 h-3.5 text-red-600 rounded border-border"
                       />
                       <span>Tampilkan</span>
                     </label>
@@ -1084,7 +1084,7 @@ export default function CardTemplatesPage() {
 
                   {openSections.freeText && (
                     <div className="space-y-1 pt-2">
-                      <label className="font-semibold text-slate-700">
+                      <label className="font-semibold text-foreground">
                         Catatan (tampil tepat setelah Drop Point Tujuan - kosong = blok tidak muncul di kartu)
                       </label>
                       <textarea
@@ -1100,23 +1100,23 @@ export default function CardTemplatesPage() {
                         }
                         placeholder="Tambahkan catatan di sini..."
                         rows={3}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium resize-none"
+                        className="w-full px-3 py-2 rounded-xl border border-border font-medium resize-none"
                       />
                     </div>
                   )}
                 </div>
 
                 {/* 5. Action Button & Footer Note */}
-                <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
+                <div className="p-4 bg-card rounded-2xl border border-border space-y-3">
                   <div className="flex items-center justify-between">
                     <div
                       className="flex items-center gap-2 cursor-pointer flex-1"
                       onClick={() => setOpenSections({ ...openSections, actionButton: !openSections.actionButton })}
                     >
-                      <span className="font-bold text-slate-800 text-sm">Tombol CTA & Catatan Kaki</span>
+                      <span className="font-bold text-foreground text-sm">Tombol CTA & Catatan Kaki</span>
                       {openSections.actionButton ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </div>
-                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600" onClick={(e) => e.stopPropagation()}>
+                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={formData.blocks_config.actionButton?.enabled ?? true}
@@ -1129,7 +1129,7 @@ export default function CardTemplatesPage() {
                             },
                           }))
                         }
-                        className="w-3.5 h-3.5 text-red-600 rounded border-slate-300"
+                        className="w-3.5 h-3.5 text-red-600 rounded border-border"
                       />
                       <span>Tampilkan Tombol</span>
                     </label>
@@ -1138,7 +1138,7 @@ export default function CardTemplatesPage() {
                   {openSections.actionButton && (
                     <div className="space-y-3 pt-2">
                       <div className="space-y-1">
-                        <label className="font-semibold text-slate-700">Teks Tombol Aksi</label>
+                        <label className="font-semibold text-foreground">Teks Tombol Aksi</label>
                         <input
                           type="text"
                           value={formData.blocks_config.actionButton?.label || '🚀 Buka LTMS Dashboard'}
@@ -1155,12 +1155,12 @@ export default function CardTemplatesPage() {
                               },
                             }))
                           }
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium disabled:opacity-40"
+                          className="w-full px-3 py-2 rounded-xl border border-border font-medium disabled:opacity-40"
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="font-semibold text-slate-700">Teks Footer Note</label>
-                        <p className="text-[11px] text-slate-500">
+                        <label className="font-semibold text-foreground">Teks Footer Note</label>
+                        <p className="text-[11px] text-muted-foreground">
                           Satu field utuh, ditampilkan PERSIS apa adanya di kartu (boleh lebih dari 1 baris).
                         </p>
                         <textarea
@@ -1175,7 +1175,7 @@ export default function CardTemplatesPage() {
                             }))
                           }
                           rows={2}
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium resize-none"
+                          className="w-full px-3 py-2 rounded-xl border border-border font-medium resize-none"
                         />
                       </div>
                     </div>
@@ -1184,20 +1184,20 @@ export default function CardTemplatesPage() {
 
                 {/* Change Summary */}
                 <div className="space-y-1 pt-2">
-                  <label className="font-semibold text-slate-700">Ringkasan Perubahan Versi</label>
+                  <label className="font-semibold text-foreground">Ringkasan Perubahan Versi</label>
                   <input
                     type="text"
                     value={formData.change_summary}
                     onChange={(e) => setFormData({ ...formData, change_summary: e.target.value })}
                     placeholder="Contoh: Mengubah penataan warna KPI dan mention PIC"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium"
+                    className="w-full px-3 py-2 rounded-xl border border-border font-medium"
                   />
                 </div>
               </div>
 
               {/* Right Column: Live Pixel-Identical Preview (5 cols) */}
-              <div className="lg:col-span-5 bg-slate-100 p-4 sm:p-6 overflow-y-auto flex flex-col items-center justify-start space-y-4">
-                <div className="w-full flex items-center justify-between text-xs font-bold text-slate-600 px-1">
+              <div className="lg:col-span-5 bg-muted p-4 sm:p-6 overflow-y-auto flex flex-col items-center justify-start space-y-4">
+                <div className="w-full flex items-center justify-between text-xs font-bold text-muted-foreground px-1">
                   <span>📱 Live Feishu Interactive Card Preview</span>
                   <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                     Single Source Compiler
@@ -1215,11 +1215,11 @@ export default function CardTemplatesPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 sm:px-6 border-t border-slate-200 flex items-center justify-end gap-2.5 bg-white">
+            <div className="p-4 sm:px-6 border-t border-border flex items-center justify-end gap-2.5 bg-card">
               <button
                 type="button"
                 onClick={() => setIsEditorOpen(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                className="px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted rounded-xl"
               >
                 Batal
               </button>
@@ -1238,28 +1238,28 @@ export default function CardTemplatesPage() {
       {/* Test Send Modal */}
       {isTestSendOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-card rounded-2xl shadow-2xl max-w-md w-full p-5 space-y-4 border border-border animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Send className="w-4 h-4 text-blue-600" />
-                <h3 className="text-sm font-bold text-slate-900">Uji Coba Pengiriman Kartu</h3>
+                <h3 className="text-sm font-bold text-foreground">Uji Coba Pengiriman Kartu</h3>
               </div>
-              <button onClick={() => setIsTestSendOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setIsTestSendOpen(false)} className="text-muted-foreground hover:text-muted-foreground">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="space-y-3 text-xs">
-              <p className="text-slate-600">
+              <p className="text-muted-foreground">
                 Pilih group Feishu untuk mengirim kartu penugasan saat ini sebagai simulasi pesan real-time.
               </p>
 
               <div className="space-y-1">
-                <label className="font-semibold text-slate-700 block">Pilih Group Feishu</label>
+                <label className="font-semibold text-foreground block">Pilih Group Feishu</label>
                 <select
                   value={testChatId}
                   onChange={(e) => setTestChatId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium"
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-card font-medium"
                 >
                   <option value="">-- Pilih Group --</option>
                   {groups.map((g) => (
@@ -1274,7 +1274,7 @@ export default function CardTemplatesPage() {
                 <button
                   type="button"
                   onClick={() => setIsTestSendOpen(false)}
-                  className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+                  className="px-4 py-2 font-semibold text-muted-foreground hover:bg-muted rounded-xl"
                 >
                   Batal
                 </button>
