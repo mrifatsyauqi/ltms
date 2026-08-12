@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, Search } from 'lucide-react';
+import { Download, RefreshCw, Search } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -97,6 +97,7 @@ export function RiwayatImportClient() {
                     <th className="h-8 border-b px-3 text-left font-medium">Status</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Keterangan</th>
                     <th className="h-8 border-b px-3 text-left font-medium">Admin</th>
+                    <th className="h-8 border-b px-3 text-left font-medium">File Asli</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -129,11 +130,30 @@ export function RiwayatImportClient() {
                       </td>
                       <td className="text-muted-foreground px-3 py-1.5">{r.Keterangan || '—'}</td>
                       <td className="text-muted-foreground px-3 py-1.5">{r['Admin Cabang']}</td>
+                      <td className="px-3 py-1.5">
+                        {r.Files.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {r.Files.map((f) => (
+                              <Button
+                                key={f.id}
+                                variant="outline"
+                                size="xs"
+                                title={f.namaFile}
+                                render={<a href={`/api/import/files/${f.id}/download`} download />}
+                              >
+                                <Download aria-hidden /> Unduh
+                              </Button>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {pageRows.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="text-muted-foreground py-10 text-center">
+                      <td colSpan={9} className="text-muted-foreground py-10 text-center">
                         {q ? 'Tidak ada riwayat yang cocok.' : 'Belum ada riwayat import.'}
                       </td>
                     </tr>

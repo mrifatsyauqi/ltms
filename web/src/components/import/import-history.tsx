@@ -1,7 +1,9 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { Download } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 import type { ImportBatchRow } from '@/lib/data/import';
 
 export async function fetchImportHistory(): Promise<ImportBatchRow[]> {
@@ -32,6 +34,7 @@ export function ImportHistory() {
           <TableHead className="text-right">Gagal</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Keterangan</TableHead>
+          <TableHead>File Asli</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -47,6 +50,25 @@ export function ImportHistory() {
             <TableCell className="text-right">{b.Gagal}</TableCell>
             <TableCell>{b.Status}</TableCell>
             <TableCell className="text-muted-foreground text-xs">{b.Keterangan}</TableCell>
+            <TableCell>
+              {b.Files.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {b.Files.map((f) => (
+                    <Button
+                      key={f.id}
+                      variant="outline"
+                      size="xs"
+                      title={f.namaFile}
+                      render={<a href={`/api/import/files/${f.id}/download`} download />}
+                    >
+                      <Download aria-hidden /> Unduh
+                    </Button>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-muted-foreground text-xs">—</span>
+              )}
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>
