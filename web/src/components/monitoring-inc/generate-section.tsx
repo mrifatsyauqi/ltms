@@ -56,7 +56,7 @@ export function GenerateSection({
   };
 
   return (
-    <div className="bg-white rounded-[8px] border border-slate-200 p-4 shadow-xs space-y-3">
+    <div className="bg-card rounded-[8px] border border-border p-4 shadow-xs space-y-3">
       {/* Top Row: Title, Subtitle, and Action Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="space-y-0.5">
@@ -64,11 +64,11 @@ export function GenerateSection({
             <span className="flex items-center justify-center size-5 rounded-full bg-slate-900 text-white text-[11px] font-bold">
               3
             </span>
-            <h3 className="text-sm font-semibold text-slate-900 tracking-tight">
+            <h3 className="text-sm font-semibold text-foreground tracking-tight">
               Generate Monitoring
             </h3>
           </div>
-          <p className="text-xs text-slate-500 pl-7">
+          <p className="text-xs text-muted-foreground pl-7">
             Sistem memfilter kota penerima, memetakan kecamatan, dan menghitung batas SLA maksimal 24 jam.
           </p>
         </div>
@@ -82,7 +82,7 @@ export function GenerateSection({
               isSuccess
                 ? 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-[0.98]'
                 : !hasFile || isProcessing || disabled
-                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none'
+                ? 'bg-accent text-muted-foreground border border-border cursor-not-allowed shadow-none'
                 : 'bg-[#E2231A] hover:bg-[#C91C15] text-white active:scale-[0.98] shadow-sm shadow-red-500/10'
             }`}
           >
@@ -108,7 +108,7 @@ export function GenerateSection({
 
       {/* Sequential Processing Chips Bar */}
       {(isProcessing || isSuccess) && (
-        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5 animate-in fade-in duration-200">
+        <div className="pt-2 border-t border-border flex flex-wrap items-center gap-1.5 animate-in fade-in duration-200">
           {steps.map((step) => {
             const isDone = step.status === 'done';
             const isRunning = step.status === 'running';
@@ -121,7 +121,7 @@ export function GenerateSection({
                     ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                     : isRunning
                     ? 'bg-red-50 text-red-700 border border-red-200 animate-pulse font-semibold'
-                    : 'bg-slate-50 text-slate-400 border border-slate-200/60'
+                    : 'bg-muted text-muted-foreground border border-border/60'
                 }`}
               >
                 {isDone ? (
@@ -129,7 +129,7 @@ export function GenerateSection({
                 ) : isRunning ? (
                   <Loader2 className="size-3 text-red-600 animate-spin" />
                 ) : (
-                  <Circle className="size-2.5 text-slate-300" />
+                  <Circle className="size-2.5 text-muted-foreground" />
                 )}
                 <span>{step.label}</span>
               </div>

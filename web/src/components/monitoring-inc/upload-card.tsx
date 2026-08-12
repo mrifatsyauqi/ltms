@@ -82,16 +82,16 @@ export function UploadCard({ onFileSelected, disabled }: UploadCardProps) {
   };
 
   return (
-    <div className="relative bg-white rounded-[8px] border border-slate-200 p-4 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between h-[230px]">
+    <div className="relative bg-card rounded-[8px] border border-border p-4 shadow-xs hover:border-border transition-all flex flex-col justify-between h-[230px]">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="flex items-center justify-center size-5 rounded-full bg-slate-900 text-white text-[11px] font-bold">
             1
           </span>
-          <h3 className="text-sm font-semibold text-slate-900 tracking-tight">Upload File Excel</h3>
+          <h3 className="text-sm font-semibold text-foreground tracking-tight">Upload File Excel</h3>
         </div>
-        <span className="text-[11px] font-medium text-slate-400">JMS Outgoing INC</span>
+        <span className="text-[11px] font-medium text-muted-foreground">JMS Outgoing INC</span>
       </div>
 
       {/* Drop Area / Loading State */}
@@ -103,12 +103,12 @@ export function UploadCard({ onFileSelected, disabled }: UploadCardProps) {
             <Loader2 className="size-4.5 animate-spin" />
           </div>
 
-          <p className="text-xs font-semibold text-slate-900 truncate max-w-[240px]" title={loadingFileName}>
+          <p className="text-xs font-semibold text-foreground truncate max-w-[240px]" title={loadingFileName}>
             {loadingFileName}
           </p>
 
           {/* Animated Gradient Progress Bar */}
-          <div className="w-56 h-1.5 bg-slate-200 rounded-full mt-2 overflow-hidden">
+          <div className="w-56 h-1.5 bg-muted rounded-full mt-2 overflow-hidden">
             <motion.div
               className="h-full bg-gradient-to-r from-[#E2231A] via-rose-500 to-[#C91C15] rounded-full"
               initial={{ width: '0%' }}
@@ -125,7 +125,7 @@ export function UploadCard({ onFileSelected, disabled }: UploadCardProps) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -3 }}
               transition={{ duration: 0.15 }}
-              className="text-[11px] text-slate-600 mt-1.5 font-medium flex items-center gap-1"
+              className="text-[11px] text-muted-foreground mt-1.5 font-medium flex items-center gap-1"
             >
               <span>{STEP_LABELS[currentStep]}</span>
             </motion.p>
@@ -137,7 +137,7 @@ export function UploadCard({ onFileSelected, disabled }: UploadCardProps) {
           className={`relative group overflow-hidden flex flex-col items-center justify-center rounded-[6px] border-2 border-dashed px-4 py-3 text-center transition-all cursor-pointer select-none my-1 flex-1 ${
             isDragOver
               ? 'border-[#E2231A] bg-red-50/50 ring-2 ring-red-500/20'
-              : 'border-slate-200 bg-slate-50/50 hover:border-slate-300 hover:bg-slate-50/80'
+              : 'border-border bg-muted/50 hover:border-border hover:bg-muted/80'
           } ${disabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
           onDragOver={(e) => {
             e.preventDefault();
@@ -153,14 +153,14 @@ export function UploadCard({ onFileSelected, disabled }: UploadCardProps) {
           }}
           onClick={() => fileInputRef.current?.click()}
         >
-          <div className="size-9 rounded-[6px] bg-white border border-slate-200 text-slate-600 group-hover:text-[#E2231A] group-hover:border-red-200 group-hover:bg-red-50/60 flex items-center justify-center mb-1.5 shadow-2xs transition-colors">
+          <div className="size-9 rounded-[6px] bg-card border border-border text-muted-foreground group-hover:text-[#E2231A] group-hover:border-red-200 group-hover:bg-red-50/60 flex items-center justify-center mb-1.5 shadow-2xs transition-colors">
             <CloudUpload className="size-4.5" />
           </div>
 
-          <p className="text-xs font-semibold text-slate-800 leading-snug">
+          <p className="text-xs font-semibold text-foreground leading-snug">
             Tarik & lepas file Excel di sini
           </p>
-          <p className="text-[11px] text-slate-400 mt-0.5">
+          <p className="text-[11px] text-muted-foreground mt-0.5">
             atau klik untuk menjelajah file komputer
           </p>
 
@@ -190,7 +190,7 @@ export function UploadCard({ onFileSelected, disabled }: UploadCardProps) {
       )}
 
       {/* Footer Info */}
-      <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium">
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium">
         <span>Format: XLSX, XLS</span>
         <span>Maksimal 10 MB</span>
       </div>

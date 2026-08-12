@@ -371,14 +371,14 @@ Terima kasih.`;
       />
 
       {/* 1. Header Bar with Integrated Action Toolbar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-border">
         <div>
-          <h1 className="text-lg md:text-xl font-semibold tracking-tight text-slate-900">
+          <h1 className="text-lg md:text-xl font-semibold tracking-tight text-foreground">
             Monitoring INC
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Monitoring pengiriman Inter City (INC) SLA maksimal 24 jam • Terakhir digenerate:{' '}
-            <span className="font-medium text-slate-700">{generateTime}</span>
+            <span className="font-medium text-foreground">{generateTime}</span>
           </p>
         </div>
 
@@ -388,25 +388,25 @@ Terima kasih.`;
           <button
             type="button"
             onClick={onReset}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs font-medium shadow-2xs transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-border bg-card hover:bg-muted active:scale-[0.98] text-foreground text-xs font-medium shadow-2xs transition-all cursor-pointer"
           >
-            <ArrowLeft className="size-3.5 text-slate-500" />
+            <ArrowLeft className="size-3.5 text-muted-foreground" />
             Upload File Baru
           </button>
 
           {/* Target Kota Selector */}
-          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-[6px] px-2.5 py-1.5 shadow-2xs text-xs font-medium text-slate-800">
+          <div className="flex items-center gap-1.5 bg-card border border-border rounded-[6px] px-2.5 py-1.5 shadow-2xs text-xs font-medium text-foreground">
             <MapPin className="size-3.5 text-[#E2231A]" />
             {isCityLocked ? (
               <div className="flex items-center gap-1">
                 <span>{targetKota}</span>
-                <Lock className="size-3 text-slate-400" />
+                <Lock className="size-3 text-muted-foreground" />
               </div>
             ) : (
               <select
                 value={targetKota}
                 onChange={(e) => onTargetKotaChange(e.target.value)}
-                className="bg-transparent font-semibold text-slate-900 focus:outline-none cursor-pointer"
+                className="bg-transparent font-semibold text-foreground focus:outline-none cursor-pointer"
               >
                 {AVAILABLE_CITIES.map((c) => (
                   <option key={c} value={c}>
@@ -433,9 +433,9 @@ Terima kasih.`;
             onClick={handleCopyImage}
             disabled={copyingImage}
             title="Salin gambar laporan (sama persis dgn lampiran Kirim ke Feishu) - tempel manual (Ctrl+V) di chat Feishu"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs font-medium shadow-2xs transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-border bg-card hover:bg-muted active:scale-[0.98] text-foreground text-xs font-medium shadow-2xs transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <ImageIcon className="size-3.5 text-slate-500" />
+            <ImageIcon className="size-3.5 text-muted-foreground" />
             {copyingImage ? 'Menyalin…' : 'Salin Gambar'}
           </button>
 
@@ -443,7 +443,7 @@ Terima kasih.`;
           <button
             type="button"
             onClick={handleExportExcel}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs font-medium shadow-2xs transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-border bg-card hover:bg-muted active:scale-[0.98] text-foreground text-xs font-medium shadow-2xs transition-all cursor-pointer"
           >
             <Download className="size-3.5 text-emerald-600" />
             Ekspor Excel
@@ -454,37 +454,37 @@ Terima kasih.`;
       {/* 2. 4 KPI Metric Cards Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Card 1: Total AWB INC */}
-        <div className="bg-white rounded-[8px] border border-slate-200 p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-slate-300">
+        <div className="bg-card rounded-[8px] border border-border p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-border">
           <div className="size-9 rounded-[6px] bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
             <FileText className="size-4.5" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-slate-500 uppercase tracking-tight">Total AWB INC</p>
-            <p className="text-xl font-bold text-slate-900 leading-tight font-mono">{stats.total.toLocaleString('id-ID')}</p>
-            <p className="text-[11px] text-slate-400">Total Pengiriman</p>
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">Total AWB INC</p>
+            <p className="text-xl font-bold text-foreground leading-tight font-mono">{stats.total.toLocaleString('id-ID')}</p>
+            <p className="text-[11px] text-muted-foreground">Total Pengiriman</p>
           </div>
         </div>
 
         {/* Card 2: Clear TTD */}
-        <div className="bg-white rounded-[8px] border border-slate-200 p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-slate-300">
+        <div className="bg-card rounded-[8px] border border-border p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-border">
           <div className="size-9 rounded-[6px] bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
             <CheckCircle2 className="size-4.5" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-slate-500 uppercase tracking-tight">Clear TTD (≤24 Jam)</p>
-            <p className="text-xl font-bold text-slate-900 leading-tight font-mono">{stats.clear.toLocaleString('id-ID')}</p>
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">Clear TTD (≤24 Jam)</p>
+            <p className="text-xl font-bold text-foreground leading-tight font-mono">{stats.clear.toLocaleString('id-ID')}</p>
             <p className="text-[11px] font-medium text-emerald-600">{stats.percent}% Tepat Waktu</p>
           </div>
         </div>
 
         {/* Card 3: Belum TTD / Telat */}
-        <div className="bg-white rounded-[8px] border border-slate-200 p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-slate-300">
+        <div className="bg-card rounded-[8px] border border-border p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-border">
           <div className="size-9 rounded-[6px] bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
             <Clock className="size-4.5" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-slate-500 uppercase tracking-tight">Belum TTD / Telat</p>
-            <p className="text-xl font-bold text-slate-900 leading-tight font-mono">{(stats.belum + stats.late).toLocaleString('id-ID')}</p>
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">Belum TTD / Telat</p>
+            <p className="text-xl font-bold text-foreground leading-tight font-mono">{(stats.belum + stats.late).toLocaleString('id-ID')}</p>
             <p className="text-[11px] font-medium text-amber-600">
               {stats.total > 0 ? Math.round(((stats.belum + stats.late) / stats.total) * 100) : 0}% Belum Selesai
             </p>
@@ -492,12 +492,12 @@ Terima kasih.`;
         </div>
 
         {/* Card 4: Presentase (Paling Kanan) */}
-        <div className="bg-white rounded-[8px] border border-slate-200 p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-slate-300">
+        <div className="bg-card rounded-[8px] border border-border p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-border">
           <div className="size-9 rounded-[6px] bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
             <Percent className="size-4.5" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-slate-500 uppercase tracking-tight">Presentase</p>
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">Presentase</p>
             <p className="text-xl font-bold text-indigo-900 leading-tight font-mono">{stats.percent}%</p>
             <p className="text-[11px] font-medium text-indigo-600">Pencapaian SLA</p>
           </div>

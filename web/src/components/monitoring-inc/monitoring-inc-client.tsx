@@ -429,33 +429,33 @@ export function MonitoringIncClient({
   return (
     <div className="space-y-3.5 max-w-7xl mx-auto animate-in fade-in-50 duration-300">
       {/* 1. Header Ringkas + Selector Target Kota */}
-      <div className="flex items-center justify-between gap-3 pb-2 border-b border-[#E5E7EB]">
+      <div className="flex items-center justify-between gap-3 pb-2 border-b border-border">
         <div>
-          <h1 className="text-lg md:text-xl font-semibold tracking-tight text-slate-900">
+          <h1 className="text-lg md:text-xl font-semibold tracking-tight text-foreground">
             Monitoring INC
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Monitoring pengiriman Inter City (INC) dengan batas SLA maksimal 24 jam.
           </p>
         </div>
 
         {/* Target Kota Dropdown */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-slate-500 hidden sm:inline">
+          <span className="text-xs font-medium text-muted-foreground hidden sm:inline">
             Target Kota
           </span>
-          <div className="flex items-center gap-1.5 bg-white border border-[#E5E7EB] rounded-[8px] px-2.5 py-1.5 shadow-2xs text-xs font-medium text-slate-800">
+          <div className="flex items-center gap-1.5 bg-card border border-border rounded-[8px] px-2.5 py-1.5 shadow-2xs text-xs font-medium text-foreground">
             <MapPin className="size-3.5 text-[#E2231A]" />
             {isCityLocked ? (
               <div className="flex items-center gap-1">
                 <span>{targetKota}</span>
-                <Lock className="size-3 text-slate-400" />
+                <Lock className="size-3 text-muted-foreground" />
               </div>
             ) : (
               <select
                 value={targetKota}
                 onChange={(e) => setTargetKota(e.target.value)}
-                className="bg-transparent font-semibold text-slate-900 focus:outline-none cursor-pointer"
+                className="bg-transparent font-semibold text-foreground focus:outline-none cursor-pointer"
               >
                 {AVAILABLE_CITIES.map((c) => (
                   <option key={c} value={c}>
