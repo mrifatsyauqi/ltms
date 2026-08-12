@@ -86,7 +86,7 @@ export function UploadCard({ onFileSelected, disabled }: UploadCardProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="flex items-center justify-center size-5 rounded-full bg-slate-900 text-white text-[11px] font-bold">
+          <span className="flex items-center justify-center size-5 rounded-full bg-foreground text-background text-[11px] font-bold">
             1
           </span>
           <h3 className="text-sm font-semibold text-foreground tracking-tight">Upload File Excel</h3>
@@ -167,7 +167,7 @@ export function UploadCard({ onFileSelected, disabled }: UploadCardProps) {
           <div className="relative mt-2">
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] bg-foreground hover:bg-foreground/90 active:scale-[0.98] text-background text-xs font-semibold shadow-xs transition-all cursor-pointer"
             >
               <Upload className="size-3.5" />
               Pilih File

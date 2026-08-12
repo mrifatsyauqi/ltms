@@ -294,7 +294,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
                 onClick={() => table.setPageIndex(pageNum)}
                 className={`size-7 rounded-[6px] text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${
                   isActive
-                    ? 'bg-slate-900 text-white shadow-2xs'
+                    ? 'bg-foreground text-background shadow-2xs'
                     : 'border border-border bg-card text-foreground hover:bg-muted active:scale-[0.98]'
                 }`}
               >
@@ -311,7 +311,7 @@ export function MonitoringIncTable({ data, title }: MonitoringIncTableProps) {
                 onClick={() => table.setPageIndex(totalPages - 1)}
                 className={`size-7 rounded-[6px] text-xs font-semibold flex items-center justify-center cursor-pointer ${
                   pageIndex === totalPages - 1
-                    ? 'bg-slate-900 text-white'
+                    ? 'bg-foreground text-background'
                     : 'border border-border bg-card text-foreground hover:bg-muted active:scale-[0.98]'
                 }`}
               >

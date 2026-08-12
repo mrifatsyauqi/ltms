@@ -320,7 +320,7 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
             </div>
 
             {stagedData.length > 0 && (
-              <div className="p-4 border rounded-lg bg-slate-50 space-y-3">
+              <div className="p-4 border border-border rounded-lg bg-muted space-y-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="totalSampaiSetup">Jumlah Total Sampai</Label>
                   <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">

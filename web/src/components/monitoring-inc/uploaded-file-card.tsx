@@ -21,7 +21,7 @@ export function UploadedFileCard({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="flex items-center justify-center size-5 rounded-full bg-slate-900 text-white text-[11px] font-bold">
+          <span className="flex items-center justify-center size-5 rounded-full bg-foreground text-background text-[11px] font-bold">
             2
           </span>
           <h3 className="text-sm font-semibold text-foreground tracking-tight">
@@ -92,7 +92,7 @@ export function UploadedFileCard({
             </div>
             <div>
               <p className="text-[10px] uppercase font-semibold text-muted-foreground">Target Kota</p>
-              <span className="inline-block mt-0.5 px-2 py-0.5 rounded-[4px] bg-slate-900 text-white text-[11px] font-bold tracking-wide">
+              <span className="inline-block mt-0.5 px-2 py-0.5 rounded-[4px] bg-foreground text-background text-[11px] font-bold tracking-wide">
                 {targetKota || fileInfo.targetKota}
               </span>
             </div>

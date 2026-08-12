@@ -328,10 +328,10 @@ export function LaporanHarianClient({ userRole, userDropPoint }: LaporanHarianCl
         onExecuteSend={handleExecuteFeishuSend}
       />
 
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-border">
         <div>
-          <h1 className="text-lg md:text-xl font-semibold tracking-tight text-slate-900">Laporan Harian Operasional DP</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h1 className="text-lg md:text-xl font-semibold tracking-tight text-foreground">Laporan Harian Operasional DP</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
             {dpLabel}{generateTime ? ` • Terakhir digenerate: ${generateTime}` : ''}
           </p>
         </div>
@@ -340,7 +340,7 @@ export function LaporanHarianClient({ userRole, userDropPoint }: LaporanHarianCl
             <select
               value={selectedKodeDp}
               onChange={(e) => setSelectedKodeDp(e.target.value)}
-              className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm"
+              className="h-9 rounded-md border border-border bg-background text-foreground px-3 text-sm"
             >
               <option value="">Pilih Drop Point...</option>
               {dropPoints.map((d) => (
@@ -350,7 +350,7 @@ export function LaporanHarianClient({ userRole, userDropPoint }: LaporanHarianCl
               ))}
             </select>
           )}
-          <label className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-slate-200 bg-white text-sm cursor-pointer hover:bg-slate-50">
+          <label className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border bg-background text-foreground text-sm cursor-pointer hover:bg-muted">
             <Upload className="size-4" />
             Upload Tarikan JMS Detail
             <input
@@ -419,8 +419,8 @@ export function LaporanHarianClient({ userRole, userDropPoint }: LaporanHarianCl
               onChange={(v) => setSisaSetoranH1(v === null ? '' : String(v))}
             />
 
-            <div className="pt-2 border-t border-slate-100">
-              <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Absensi</p>
+            <div className="pt-2 border-t border-border">
+              <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Absensi</p>
               <InfoRow label="Total Karyawan Masuk" value={karyawanMasuk ?? '-'} />
               <NumField
                 label="- Jumlah Admin"
@@ -502,14 +502,14 @@ export function LaporanHarianClient({ userRole, userDropPoint }: LaporanHarianCl
           </CardHeader>
           <CardContent className="space-y-4">
             {photos.map((slot, idx) => (
-              <div key={slot.label} className="border border-slate-200 rounded-md p-2.5 space-y-2">
-                <p className="text-xs font-semibold text-slate-600">{slot.label}</p>
-                <label className="flex items-center justify-center h-24 rounded border border-dashed border-slate-300 bg-slate-50 cursor-pointer overflow-hidden">
+              <div key={slot.label} className="border border-border rounded-md p-2.5 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">{slot.label}</p>
+                <label className="flex items-center justify-center h-24 rounded border border-dashed border-border bg-muted cursor-pointer overflow-hidden">
                   {slot.imageDataUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={slot.imageDataUrl} alt={slot.label} className="h-full w-full object-cover" />
                   ) : (
-                    <ImageIcon className="size-5 text-slate-300" />
+                    <ImageIcon className="size-5 text-muted-foreground" />
                   )}
                   <input
                     type="file"
@@ -550,12 +550,12 @@ function InfoRow({ label, value, highlight }: { label: string; value: string | n
       : highlight === 'LEBIH'
       ? 'text-amber-700'
       : highlight === 'CEK'
-      ? 'text-slate-500'
-      : 'text-slate-800';
+      ? 'text-muted-foreground'
+      : 'text-foreground';
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-slate-500">{label}</span>
-      <span className={`font-semibold text-right ${highlight ? okColor : 'text-slate-800'}`}>{value}</span>
+      <span className="text-muted-foreground">{label}</span>
+      <span className={`font-semibold text-right ${highlight ? okColor : 'text-foreground'}`}>{value}</span>
     </div>
   );
 }
@@ -563,7 +563,7 @@ function InfoRow({ label, value, highlight }: { label: string; value: string | n
 function NumField({ label, value, onChange }: { label: string; value: number | null; onChange: (v: number | null) => void }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <Label className="text-slate-500 font-normal shrink-0">{label}</Label>
+      <Label className="text-muted-foreground font-normal shrink-0">{label}</Label>
       <Input
         type="number"
         value={value === null ? '' : value}
@@ -577,13 +577,13 @@ function NumField({ label, value, onChange }: { label: string; value: number | n
 function TextField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div className="space-y-1">
-      <Label className="text-slate-500 font-normal text-xs">{label}</Label>
+      <Label className="text-muted-foreground font-normal text-xs">{label}</Label>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={2}
         placeholder="Diisi manual..."
-        className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-slate-400"
+        className="w-full rounded-md border border-border bg-background text-foreground px-2 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-ring"
       />
     </div>
   );

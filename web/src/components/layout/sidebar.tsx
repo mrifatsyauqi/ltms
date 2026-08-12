@@ -160,7 +160,7 @@ export function Sidebar({ role, nama, dropPoint, menuAccess = null }: SidebarPro
                           onClick={() => toggleExpanded(item)}
                           aria-expanded={isOpen}
                           aria-label={isOpen ? `Tutup submenu ${item.label}` : `Buka submenu ${item.label}`}
-                          className="hover:bg-slate-100 focus-visible:ring-sidebar-ring shrink-0 rounded-[6px] p-1.5 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                          className="hover:bg-sidebar-accent focus-visible:ring-sidebar-ring shrink-0 rounded-[6px] p-1.5 transition-colors focus-visible:ring-2 focus-visible:outline-none"
                         >
                           <ChevronDown
                             className={cn('size-3.5 shrink-0 transition-transform', isOpen && 'rotate-180')}
