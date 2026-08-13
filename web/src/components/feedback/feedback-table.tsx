@@ -177,6 +177,17 @@ export function FeedbackTable({
   // baris) - baca ref di call-time, bukan closure atas nilai lama.
   const submitRef = useRef(submit);
   submitRef.current = submit;
+  // Sama persis alasannya dgn submitRef di atas: `columns` dimemo dgn deps
+  // [readOnly] SAJA, jadi closure `cell` kolom 'feedback' HANYA menangkap
+  // `options` dari render PERTAMA kali columns dibuat - saat itu
+  // useFeedbackOptions() hampir pasti masih [] krn query master-feedback/
+  // favorite-feedback belum selesai (async, react-query). Tanpa ref ini,
+  // rekomendasi Master Feedback JADI TAK PERNAH MUNCUL SAMA SEKALI selamanya
+  // (bug produksi: ketik huruf apa pun, dropdown tak pernah muncul) walau
+  // query-nya sendiri sukses & `options` di scope komponen sudah terisi -
+  // closure lama tak pernah tahu itu krn `columns` tak pernah dibuat ulang.
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
   const wasFetchingRef = useRef(isFetching);
   useEffect(() => {
     if (wasFetchingRef.current && !isFetching && data) {
@@ -438,7 +449,7 @@ export function FeedbackTable({
           ) : (
             <FeedbackCell
               row={r}
-              options={options}
+              options={optionsRef.current}
               saving={submitRef.current.isPending && submitRef.current.variables?.waybill === r['No. Waybill']}
               onCommit={handleCommit}
               registerRef={registerRef}
