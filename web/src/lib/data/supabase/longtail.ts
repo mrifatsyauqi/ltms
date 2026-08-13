@@ -142,13 +142,48 @@ export async function submitFeedback(
 export const BULK_FEEDBACK_MAX_ITEMS = 100;
 
 /**
+ * Ukuran chunk paralel bulk feedback - REUSE pola chunking `import.ts`
+ * (Promise.all per potongan, bukan 1-per-1 & bukan semua sekaligus), TAPI
+ * angkanya jauh lebih kecil drpd CHUNK=500 di import.ts krn beda karakter
+ * kerja: import.ts men-chunk BARIS utk SATU query upsert bulk (payload
+ * besar, 1 round-trip per chunk), sedangkan di sini tiap waybill = SATU
+ * pemanggilan submitFeedback() yang ISINYA SENDIRI ~7 round-trip DB
+ * berantai (requireActor, requirePermission, findRow, assertCanAccessDp,
+ * update, nextAttempt, insert Activity_Log - lihat submitFeedback di atas).
+ * 15 dipilih sbg titik tengah wajar: cukup besar utk speedup signifikan drpd
+ * sekuensial murni, cukup kecil supaya tak membuka >100 koneksi/query
+ * bersamaan ke connection pool Supabase (pgbouncer) dalam satu waktu.
+ */
+const BULK_FEEDBACK_CHUNK_SIZE = 15;
+
+function chunkItems<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+/**
  * Terapkan SATU feedback ke BANYAK waybill sekaligus - WAJIB memanggil
- * submitFeedback() PERSIS SAMA per baris (loop berurutan), BUKAN logic
- * terpisah, supaya freeze/resume aging, optimistic locking (baseVersion
- * per baris), dan entry Activity_Log per waybill TETAP mengikuti aturan
- * yang sama persis dengan submit satu-per-satu. Sebagian gagal (mis.
- * VERSION_CONFLICT di satu baris) TIDAK membatalkan baris lain yang sudah
- * berhasil - setiap baris punya transaksi/lock sendiri di submitFeedback.
+ * submitFeedback() PERSIS SAMA per baris (BUKAN logic terpisah), supaya
+ * freeze/resume aging, optimistic locking (baseVersion per baris), dan
+ * entry Activity_Log per waybill TETAP mengikuti aturan yang sama persis
+ * dengan submit satu-per-satu. Sebagian gagal (mis. VERSION_CONFLICT di
+ * satu baris) TIDAK membatalkan baris lain yang sudah berhasil - setiap
+ * baris punya lock optimistic sendiri di submitFeedback.
+ *
+ * DIPROSES CHUNKED-PARALLEL (Promise.allSettled per chunk BULK_FEEDBACK_CHUNK_SIZE
+ * waybill, chunk demi chunk berurutan) - BUKAN sekuensial 1-per-1 (lambat,
+ * ratusan round-trip DB menunggu satu-per-satu) dan BUKAN satu Promise.all
+ * raksasa utk seluruh 100 waybill (bisa membanjiri connection pool). AMAN
+ * diparalelkan krn setiap waybill = BARIS BERBEDA dgn primary key berbeda -
+ * tak ada resource yang dipakai bersama antar waybill dalam satu chunk
+ * (beda dgn kasus longtail+activity_log UNTUK WAYBILL YANG SAMA yang
+ * butuh urutan transaksi) - optimistic locking (kolom version) tetap
+ * berlaku identik per baris krn UPDATE-nya sendiri sudah ber-syarat
+ * `.eq('version', ...)` di submitFeedback, terlepas urutan pemanggilannya.
+ * Promise.allSettled (bukan Promise.all) supaya 1 kegagalan di sebuah
+ * chunk TIDAK membatalkan waybill lain yang sedang diproses bersamaan di
+ * chunk yang sama.
  */
 export async function bulkSubmitFeedback(
   actorEmail: string,
@@ -177,19 +212,25 @@ export async function bulkSubmitFeedback(
     | { waybill: string; ok: false; error: string; code?: string }
   > = [];
 
-  for (const item of items) {
-    try {
-      const data = await submitFeedback(actorEmail, item.waybill, feedback, item.baseVersion);
-      results.push({ waybill: item.waybill, ok: true, data });
-    } catch (err) {
-      const apiErr = err instanceof ApiError ? err : null;
-      results.push({
-        waybill: item.waybill,
-        ok: false,
-        error: apiErr?.message || (err as Error)?.message || 'Gagal menyimpan',
-        code: apiErr?.code,
-      });
-    }
+  for (const chunk of chunkItems(items, BULK_FEEDBACK_CHUNK_SIZE)) {
+    const settled = await Promise.allSettled(
+      chunk.map((item) => submitFeedback(actorEmail, item.waybill, feedback, item.baseVersion)),
+    );
+    settled.forEach((outcome, i) => {
+      const item = chunk[i];
+      if (outcome.status === 'fulfilled') {
+        results.push({ waybill: item.waybill, ok: true, data: outcome.value });
+      } else {
+        const err = outcome.reason;
+        const apiErr = err instanceof ApiError ? err : null;
+        results.push({
+          waybill: item.waybill,
+          ok: false,
+          error: apiErr?.message || (err as Error)?.message || 'Gagal menyimpan',
+          code: apiErr?.code,
+        });
+      }
+    });
   }
 
   const successCount = results.filter((r) => r.ok).length;
