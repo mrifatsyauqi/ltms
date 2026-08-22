@@ -80,13 +80,18 @@ export class BablastService {
   }
 
   async listSenders(): Promise<any[]> {
+    const { baseUrl } = await getBablastCredentials();
     try {
-      const client = await this.getSdkClient();
-      const senders = await client.wa.senders.list();
-      return senders || [];
+      const headers = await this.getHeaders();
+      const response = await fetchWithTimeout(`${baseUrl}/senders`, {
+        method: 'GET',
+        headers
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw this.handleBablastError(response.status, data.message);
+      return data.data || [];
     } catch (error: any) {
-      console.error('Failed to list Bablast senders via SDK:', error.message);
-      // We don't have HTTP status here natively if SDK throws generic, so we wrap it securely
+      console.error('Failed to list Bablast senders via REST API:', error.message);
       throw new ApiError('500', 'Failed to fetch senders from Bablast');
     }
   }

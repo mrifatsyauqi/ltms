@@ -18,6 +18,8 @@ interface SenderConnection {
   display_name: string | null;
   status: string;
   last_seen: string;
+  sender_code?: string | null;
+  channel_type?: string | null;
 }
 
 interface ConfigStatus {
@@ -506,6 +508,20 @@ export function TabSender() {
                   </div>
                   </CardContent>
                   <CardFooter className="bg-slate-50 border-t p-3 flex flex-col gap-2">
+                    
+                    {!sender.sender_code && sender.status === 'connected' && (
+                      <div className="w-full bg-amber-50 border border-amber-200 text-amber-700 p-2 rounded-md mb-1 text-xs">
+                        <span className="font-semibold block mb-1">⚠ Sender belum siap digunakan</span>
+                        WhatsApp sudah terhubung, tetapi Bablast belum memberikan sender identifier (sender_code) yang diperlukan untuk pengiriman. Hubungi dukungan Bablast.
+                      </div>
+                    )}
+                    {sender.sender_code && sender.status === 'connected' && (
+                      <div className="w-full bg-emerald-50 border border-emerald-200 text-emerald-700 p-2 rounded-md mb-1 text-xs flex items-center">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2 inline-block"></span>
+                        <span className="font-semibold">Sender siap digunakan</span>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-2 gap-2 w-full">
                       <Button 
                         variant="outline" 
@@ -527,7 +543,7 @@ export function TabSender() {
                         variant="outline" 
                         size="sm" 
                         className="w-full text-xs"
-                        disabled={sender.status !== 'connected'}
+                        disabled={sender.status !== 'connected' || !sender.sender_code}
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -873,8 +889,13 @@ export function TabSender() {
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
+          <div className="grid gap-4 py-4">
+            {testKirimSender && testKirimSender.sender_code && (
+              <div className="bg-slate-50 p-2 rounded border text-xs text-slate-500 font-mono">
+                Sender Code: {testKirimSender.sender_code.substring(0, 3)}••••••••
+              </div>
+            )}
+            <div className="grid gap-2">
               <Label htmlFor="test-phone">Nomor Tujuan</Label>
               <Input 
                 id="test-phone" 
@@ -900,18 +921,34 @@ export function TabSender() {
             {testKirimResult && (
               <div className={`p-3 rounded-md text-sm border ${testKirimResult.success ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
                 <div className="font-semibold mb-1">
-                  {testKirimResult.success ? 'Berhasil Terkirim' : 'Gagal Mengirim'}
+                  {testKirimResult.success ? 'Berhasil Terkirim' : testKirimResult.status === 404 ? 'Sender belum tersedia untuk pengiriman' : 'Gagal Mengirim'}
                 </div>
                 {testKirimResult.success ? (
                   <p className="text-xs">Message ID: {testKirimResult.data?.data?.message_id || 'OK'}</p>
                 ) : (
                   <div className="text-xs space-y-1">
-                    <p><strong>Status:</strong> HTTP {testKirimResult.status}</p>
-                    <p><strong>Response:</strong> {JSON.stringify(testKirimResult.data || testKirimResult.error)}</p>
-                    {testKirimResult.status === 404 && (
-                      <p className="mt-2 pt-2 border-t border-red-200">
-                        *Catatan: 404 dari Bablast mengindikasikan sender_code belum disinkronisasi sepenuhnya, atau menggunakan channel (WABA) yang memiliki flow/endpoint berbeda.
-                      </p>
+                    {testKirimResult.status === 404 ? (
+                      <>
+                        <p>Bablast menemukan koneksi WhatsApp tetapi endpoint Send tidak mengenali sender identifier yang digunakan.</p>
+                        <div className="mt-2 pt-2 border-t border-red-200 font-mono">
+                          Detail teknis:<br/>
+                          HTTP 404<br/>
+                          Error: Sender not found
+                        </div>
+                        <div className="mt-3 flex gap-2">
+                          <Button variant="outline" size="sm" onClick={() => fetchSenders()} className="h-7 text-xs bg-white text-red-700 hover:bg-red-50">
+                            Refresh Sender
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => setIsTestKirimModalOpen(false)} className="h-7 text-xs bg-white text-red-700 hover:bg-red-50">
+                            Periksa Koneksi
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p><strong>Status:</strong> HTTP {testKirimResult.status}</p>
+                        <p><strong>Response:</strong> {JSON.stringify(testKirimResult.data || testKirimResult.error)}</p>
+                      </>
                     )}
                   </div>
                 )}
