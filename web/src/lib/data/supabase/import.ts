@@ -5,7 +5,14 @@ import { ApiError } from '@/lib/errors';
 import { FULL_ACCESS_ROLES } from '@/lib/roles';
 import { isClearTTD, jakartaParts, jakartaStamp, planAutoClose } from './longtail-shared';
 import type { LongtailDbRow } from './longtail-shared';
-import type { AutoClosePreview, ImportBatchRow, ImportPreviewResult, ImportResult, MappingTemplate } from '@/lib/data/types';
+import type {
+  AutoClosePreview,
+  ImportBatchFileRow,
+  ImportBatchRow,
+  ImportPreviewResult,
+  ImportResult,
+  MappingTemplate,
+} from '@/lib/data/types';
 import type { MappedRow } from '@/lib/import/types';
 
 const CHUNK = 500;
@@ -473,10 +480,32 @@ export async function listImportBatches(actorEmail: string): Promise<ImportBatch
     .select('*')
     .order('created_at', { ascending: false });
   if (error) throw new ApiError('INTERNAL_ERROR', error.message);
-  return (data ?? []).map((r) => {
+  const rows = data ?? [];
+
+  // File asli per batch (retensi 7 hari - lihat import_file_retention_migration.sql
+  // & cleanupExpiredImportFiles) - satu query terpisah, dikelompokkan di JS,
+  // supaya listImportBatches tetap jalan normal walau tabel/bucket-nya belum
+  // ada (mis. migrasi belum dijalankan) - errornya diredam, bukan bikin
+  // seluruh Riwayat Import gagal tampil.
+  const filesByBatch = new Map<string, ImportBatchFileRow[]>();
+  const batchIds = rows.map((r) => String((r as { batch_id: string }).batch_id));
+  if (batchIds.length > 0) {
+    const { data: fileRows } = await db()
+      .from('import_batch_file')
+      .select('id, batch_id, nama_file, size_bytes')
+      .in('batch_id', batchIds);
+    for (const f of (fileRows ?? []) as { id: string; batch_id: string; nama_file: string; size_bytes: number }[]) {
+      const list = filesByBatch.get(f.batch_id) ?? [];
+      list.push({ id: f.id, namaFile: s(f.nama_file), sizeBytes: toInt(f.size_bytes) });
+      filesByBatch.set(f.batch_id, list);
+    }
+  }
+
+  return rows.map((r) => {
+    const batchId = s((r as { batch_id: string }).batch_id);
     const parts = jakartaParts(new Date(String((r as { created_at: string }).created_at)));
     return {
-      'Batch ID': s((r as { batch_id: string }).batch_id),
+      'Batch ID': batchId,
       Tanggal: parts.tanggal,
       Jam: parts.jam,
       'Admin Cabang': s((r as { admin_cabang: string }).admin_cabang),
@@ -486,8 +515,117 @@ export async function listImportBatches(actorEmail: string): Promise<ImportBatch
       Gagal: toInt((r as { gagal: number }).gagal),
       Status: s((r as { status: string }).status),
       Keterangan: s((r as { keterangan: string }).keterangan),
+      Files: filesByBatch.get(batchId) ?? [],
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Retensi file asli Import Long Tail (7 hari) - lihat
+// import_file_retention_migration.sql. File byte ASLI (bukan hasil parse)
+// disimpan ke Storage supaya bisa diunduh ulang; sebelumnya file yang
+// diupload hanya diparse di browser & tak pernah tersimpan sama sekali.
+// ---------------------------------------------------------------------------
+const IMPORT_FILES_BUCKET = 'import-files';
+export const IMPORT_FILE_RETENTION_DAYS = 7;
+
+/** Simpan file ASLI (byte apa adanya) ke Storage utk satu batch import yang
+ *  BARU SAJA berhasil (batchId hasil importLongTail) - dipanggil TERPISAH
+ *  dari importLongTail (bukan sekaligus di panggilan yang sama) supaya
+ *  kegagalan upload file (mis. jaringan putus) tidak pernah menggagalkan
+ *  import data yang sudah sukses tersimpan ke LongTail. */
+export async function uploadImportBatchFiles(
+  actorEmail: string,
+  batchId: string,
+  files: { name: string; bytes: Uint8Array; sizeBytes: number }[],
+): Promise<ImportBatchFileRow[]> {
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'import_longtail');
+  if (!batchId) throw new ApiError('VALIDATION_ERROR', 'batchId wajib diisi');
+  if (!Array.isArray(files) || files.length === 0) throw new ApiError('VALIDATION_ERROR', 'File wajib diisi');
+
+  // Kode DP dokumen: batchId sudah unik per import (jakartaStamp + random),
+  // dipakai sbg folder supaya tak ada tabrakan nama file antar batch. Nama
+  // file asli dipertahankan APA ADANYA di kolom nama_file (utk ditampilkan
+  // & jadi nama unduhan) - hanya path storage-nya yang di-sanitize.
+  const saved: ImportBatchFileRow[] = [];
+  for (const f of files) {
+    const safeName = f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storagePath = `${batchId}/${crypto.randomUUID()}-${safeName}`;
+    const { error: upErr } = await db()
+      .storage
+      .from(IMPORT_FILES_BUCKET)
+      .upload(storagePath, f.bytes, {
+        contentType: 'application/octet-stream',
+        upsert: false,
+      });
+    if (upErr) throw new ApiError('INTERNAL_ERROR', `Gagal upload file "${f.name}": ${upErr.message}`);
+
+    const { data: row, error: insErr } = await db()
+      .from('import_batch_file')
+      .insert({ batch_id: batchId, nama_file: f.name, storage_path: storagePath, size_bytes: f.sizeBytes })
+      .select('id, nama_file, size_bytes')
+      .single();
+    if (insErr) throw new ApiError('INTERNAL_ERROR', insErr.message);
+    saved.push({ id: String(row.id), namaFile: s(row.nama_file), sizeBytes: toInt(row.size_bytes) });
+  }
+  return saved;
+}
+
+/** Unduh file asli via id baris import_batch_file - dipakai endpoint
+ *  download (streaming ke klien). Otomatis "hilang" (NOT_FOUND) begitu baris
+ *  & objek Storage-nya sudah dihapus cleanupExpiredImportFiles (lewat 7 hari)
+ *  - tak perlu cek tanggal manual di sini, keberadaan barisnya sendiri sudah
+ *  jadi sinyal apakah file masih ada. */
+export async function downloadImportBatchFile(
+  actorEmail: string,
+  fileId: string,
+): Promise<{ namaFile: string; blob: Blob }> {
+  const actor = requireRole(await requireActor(actorEmail), FULL_ACCESS_ROLES);
+  await requirePermission(actor, 'import_longtail');
+
+  const { data: row, error } = await db()
+    .from('import_batch_file')
+    .select('nama_file, storage_path')
+    .eq('id', fileId)
+    .maybeSingle();
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  if (!row) throw new ApiError('NOT_FOUND', 'File tidak ditemukan atau sudah lewat masa retensi 7 hari');
+
+  const { data: blob, error: dlErr } = await db().storage.from(IMPORT_FILES_BUCKET).download(row.storage_path);
+  if (dlErr || !blob) throw new ApiError('NOT_FOUND', 'File tidak ditemukan di penyimpanan (mungkin sudah dihapus)');
+
+  return { namaFile: s(row.nama_file), blob };
+}
+
+/** Hapus file import_batch_file (Storage + baris DB) yang sudah lewat 7 hari
+ *  - dipanggil dari cron harian (/api/cron/snapshot, lihat komentar di sana
+ *  kenapa digabung ke cron yang sama, bukan cron terpisah). import_batch
+ *  (riwayat/metadata) TIDAK ikut dihapus - hanya file ASLI-nya, jadi riwayat
+ *  import tetap terlihat lengkap, cuma tombol unduh hilang setelah retensi. */
+export async function cleanupExpiredImportFiles(): Promise<{ deleted: number }> {
+  const cutoff = new Date(Date.now() - IMPORT_FILE_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const { data: expired, error } = await db()
+    .from('import_batch_file')
+    .select('id, storage_path')
+    .lt('created_at', cutoff);
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  const rows = (expired ?? []) as { id: string; storage_path: string }[];
+  if (rows.length === 0) return { deleted: 0 };
+
+  for (const chunk of chunks(rows, CHUNK)) {
+    const paths = chunk.map((r) => r.storage_path);
+    const { error: rmErr } = await db().storage.from(IMPORT_FILES_BUCKET).remove(paths);
+    // Lanjut hapus baris DB walau remove Storage sebagian gagal (mis. sudah
+    // terhapus manual sebelumnya) - jangan sampai baris kadaluarsa menumpuk
+    // selamanya cuma krn satu objek Storage sudah tak ada.
+    if (rmErr) console.error('cleanupExpiredImportFiles: gagal hapus objek Storage', rmErr.message);
+
+    const ids = chunk.map((r) => r.id);
+    const { error: delErr } = await db().from('import_batch_file').delete().in('id', ids);
+    if (delErr) throw new ApiError('INTERNAL_ERROR', delErr.message);
+  }
+  return { deleted: rows.length };
 }
 
 export async function listMappingTemplates(actorEmail: string): Promise<MappingTemplate[]> {

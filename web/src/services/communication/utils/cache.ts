@@ -46,3 +46,4 @@ export class MemoryCache {
 
 // Singleton in-memory cache instance
 export const communicationCache = new MemoryCache();
+export const memoryCache = communicationCache;

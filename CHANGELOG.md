@@ -4,6 +4,158 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v2.6.1] - 2026-08-06 (Communication Center: Critical Send Fixes, Feature Simplification & Card Redesign)
+
+### Fixed
+- **Bug: Simpan Template Gagal**:
+  - **Penyebab**: Phase v2.6.0 menghentikan penulisan `json_template` saat create/update, tapi kolom `card_templates.json_template` di database masih `NOT NULL` tanpa default sampai migration `communication_center_render_pipeline_migration.sql` benar-benar dijalankan — INSERT gagal dengan pelanggaran constraint dan hanya tampil sebagai error generik `INTERNAL_ERROR` ke pengguna.
+  - **Status**: Migration sudah dikonfirmasi dijalankan pengguna di Supabase.
+- **Bug: Send Test / Kirim ke Feishu → `400 Bad Request`**:
+  - **Penyebab #1 (root cause utama, dikonfirmasi via `scripts/audit-send-test-card.ts` yang membandingkan compile output persis dengan payload Send Test)**: Ketiga starter preset menyetel `actionButton.url: '{{dashboard_url}}'`, tapi `normalizeContext()` tidak pernah mengisi variabel `dashboard_url` — `MessageTemplateEngine.render()` sengaja membiarkan placeholder tak ter-resolve apa adanya, sehingga string literal `{{dashboard_url}}` (bukan URL) terkirim sebagai `url` tombol aksi ke Feishu API, yang menolaknya. Bug pre-existing (bukan regresi dari refactor v2.6.0), belum pernah ketahuan karena jalur ini belum pernah diuji end-to-end ke Feishu asli sebelumnya.
+  - **Perbaikan (`card-compiler.service.ts`)**: URL tombol aksi divalidasi harus berformat `http(s)://` sebelum dipakai; kalau hasil render masih placeholder tak ter-resolve, otomatis fallback ke `appBaseUrl`.
+  - **Penyebab #2 (ditemukan setelah Penyebab #1 diperbaiki, dari error Feishu yang lebih detail)**: `[Code 230099] there is an invalid user resource (at/person) in your card; ErrorValue: ou_demo_limpung_01` — 8 baris data seed awal di `communication_mention_mappings` (`supabase/communication_mentions_migration.sql`) memakai `feishu_open_id` palsu (`ou_demo_*`) yang tidak pernah terdaftar di tenant Feishu asli. Setiap kartu yang menyebut kecamatan/kurir/DP tsb selalu gagal kirim karena Feishu memvalidasi tag `<at id="...">` terhadap direktori user asli.
+  - **Mitigasi sementara (atas keputusan pengguna)**: `supabase/clear_demo_mention_open_ids.sql` — mengosongkan `feishu_open_id` utk 8 baris seed demo (fallback otomatis ke teks `@Nama` biasa, tidak merusak kartu) sampai Open ID asli diisi.
+  - **Diagnostic gap yang turut diperbaiki (`message.service.ts`)**: kode sebelumnya membuang body response Feishu saat gagal, hanya melempar status HTTP polos. Sekarang membaca `code`/`msg` asli dari Feishu di setiap error non-2xx — inilah yang memungkinkan Penyebab #2 ketahuan tanpa akses browser/Feishu langsung.
+- **Bug pre-existing lain (ditemukan & diperbaiki saat verifikasi desain ulang kartu Delivery)**: `MessageTemplateEngine.normalizeContext()` (`message-template.engine.ts`) tidak pernah menghitung variabel `delivered` / `pending_delivery` / `delivery_sla` sama sekali (hanya `total_arrived` / `delivery_percentage`) — preset Monitoring Delivery yang LAMA sudah memakai placeholder ini sejak awal dan selalu gagal ter-resolve, tapi karena bukan URL, Feishu tidak menolaknya — cuma tampil sebagai teks mentah `{{delivered}}` dsb di kartu, kesalahan yang diam-diam lolos. Sekarang dihitung & dialiaskan dengan benar.
+
+### Added
+- **Fitur "Cari Open ID" (`mentions/lookup-open-id`)**: Open ID Feishu ternyata tidak pernah tampil di profil pengguna manapun (identitas teknis khusus per-app/bot, bukan personal) — panduan bawaan lama yang menyuruh cek profil diperbaiki. Fitur baru mencari Open ID resmi via Feishu Contact API (`contact/v3/users/batch_get_id`) berdasarkan nomor HP (dengan normalisasi format lokal Indonesia → E.164):
+  - `FeishuContactService.lookupOpenIdByMobile()` (`services/communication/providers/feishu/contact.service.ts`).
+  - `POST /api/communication/mentions/lookup-open-id`.
+  - Kolom Nomor HP (sebelumnya ada di database tapi tak pernah ditampilkan di form) + tombol "Cari Open ID" di halaman Mention Mapping, otomatis mengisi field Open ID saat ketemu.
+- **`subdistricts.listStyle` opsi baru di compiler (`'divided'` default | `'numbered'`)**: render list Drop Point Tujuan sebagai `1. Nama (jumlah)` dengan mention di baris baru terindentasi, tanpa mengubah tampilan template lain yang masih pakai gaya lama.
+- **Toggle Builder yang sebelumnya tidak ada meski compiler sudah mendukung**: show/hide independen utk 3 kolom info header (Pickup DP / Target Kota / Update), show/hide seluruh section Penugasan Operasional, enable/disable tombol aksi (sebelumnya selalu terpaksa aktif begitu label disentuh).
+
+### Removed
+- **Fitur Version History / Rollback**: dihapus total (2 endpoint API, tombol & modal Riwayat Versi, method service `getVersions`/`rollbackToVersion`) — dianggap tidak diperlukan, template cukup diedit langsung. Tulisan riwayat versi ke `card_template_versions` tetap jalan di background sebagai audit trail.
+- **Fitur Archive → diganti Hapus Permanen**: Archive sebelumnya bekerja tapi tidak ada UI untuk melihat/memulihkan item yang diarsipkan (item "hilang" tanpa cara balik). Diganti tombol Hapus (dengan dialog konfirmasi eksplisit) yang benar-benar menghapus baris `card_templates` — diverifikasi dulu di skema bahwa `communication_logs` tidak punya foreign key ke `card_templates` sama sekali (menyimpan `card_json` snapshot sendiri sejak v2.6.0), jadi History tidak terpengaruh oleh penghapusan template.
+
+### Changed & Refactored
+- **Desain ulang preset "Monitoring INC" & "Monitoring Delivery"** (`template-presets.ts`) sesuai spesifikasi layout baru — diaudit dulu terhadap skema block yang ada (tidak perlu tipe block baru), lalu dibangun lewat mekanisme "Gunakan Preset" Builder (bukan hardcode JSON):
+  - Monitoring INC: header 2-kolom (DP Pickup | Waktu Generate), grid KPI 2×2 dengan ikon, list Drop Point Tujuan bernomor dgn mention per-baris, tanpa tombol aksi.
+  - Monitoring Delivery: header 1-kolom (Waktu Update saja), grid KPI 2×2, tanpa list penugasan/tombol aksi.
+  - **Catatan**: template yang sudah ada di production (dibuat dari preset lama) tidak otomatis berubah — perlu dihapus & dibuat ulang dari preset, atau diedit manual lewat toggle Builder yang baru.
+
+---
+
+## [v2.6.0] - 2026-08-05 (Communication Center: Single Render Pipeline & API Consistency)
+
+### Added
+- **`CardRenderPipeline` (`services/communication/configuration/card-render-pipeline.service.ts`)**: satu pipeline server-side yang resolve `blocksConfig` + mention mapping lalu panggil `CardCompilerService.compileCard()` — dipakai identik oleh endpoint preview dan jalur kirim asli, sehingga Preview dan Send tidak mungkin lagi berbeda hasil.
+- **`POST /api/communication/card-templates/preview`**: satu-satunya cara browser mendapat JSON kartu terkompilasi — browser tidak pernah lagi generate JSON Feishu sendiri.
+- **`<InteractiveCardPreview>` (`components/communication/interactive-card-preview.tsx`)**: satu komponen preview yang menerima JSON terkompilasi (bukan `blocks_config`), dipakai identik di Card Builder Preview, Share Dialog Preview, dan History Preview.
+- **`communication_logs.card_json`** (migration `communication_center_render_pipeline_migration.sql`): snapshot JSON kartu yang benar-benar terkirim, dipakai History Preview merender kartu yang sama persis tanpa perlu template masih ada.
+- **Route tree baru `/api/communication/card-templates/**`**, termasuk endpoint rollback versi yang sebelumnya dipanggil client tapi tidak pernah ada.
+- **Konversi TanStack Query** di 5 client surface Communication Center (Card Templates, Groups, Mentions, Share Dialog, History Dialog) — save reaktif, tanpa refresh manual.
+- **`commApi` (`lib/communication-client.ts`)**: helper fetch seragam yang menegakkan envelope `{ok, data, error}` di seluruh Communication Center.
+
+### Changed & Refactored
+- **`blocks_config` menjadi satu-satunya source of truth** — `json_template` tidak lagi ditulis saat create/update template (kolom dipertahankan, dibuat nullable via migration, non-destruktif).
+- **Envelope API distandardisasi** ke `{ok, data, error}` di seluruh route Communication Center (sebelumnya `mentions/*` memakai `{success,...}` yang berbeda sendiri).
+- **Rekonsiliasi dengan commit paralel `2aaa13f`** (implementasi unified-API-client independen yang tumpang tindih, dibuat bersamaan tanpa sepengetahuan sesi ini): di-rebase, arsitektur render pipeline sesi ini dipertahankan pada bagian yang tumpang tindih; komponen unik `2aaa13f` (`api-client.ts`, `dto.ts`, route `templates/card/*` versi baru) dihapus karena terduplikasi sepenuhnya oleh implementasi ini.
+
+### Removed
+- **Fitur Message Template legacy** (CRUD teks bebas lama): service, 6 route API, dan halaman frontend dihapus total. `MessageTemplateEngine` (mesin interpolasi `{{variable}}` yang dipakai di dalam compiler) sengaja dipertahankan — bukan bagian dari legacy yang dihapus.
+- **Dead code**: `card.builder.ts`, `card.service.ts` (fluent builder & service lama, sudah tidak dipanggil di manapun selain test), alias `CardCompilerService.compile()`.
+- **Renderer client-side duplikat** (`feishu-card-preview.tsx`) — digantikan `<InteractiveCardPreview>` yang menerima JSON server, bukan `blocks_config` mentah.
+- **Route duplikat/mati**: `/api/communication/feishu/groups*`, `/api/communication/groups/sync`.
+
+### Fixed
+- **Envelope mismatch** di seluruh route `mentions/*` (`{success,...}` → `{ok,...}`), menyebabkan dropdown grup/mention berpotensi selalu kosong di production.
+- **`handleArchive` no-op**: tombol arsip sebelumnya mengirim PUT dengan body yang diabaikan service, tidak benar-benar mengubah status apapun.
+- **Endpoint rollback yang tidak pernah ada**: client selalu memanggil endpoint yang belum pernah dibuat sebelumnya.
+
+### Verified
+- `tsc --noEmit`, seluruh unit test, dan `npm run build` dijalankan bersih di setiap checkpoint perubahan.
+
+---
+
+## [v2.5.1] - 2026-08-05 (Phase 2.5.1: Communication Center Access Revision & Global Scope Authorization)
+
+### Added
+- **Reusable Communication Authorization & Data Scope Layer (`web/src/services/communication/utils/authorization.ts`)**:
+  - Implementasi class `CommunicationAuthorizationService` dengan metode `resolveUserScope` dan `validateDataScope`.
+  - Memetakan wewenang dan cakupan data pengguna secara terisolasi dan dinamis dari database Supabase (`cabang`, `master_drop_point`, relasi `spv_drop_point_user_id`):
+    - **Super Admin**: Akses global tanpa batas ke seluruh kota dan drop point.
+    - **Admin Cabang**: Akses penuh ke seluruh kota dan drop point dalam lingkup cabang.
+    - **Manager Kota / Asisten Manager Kota**: Terikat pada kota tanggung jawabnya (`allowedKota`) beserta drop point di bawahnya.
+    - **SPV Drop Point**: Terikat pada seluruh Drop Point yang disupervisi (`allowedDropPoints`).
+    - **Admin Drop Point**: Terikat khusus pada Drop Point miliknya sendiri.
+  - Memvalidasi parameter `targetScope`, `targetKota`, `targetDp`, dan metrik laporan di Backend sebelum pengiriman dieksekusi untuk mencegah kebocoran data (*data leakage*) lintas wilayah.
+
+- **Global Multi-Module Communication Contracts & Card Builders (`communication.types.ts` & `card.builder.ts`)**:
+  - Membuka Communication Center sebagai layanan global untuk seluruh modul LTMS:
+    - `monitoring_inc` (Monitoring Incoming SLA)
+    - `monitoring_delivery` (Monitoring Delivery JMS & Sprinter)
+    - `longtail` (Laporan Paket Status Long Tail)
+    - `dashboard` (Ringkasan KPI Dashboard Operasional)
+    - `custom` / `analytics` (Laporan Custom & Analitik)
+  - Penambahan builder method fleksibel pada `FeishuCardBuilder`:
+    - `createDeliveryCard`, `createDashboardCard`, `createLongtailCard`, `createGenericReportCard`.
+  - Dispatching otomatis pada `FeishuCardService.generateCard(data, imageKey)` berdasarkan metadata `module` pemanggil.
+
+- **Global Reusable Frontend Share Dialog (`web/src/components/communication/feishu-share-dialog.tsx`)**:
+  - Komponen modal universal yang siap digunakan oleh modul apa pun di LTMS dengan dukungan dynamic module header, scope badge, live preview card, preview gambar HD, dan preview caption.
+  - `web/src/components/monitoring-inc/feishu-share-dialog.tsx` dialihkan me-re-export modul global untuk arsitektur DRY yang bersih.
+
+- **Automated Scope Authorization Test Suite (`web/src/services/communication/authorization.test.ts`)**:
+  - 13 unit test baru yang mencakup pengujian isolasi scope untuk seluruh role (Super Admin, Admin Cabang, Manager Kota, SPV DP, Admin DP), penolakan pengiriman data lintas cabang/kota/DP, serta pembentukan card dinamis lintas modul.
+
+### Changed & Refactored
+- **Refactoring Endpoint Pengiriman (`POST /api/communication/send`)**:
+  - Menghapus pengecekan role manual (hardcoded) dan menyerahkan sepenuhnya ke layer otorisasi backend `communicationAuthService.authorizeSend`.
+  - Mengembalikan status `403 FORBIDDEN` dengan deskripsi penyebab penolakan yang jelas saat terjadi pelanggaran data scope.
+
+---
+
+## [v2.5.0] - 2026-08-05 (Phase 2.5: Feishu Open Platform Production E2E Verification & Hardening)
+
+### Added
+- **Automated E2E Production Test Suite (`npm run test:feishu`)**:
+  - Script test runner mandiri (`web/scripts/test-feishu-e2e.mjs`) untuk validasi *end-to-end* seluruh alur Feishu Open Platform secara berkala:
+    1. Autentikasi dan penerbitan *Tenant Access Token* (`/auth/v3/tenant_access_token/internal`).
+    2. Query dan penemuan grup bot Feishu (`/im/v1/chats`).
+    3. Unggah gambar laporan visual HD ke penyimpanan Feishu Cloud (`/im/v1/images`).
+    4. Pembuatan dan pengiriman *Feishu Interactive Card 2.0* (`/im/v1/messages`).
+    5. Validasi konektivitas tabel audit Supabase (`feishu_groups` dan `communication_logs`).
+  - Dilengkapi pengukuran latensi respons per tahap (ms) dan pelaporan matriks diagnostik terperinci.
+
+### Changed & Hardened
+- **Role Permission Guard & Normalisasi Akses (`/api/communication/send`)**:
+  - Memperluas izin pengiriman laporan Monitoring INC ke seluruh role pengguna operasional aktif (`Super Admin`, `Admin Cabang`, `Manager Kota`, `Asisten Manager Kota`, `SPV Drop Point`, `Admin DP`).
+  - Menerapkan pencocokan *case-insensitive* pada string role session untuk mencegah kesalahan otorisasi `FORBIDDEN` tak terduga.
+- **Penyempurnaan Pesan Diagnostik Lingkungan Produksi**:
+  - Pesan error kredensial diperjelas untuk memandu konfigurasi pada *Vercel Dashboard Environment Variables* maupun file `.env.local`.
+- **Database Schema Cache Refresh (`feishu_communication_center.sql`)**:
+  - Menambahkan perintah `NOTIFY pgrst, 'reload schema';` pada script migrasi Supabase untuk sinkronisasi instan PostgREST cache.
+
+### Verified
+- **Validasi Produksi Nyata (Live Vercel Deployment)**:
+  - Sukses mengirimkan pesan *Feishu Interactive Card Monitoring INC* beresolusi tinggi langsung ke group chat resmi Feishu (*Uji Coba LTMS*) dari web aplikasi production Vercel.
+
+---
+
+## [v2.4.0] - 2026-08-04 (Phase 2: Feishu Open Platform Production Integration & Enterprise Architecture)
+
+### Added
+- **Feishu Open Platform Official Integration (`web/src/services/communication`)**:
+  - **Dynamic Base URL**: Penggunaan `FEISHU_API_BASE_URL` (default: `https://open.feishu.cn/open-apis`) tanpa hardcoded string.
+  - **Health Check Endpoint (`GET /api/communication/health`)**: Diagnostik real-time untuk status konektivitas Feishu API, token, bot, chat API, image API, dan message API.
+  - **Type-Safe `FeishuCardBuilder` (`card.builder.ts`)**: Fluent builder OOP untuk memvalidasi struktur Interactive Card JSON 2.0 Feishu.
+  - **Strict Response Validation dengan Zod (`communication.schemas.ts`)**: Validasi seluruh respons Feishu API (Token, Chats, Upload Image, Upload File, Send Message) mencegah runtime schema mismatch.
+  - **Sliding-Window Rate Limiter (`utils/rate-limiter.ts`)**: Pembatasan 5 request per 10 detik per user untuk proteksi anti-spam.
+  - **Promise Concurrency Queue (`utils/queue.ts`)**: Antrean pengiriman FIFO untuk mencegah race condition atau double submission.
+  - **API Request Timeout 15 Detik (`utils/fetch-timeout.ts`)**: `AbortController` terintegrasi pada seluruh outbound fetch request Feishu.
+  - **Enhanced Audit Logger (`utils/logger.ts`)**: Pencatatan metadata mendalam (`endpoint`, `statusCode`, `responseTimeMs`, `retryCount`, `requestId`, `messageId`).
+  - **Permission Role Guard**: Validasi role wewenang (Super Admin, Admin Cabang, Manager Kota, Asisten Manager Kota) pada endpoint `/api/communication/send`.
+
+- **Frontend Enterprise UI/UX Improvements (`/monitoring-inc`)**:
+  - **3-Tab Live Preview**: Preview Mockup Card, Preview Gambar HD 1200×900, dan Preview Caption sebelum pengiriman.
+  - **Group Sync Status**: Penunjuk waktu *Terakhir Sinkron: HH:mm WIB* dengan tombol *Sinkronkan Ulang*.
+  - **Dedicated Riwayat Pengiriman (`feishu-history-dialog.tsx`)**: Modal audit log interaktif lengkap dengan status badge, response latency ms, grup tujuan, target kota, dan email pengirim.
+
+---
+
 ## [v2.3.0] - 2026-08-04 (Communication Center: Feishu Open Platform Integration v1.0)
 
 ### Added

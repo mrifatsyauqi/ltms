@@ -1,12 +1,15 @@
 import {
+  AtSign,
   Building2,
   ClipboardList,
   Clock,
   Database,
   FileClock,
+  FileText,
   History,
   LayoutDashboard,
   MessageSquareText,
+  PanelsTopLeft,
   Settings,
   ShieldCheck,
   Table2,
@@ -14,6 +17,7 @@ import {
   Upload,
   UserCog,
   UserRound,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 import { hasFullAccess } from '@/lib/roles';
@@ -64,6 +68,15 @@ export function navForRole(role: string | undefined, access: Record<MenuKey, boo
           { label: 'Import Long Tail', href: '/import', icon: Upload, menuKey: 'import_longtail' },
           { label: 'Monitoring Delivery', href: '/monitoring-delivery', icon: Truck, menuKey: 'monitoring_delivery_cabang' },
           { label: 'Monitoring INC', href: '/monitoring-inc', icon: Clock, menuKey: 'monitoring_inc' },
+          { label: 'Laporan Harian', href: '/laporan-harian', icon: FileText, menuKey: 'laporan_harian' },
+        ],
+      },
+      {
+        label: 'Communication Center',
+        items: [
+          { label: 'Card Templates', href: '/communication/card-templates', icon: PanelsTopLeft },
+          { label: 'Groups', href: '/communication/groups', icon: Users },
+          { label: 'Mention Mapping', href: '/communication/mentions', icon: AtSign },
         ],
       },
       {
@@ -99,6 +112,7 @@ export function navForRole(role: string | undefined, access: Record<MenuKey, boo
         { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, menuKey: 'dashboard' },
         { label: 'Monitoring Delivery', href: '/monitoring-delivery', icon: Truck, menuKey: 'monitoring_delivery_dp' },
         { label: 'Monitoring INC', href: '/monitoring-inc', icon: Clock, menuKey: 'monitoring_inc' },
+        { label: 'Laporan Harian', href: '/laporan-harian', icon: FileText, menuKey: 'laporan_harian' },
         { label: 'Feedback Long Tail', href: '/feedback', icon: MessageSquareText, menuKey: 'feedback_longtail_view' },
         { label: 'Riwayat Feedback', href: '/riwayat-feedback', icon: History, menuKey: 'riwayat_feedback' },
         { label: 'Profil Saya', href: '/profil', icon: UserRound },

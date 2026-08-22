@@ -78,6 +78,24 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
     staleTime: SLOW_STALE_TIME, // jarang berubah (data master)
   });
   const activeDps = useMemo(() => (dps ?? []).filter((d) => isAktif(d['Status Aktif'])), [dps]);
+  // Kolom "Drop Point" di tabel LIST: utk role Admin DP datanya di
+  // users.drop_point (field r['Drop Point'], sudah benar). Utk role SPV
+  // Drop Point, field itu SELALU kosong by design (SPV di-assign lewat
+  // master_drop_point.spv_drop_point_user_id, bukan users.drop_point -
+  // lihat catatan di openEdit) - kolom List sebelumnya tidak pernah
+  // menampilkan data ini sama sekali. Bangun peta userId -> daftar Kode DP
+  // yang disupervisi (sumber SAMA persis dgn yang dipakai openEdit di atas).
+  const supervisedKodeByUserId = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const d of dps ?? []) {
+      const spvId = d['SPV Drop Point'];
+      if (!spvId) continue;
+      const list = map.get(spvId) ?? [];
+      list.push(d['Kode DP']);
+      map.set(spvId, list);
+    }
+    return map;
+  }, [dps]);
   // Sumber dropdown Jabatan - lihat SELECTABLE_JABATAN utk kenapa cuma 2 dari
   // 6 baris yang tampil di sini.
   const { data: jabatanList } = useQuery({
@@ -333,7 +351,11 @@ export function UserManagementClient({ selfEmail }: { selfEmail: string }) {
                           {r.Role}
                         </span>
                       </td>
-                      <td className="px-3 py-1.5 font-mono">{r['Drop Point'] || '—'}</td>
+                      <td className="px-3 py-1.5 font-mono">
+                        {r.Role === 'SPV Drop Point'
+                          ? (supervisedKodeByUserId.get(r.Id)?.join(', ') || '—')
+                          : (r['Drop Point'] || '—')}
+                      </td>
                       <td className="px-3 py-1.5">
                         <StatusBadge aktif={isAktif(r['Status Aktif'])} />
                       </td>

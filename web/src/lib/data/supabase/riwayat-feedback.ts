@@ -1,5 +1,5 @@
 import { db } from './client';
-import { requireActor, resolveScopedDps } from './helpers';
+import { expandDpMatchValues, requireActor, resolveScopedDps } from './helpers';
 import { requirePermission } from './permissions';
 import { ApiError } from '@/lib/errors';
 import { isClearTTD, jakartaParts } from './longtail-shared';
@@ -34,17 +34,20 @@ export async function listRiwayatFeedback(
   const actor = await requireActor(actorEmail);
   await requirePermission(actor, 'riwayat_feedback');
   const scopedDps = await resolveScopedDps(actor);
+  // Kode DP -> nilai activity_log.dp yang SAH (termasuk Nama DP) - lihat
+  // komentar expandDpMatchValues (helpers.ts).
+  const matchValues = scopedDps
+    ? await expandDpMatchValues(scopedDps)
+    : dpFilter
+      ? await expandDpMatchValues([dpFilter])
+      : null;
 
   let q = db()
     .from('activity_log')
     .select('waybill, user_email, dp, attempt_ke, data_baru, sumber, created_at')
     .in('sumber', ['Manual Feedback', AUTO_CLOSE])
     .order('created_at', { ascending: false });
-  if (scopedDps) {
-    q = q.in('dp', scopedDps);
-  } else if (dpFilter) {
-    q = q.eq('dp', dpFilter);
-  }
+  if (matchValues) q = q.in('dp', matchValues);
   if (from) q = q.gte('created_at', `${from}T00:00:00+07:00`);
   if (to) q = q.lte('created_at', `${to}T23:59:59.999+07:00`);
 

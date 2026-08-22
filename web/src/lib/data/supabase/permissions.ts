@@ -23,6 +23,7 @@ export const MENU_KEYS = [
   'monitoring_delivery_dp',
   'monitoring_delivery_cabang',
   'monitoring_inc',
+  'laporan_harian',
   'master_cabang',
   'master_drop_point',
   'master_feedback',

@@ -40,6 +40,10 @@ export function FeedbackCell({ row, options, saving, onCommit, registerRef, onEn
   // sendiri sudah terlihat dari badge Umur (agingLevel frozen=__isClearTTD).
 
   // Rekomendasi: cocok dari huruf pertama (prefix), urut sesuai options.
+  // Dropdown SENGAJA tidak langsung menampilkan semua opsi begitu sel
+  // difokus/diklik (pernah dicoba - secara UX mengganggu, kelihatan penuh
+  // sebelum admin sempat mengetik apa2) - baru muncul setelah mulai mengetik
+  // & match huruf pertama.
   const q = value.trim().toLowerCase();
   const suggestions = q
     ? options.filter((o) => o.toLowerCase().startsWith(q) && o.toLowerCase() !== q).slice(0, MAX_SUGGEST)

@@ -1,6 +1,6 @@
 import { db } from './client';
 import { ApiError } from '@/lib/errors';
-import { resolveScopedDps, type Actor } from './helpers';
+import { expandDpMatchValues, resolveScopedDps, type Actor } from './helpers';
 import type { LongtailDbRow } from './longtail-pure';
 
 // Re-export semua helper MURNI supaya import lama dari './longtail-shared' tetap jalan.
@@ -13,13 +13,17 @@ export async function fetchLongtailScoped(actor: Actor, dpFilter?: string): Prom
   const PAGE = 1000;
   const out: LongtailDbRow[] = [];
   const scopedDps = await resolveScopedDps(actor);
+  // Kode DP -> nilai dp_sampai yang SAH (termasuk Nama DP) - lihat komentar
+  // expandDpMatchValues (beberapa DP py Kode DP master beda dari teks
+  // "DP Sampai" yang terlanjur ter-import).
+  const matchValues = scopedDps
+    ? await expandDpMatchValues(scopedDps)
+    : dpFilter
+      ? await expandDpMatchValues([dpFilter])
+      : null;
   for (let from = 0; ; from += PAGE) {
     let q = db().from('longtail').select('*').order('no_waybill').range(from, from + PAGE - 1);
-    if (scopedDps) {
-      q = q.in('dp_sampai', scopedDps);
-    } else if (dpFilter) {
-      q = q.eq('dp_sampai', dpFilter);
-    }
+    if (matchValues) q = q.in('dp_sampai', matchValues);
     const { data, error } = await q;
     if (error) throw new ApiError('INTERNAL_ERROR', error.message);
     const batch = (data ?? []) as LongtailDbRow[];

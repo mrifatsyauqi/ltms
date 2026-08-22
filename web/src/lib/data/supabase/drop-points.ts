@@ -3,6 +3,7 @@ import { aktifText, assertKotaExists, assertUserExists, getSupervisedDPs, requir
 import { requirePermission } from './permissions';
 import { ApiError } from '@/lib/errors';
 import { FULL_ACCESS_ROLES } from '@/lib/roles';
+import { normalizeKecamatan } from '@/lib/kecamatan';
 import type {
   CreateDropPointInput,
   DropPointRow,
@@ -23,16 +24,17 @@ type Lookups = {
   namaKotaByKode: Map<string, string>;
   namaUserById: Map<string, string>;
   adminDpByKode: Map<string, string[]>;
+  kecamatanByDp: Map<string, string[]>;
 };
 
-/** Query pendukung buat Nama Kota, Nama SPV, dan daftar Admin DP per baris -
- *  dijalankan sekali per list (bukan N+1 per baris). */
+/** Query pendukung buat Nama Kota, Nama SPV, daftar Admin DP, dan daftar
+ *  Kecamatan per baris - dijalankan sekali per list (bukan N+1 per baris). */
 async function buildLookups(rows: DbRow[]): Promise<Lookups> {
   const kodeKotaList = [...new Set(rows.map((r) => r.kode_kota).filter((v): v is string => !!v))];
   const spvIds = [...new Set(rows.map((r) => r.spv_drop_point_user_id).filter((v): v is string => !!v))];
   const kodeDpList = rows.map((r) => r.kode_dp);
 
-  const [cabangRes, spvRes, adminDpRes] = await Promise.all([
+  const [cabangRes, spvRes, adminDpRes, kecamatanRes] = await Promise.all([
     kodeKotaList.length
       ? db().from('cabang').select('kode_kota, nama_kota').in('kode_kota', kodeKotaList)
       : Promise.resolve({ data: [] as { kode_kota: string; nama_kota: string }[], error: null }),
@@ -42,10 +44,14 @@ async function buildLookups(rows: DbRow[]): Promise<Lookups> {
     kodeDpList.length
       ? db().from('users').select('nama_tampilan, nama, drop_point').eq('role', 'Admin DP').in('drop_point', kodeDpList)
       : Promise.resolve({ data: [] as { nama_tampilan: string | null; nama: string; drop_point: string }[], error: null }),
+    kodeDpList.length
+      ? db().from('drop_point_kecamatan').select('kode_dp, kecamatan').in('kode_dp', kodeDpList).order('kecamatan')
+      : Promise.resolve({ data: [] as { kode_dp: string; kecamatan: string }[], error: null }),
   ]);
   if (cabangRes.error) throw new ApiError('INTERNAL_ERROR', cabangRes.error.message);
   if (spvRes.error) throw new ApiError('INTERNAL_ERROR', spvRes.error.message);
   if (adminDpRes.error) throw new ApiError('INTERNAL_ERROR', adminDpRes.error.message);
+  if (kecamatanRes.error) throw new ApiError('INTERNAL_ERROR', kecamatanRes.error.message);
 
   const namaKotaByKode = new Map((cabangRes.data ?? []).map((c) => [String(c.kode_kota), String(c.nama_kota)]));
   const namaUserById = new Map(
@@ -58,15 +64,24 @@ async function buildLookups(rows: DbRow[]): Promise<Lookups> {
     list.push(String(u.nama_tampilan || u.nama || ''));
     adminDpByKode.set(kode, list);
   }
-  return { namaKotaByKode, namaUserById, adminDpByKode };
+  const kecamatanByDp = new Map<string, string[]>();
+  for (const k of kecamatanRes.data ?? []) {
+    const kode = String(k.kode_dp);
+    const list = kecamatanByDp.get(kode) ?? [];
+    list.push(String(k.kecamatan));
+    kecamatanByDp.set(kode, list);
+  }
+  return { namaKotaByKode, namaUserById, adminDpByKode, kecamatanByDp };
 }
 
 /** Baris DB (snake_case, boolean) -> bentuk respons lama (dipakai frontend). */
 function toRow(r: DbRow, lk: Lookups): DropPointRow {
+  const kecamatan = lk.kecamatanByDp.get(r.kode_dp) ?? [];
   return {
     'Kode DP': String(r.kode_dp ?? ''),
     'Nama DP': String(r.nama_dp ?? ''),
-    'Wilayah/Cabang': String(r.wilayah ?? ''),
+    'Wilayah/Cabang': kecamatan.join(', '),
+    'Kecamatan': kecamatan,
     'Status Aktif': aktifText(r.status_aktif),
     'Kode Kota': String(r.kode_kota ?? ''),
     'Nama Kota': r.kode_kota ? (lk.namaKotaByKode.get(r.kode_kota) ?? '') : '',
@@ -74,6 +89,45 @@ function toRow(r: DbRow, lk: Lookups): DropPointRow {
     'SPV Drop Point Nama': r.spv_drop_point_user_id ? (lk.namaUserById.get(r.spv_drop_point_user_id) ?? '') : '',
     'Admin DP': lk.adminDpByKode.get(r.kode_dp) ?? [],
   };
+}
+
+function normalizeKecamatanList(kecamatanListRaw: string[]): string[] {
+  return [...new Set(kecamatanListRaw.map((k) => normalizeKecamatan(String(k))).filter(Boolean))];
+}
+
+/** Cek konflik lintas-DP (read-only) - dipanggil SEBELUM baris DP dibuat/
+ *  ditulis, supaya kalau ada konflik, belum ada tulisan apa pun yang perlu
+ *  di-rollback (tidak ada tulisan setengah jadi). */
+async function validateKecamatanConflicts(kodeDp: string, normalized: string[]): Promise<void> {
+  if (normalized.length === 0) return;
+  const { data: conflictRows, error } = await db()
+    .from('drop_point_kecamatan')
+    .select('kecamatan, kode_dp')
+    .in('kecamatan', normalized)
+    .neq('kode_dp', kodeDp);
+  if (error) throw new ApiError('INTERNAL_ERROR', error.message);
+  if (conflictRows && conflictRows.length > 0) {
+    const detail = conflictRows.map((r) => `${r.kecamatan} (sudah di DP ${r.kode_dp})`).join(', ');
+    throw new ApiError('CONFLICT', `Kecamatan berikut sudah terdaftar di DP lain: ${detail}`);
+  }
+}
+
+/** Tulis set akhir Kecamatan utk satu DP (delete semua lalu insert ulang).
+ *  WAJIB dipanggil SETELAH baris master_drop_point-nya ada (FK) dan SETELAH
+ *  validateKecamatanConflicts lolos. */
+async function writeKecamatanForDp(kodeDp: string, normalized: string[]): Promise<void> {
+  const { error: delErr } = await db().from('drop_point_kecamatan').delete().eq('kode_dp', kodeDp);
+  if (delErr) throw new ApiError('INTERNAL_ERROR', delErr.message);
+
+  if (normalized.length > 0) {
+    const { error: insErr } = await db()
+      .from('drop_point_kecamatan')
+      .insert(normalized.map((kecamatan) => ({ kode_dp: kodeDp, kecamatan })));
+    if (insErr) {
+      if (insErr.code === '23505') throw new ApiError('CONFLICT', 'Salah satu Kecamatan sudah terdaftar di DP lain');
+      throw new ApiError('INTERNAL_ERROR', insErr.message);
+    }
+  }
 }
 
 export async function listDropPoints(actorEmail: string): Promise<DropPointRow[]> {
@@ -127,10 +181,14 @@ export async function createDropPoint(
     .maybeSingle();
   if (exists) throw new ApiError('CONFLICT', 'Kode DP sudah ada');
 
+  // Validasi konflik Kecamatan DULU (baris DP-nya belum ada, jadi kalau ada
+  // konflik, belum ada tulisan apa pun yang perlu di-rollback).
+  const normalizedKecamatan = normalizeKecamatanList(data.kecamatan ?? []);
+  await validateKecamatanConflicts(kodeDp, normalizedKecamatan);
+
   const { error } = await db().from('master_drop_point').insert({
     kode_dp: kodeDp,
     nama_dp: namaDp,
-    wilayah: data.wilayah ?? '',
     status_aktif: true,
     kode_kota: kodeKota,
     spv_drop_point_user_id: spvDropPointUserId,
@@ -139,6 +197,8 @@ export async function createDropPoint(
     if (error.code === '23505') throw new ApiError('CONFLICT', 'Kode DP sudah ada');
     throw new ApiError('INTERNAL_ERROR', error.message);
   }
+  // Baris DP sudah ada (FK terpenuhi) - sekarang aman menulis Kecamatan.
+  await writeKecamatanForDp(kodeDp, normalizedKecamatan);
   return { kodeDp };
 }
 
@@ -151,7 +211,6 @@ export async function updateDropPoint(
   await requirePermission(actor, 'master_drop_point');
   const patch: Record<string, unknown> = {};
   if (data.namaDp !== undefined) patch.nama_dp = data.namaDp;
-  if (data.wilayah !== undefined) patch.wilayah = data.wilayah;
   if (data.statusAktif !== undefined) patch.status_aktif = !!data.statusAktif;
   if (data.kodeKota !== undefined) {
     if (data.kodeKota) await assertKotaExists(data.kodeKota);
@@ -162,6 +221,10 @@ export async function updateDropPoint(
     patch.spv_drop_point_user_id = data.spvDropPointUserId || null;
   }
 
+  // Validasi konflik Kecamatan DULU (belum ada tulisan apa pun kalau gagal).
+  const normalizedKecamatan = data.kecamatan !== undefined ? normalizeKecamatanList(data.kecamatan) : undefined;
+  if (normalizedKecamatan !== undefined) await validateKecamatanConflicts(kodeDp, normalizedKecamatan);
+
   const { data: updated, error } = await db()
     .from('master_drop_point')
     .update(patch)
@@ -170,6 +233,7 @@ export async function updateDropPoint(
     .maybeSingle();
   if (error) throw new ApiError('INTERNAL_ERROR', error.message);
   if (!updated) throw new ApiError('NOT_FOUND', `Kode DP "${kodeDp}" tidak ditemukan`);
+  if (normalizedKecamatan !== undefined) await writeKecamatanForDp(kodeDp, normalizedKecamatan);
   const row = updated as DbRow;
   const lk = await buildLookups([row]);
   return toRow(row, lk);

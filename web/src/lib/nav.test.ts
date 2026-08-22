@@ -61,7 +61,7 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
     const groups = navForRole('Admin DP', acc);
     const filtered = filterNavByAccess(groups, acc);
     const labels = filtered.flatMap((g) => g.items.map((i) => i.label));
-    assert.deepEqual(labels, ['Monitoring Delivery', 'Monitoring INC', 'Feedback Long Tail', 'Riwayat Feedback', 'Profil Saya']);
+    assert.deepEqual(labels, ['Monitoring Delivery', 'Monitoring INC', 'Laporan Harian', 'Feedback Long Tail', 'Riwayat Feedback', 'Profil Saya']);
   });
 
   // --------------------------------------------------------------------------
@@ -157,8 +157,13 @@ describe('nav.ts: filterNavByAccess() - sembunyikan item nav yang menu_key-nya d
     const groups = navForRole('Admin Cabang', access());
     const all = groups.flatMap((g) => [...g.items, ...(g.items.flatMap((i) => i.children ?? []))]);
     for (const item of all) {
-      if (item.label === 'Profile') {
-        assert.equal(item.menuKey, undefined, 'Profile sengaja SELALU tampil, tak pernah masuk matrix');
+      if (
+        item.label === 'Profile' ||
+        item.label === 'Card Templates' ||
+        item.label === 'Groups' ||
+        item.label === 'Mention Mapping'
+      ) {
+        assert.equal(item.menuKey, undefined, 'Communication Center & Profile sengaja SELALU tampil, tak pernah masuk matrix');
         continue;
       }
       assert.ok(item.menuKey, `"${item.label}" harus punya menuKey - tak ada item full access yg "sengaja belum digating"`);

@@ -4,12 +4,14 @@ import { useRef, useState } from 'react';
 import * as xlsx from 'xlsx';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
-import { Image as ImageIcon, Table2 } from 'lucide-react';
+import { Image as ImageIcon, Table2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MonitoringRow, MonitoringTable } from './monitoring-table';
+import { FeishuShareDialog, FeishuShareStage } from '@/components/communication/feishu-share-dialog';
+import type { FeishuGroup } from '@/services/communication/communication.types';
 
 type Props = {
   dpName: string;
@@ -25,6 +27,8 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
   
   const [isGenerated, setIsGenerated] = useState(false);
   const [copying, setCopying] = useState<null | 'img' | 'table'>(null);
+  const [isFeishuShareOpen, setIsFeishuShareOpen] = useState(false);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
@@ -196,6 +200,78 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
     }
   };
 
+  // Totals for Feishu Share
+  const totalDelivery = stagedData.reduce((acc, r) => acc + r.waybillDelivery, 0);
+  const totalTtd = stagedData.reduce((acc, r) => acc + r.tandaTerima, 0);
+  const totalBelum = stagedData.reduce((acc, r) => acc + r.belumDiterima, 0);
+  const percentTtd = totalDelivery > 0 ? Number(((totalTtd / totalDelivery) * 100).toFixed(1)) : 0;
+  const kurirList = stagedData
+    .filter((r) => r.belumDiterima > 0)
+    .sort((a, b) => b.belumDiterima - a.belumDiterima)
+    .slice(0, 10)
+    .map((r) => ({
+      name: r.groupName,
+      count: `${r.belumDiterima} Paket`,
+    }));
+
+  const handleExecuteFeishuSend = async (
+    selectedGroup: FeishuGroup,
+    updateStage: (stage: FeishuShareStage, progress: number) => void,
+    selectedCardTemplateId?: string
+  ) => {
+    if (!tableRef.current) throw new Error('Tabel monitoring belum siap dirender.');
+
+    updateStage('preparing_data', 15);
+    await new Promise((r) => setTimeout(r, 200));
+
+    updateStage('rendering_report', 35);
+    const dataUrl = await toPng(tableRef.current, {
+      quality: 1,
+      pixelRatio: 2,
+      backgroundColor: '#FFFFFF',
+    });
+    setGeneratedImageUrl(dataUrl);
+    await new Promise((r) => setTimeout(r, 200));
+
+    updateStage('generating_caption', 55);
+    await new Promise((r) => setTimeout(r, 200));
+
+    updateStage('uploading_image', 75);
+    await new Promise((r) => setTimeout(r, 250));
+
+    updateStage('sending_message', 90);
+    const res = await fetch('/api/communication/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        channel: 'feishu',
+        chatId: selectedGroup.chatId || (selectedGroup as any).chat_id,
+        messageType: 'interactive_card',
+        cardTemplateId: selectedCardTemplateId,
+        data: {
+          module: 'monitoring_delivery',
+          targetScope: {
+            type: 'drop_point',
+            name: dpName,
+          },
+          drop_point: dpName,
+          total_delivery: totalDelivery,
+          delivered: totalTtd,
+          pending_delivery: totalBelum,
+          delivery_sla: percentTtd,
+          kurirList,
+          imageBase64: dataUrl,
+          generated_at: new Date().toLocaleString('id-ID'),
+        },
+      }),
+    });
+
+    const json = await res.json();
+    if (!res.ok || (!json.ok && !json.success)) {
+      throw new Error(json.error || 'Gagal mengirim pesan ke API Feishu.');
+    }
+  };
+
   return (
     <div className="mt-6 space-y-6">
       {!isGenerated && (
@@ -244,7 +320,7 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
             </div>
 
             {stagedData.length > 0 && (
-              <div className="p-4 border rounded-lg bg-slate-50 space-y-3">
+              <div className="p-4 border border-border rounded-lg bg-muted space-y-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="totalSampaiSetup">Jumlah Total Sampai</Label>
                   <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
@@ -280,9 +356,16 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
                 <Table2 className="size-4" aria-hidden />
                 {copying === 'table' ? 'Menyalin…' : 'Salin Tabel (Excel)'}
               </Button>
-              <Button onClick={handleCopyImage} disabled={copying !== null} title="Tempel sebagai gambar di WhatsApp / Feishu">
+              <Button variant="outline" onClick={handleCopyImage} disabled={copying !== null} title="Tempel sebagai gambar di WhatsApp / Feishu">
                 <ImageIcon className="size-4" aria-hidden />
-                {copying === 'img' ? 'Menyalin…' : 'Salin Gambar (Chat)'}
+                {copying === 'img' ? 'Menyalin…' : 'Salin Gambar'}
+              </Button>
+              <Button
+                onClick={() => setIsFeishuShareOpen(true)}
+                className="bg-[#3370FF] hover:bg-[#2B5CD9] text-white font-bold gap-1.5 shadow-sm"
+              >
+                <Send className="size-4" />
+                <span>Kirim ke Feishu</span>
               </Button>
             </div>
           </CardHeader>
@@ -291,6 +374,24 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
           </CardContent>
         </Card>
       )}
+
+      {/* Feishu Share Dialog */}
+      <FeishuShareDialog
+        isOpen={isFeishuShareOpen}
+        onClose={() => setIsFeishuShareOpen(false)}
+        moduleName="Monitoring Delivery"
+        targetScopeName={dpName}
+        generateTime={new Date().toLocaleString('id-ID')}
+        summaryData={{
+          total: totalDelivery,
+          clear: totalTtd,
+          belum: totalBelum,
+          percent: percentTtd,
+          kurirList,
+        }}
+        imagePreviewUrl={generatedImageUrl}
+        onExecuteSend={handleExecuteFeishuSend}
+      />
     </div>
   );
 }

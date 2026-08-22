@@ -51,3 +51,7 @@ CREATE POLICY "Allow authenticated read communication_logs"
     FOR SELECT
     TO authenticated
     USING (true);
+
+-- Refresh PostgREST schema cache
+NOTIFY pgrst, 'reload schema';
+

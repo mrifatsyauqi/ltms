@@ -12,6 +12,7 @@ import type { MenuKey } from '@/lib/data/supabase/permissions';
 import { signOutAction } from '@/app/actions/auth';
 import { ScopeFilter } from '@/components/dashboard/scope-filter';
 import { SupervisedScopeBox } from '@/components/dashboard/supervised-scope-box';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 type SidebarProps = {
   role?: string;
@@ -147,7 +148,7 @@ export function Sidebar({ role, nama, dropPoint, menuAccess = null }: SidebarPro
                           'focus-visible:ring-sidebar-ring focus-visible:ring-2 focus-visible:outline-none active:scale-[0.98]',
                           active
                             ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium shadow-xs'
-                            : 'hover:bg-slate-100 hover:text-slate-900 text-slate-600',
+                            : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-sidebar-foreground/80',
                         )}
                       >
                         <Icon className="size-[17px] shrink-0" aria-hidden />
@@ -159,7 +160,7 @@ export function Sidebar({ role, nama, dropPoint, menuAccess = null }: SidebarPro
                           onClick={() => toggleExpanded(item)}
                           aria-expanded={isOpen}
                           aria-label={isOpen ? `Tutup submenu ${item.label}` : `Buka submenu ${item.label}`}
-                          className="hover:bg-slate-100 focus-visible:ring-sidebar-ring shrink-0 rounded-[6px] p-1.5 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                          className="hover:bg-sidebar-accent focus-visible:ring-sidebar-ring shrink-0 rounded-[6px] p-1.5 transition-colors focus-visible:ring-2 focus-visible:outline-none"
                         >
                           <ChevronDown
                             className={cn('size-3.5 shrink-0 transition-transform', isOpen && 'rotate-180')}
@@ -185,7 +186,7 @@ export function Sidebar({ role, nama, dropPoint, menuAccess = null }: SidebarPro
                                   'focus-visible:ring-sidebar-ring focus-visible:ring-2 focus-visible:outline-none active:scale-[0.98]',
                                   childActive
                                     ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium shadow-xs'
-                                    : 'hover:bg-slate-100 hover:text-slate-900 text-slate-600',
+                                    : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-sidebar-foreground/80',
                                 )}
                               >
                                 <ChildIcon className="size-[17px] shrink-0" aria-hidden />
@@ -221,6 +222,7 @@ export function Sidebar({ role, nama, dropPoint, menuAccess = null }: SidebarPro
             {(nama ?? '?').slice(0, 2).toUpperCase()}
           </div>
         )}
+        <ThemeToggle collapsed={collapsed} />
         <form action={signOutAction}>
           <button
             type="submit"

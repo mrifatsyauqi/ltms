@@ -1,5 +1,5 @@
 import { db } from './client';
-import { requireActor, resolveScopedDps } from './helpers';
+import { expandDpMatchValues, requireActor, resolveScopedDps } from './helpers';
 import { hasFullAccess } from '@/lib/roles';
 import { requirePermission } from './permissions';
 import { ApiError } from '@/lib/errors';
@@ -14,15 +14,24 @@ import type { DashboardData } from '@/lib/data/types';
 
 type DpFilter = string | string[] | null;
 
+/** Kode DP (scalar/array/null dari dpFilter) -> nilai dp_sampai/dp yang SAH
+ *  (termasuk Nama DP) - lihat komentar expandDpMatchValues (helpers.ts):
+ *  beberapa DP py Kode DP master beda dari teks "DP Sampai" yang terlanjur
+ *  ter-import, jadi filter mentah berbasis Kode DP saja bisa 0 hasil. */
+async function resolveDpMatchValues(dpFilter: DpFilter): Promise<string[] | null> {
+  if (dpFilter == null) return null;
+  const kodeList = Array.isArray(dpFilter) ? dpFilter : [dpFilter];
+  return expandDpMatchValues(kodeList);
+}
+
 /** Ambil baris LongTail ter-scope: Admin DP -> DP-nya; SPV Drop Point -> semua
  *  DP yang disupervisi (array); full access -> semua atau 1 DP (filter CAKUPAN). */
-async function fetchScoped(dpFilter: DpFilter): Promise<LongtailDbRow[]> {
+async function fetchScoped(matchValues: string[] | null): Promise<LongtailDbRow[]> {
   const PAGE = 1000;
   const out: LongtailDbRow[] = [];
   for (let from = 0; ; from += PAGE) {
     let q = db().from('longtail').select('*').order('no_waybill').range(from, from + PAGE - 1);
-    if (Array.isArray(dpFilter)) q = q.in('dp_sampai', dpFilter);
-    else if (dpFilter) q = q.eq('dp_sampai', dpFilter);
+    if (matchValues) q = q.in('dp_sampai', matchValues);
     const { data, error } = await q;
     if (error) throw new ApiError('INTERNAL_ERROR', error.message);
     const batch = (data ?? []) as LongtailDbRow[];
@@ -43,7 +52,7 @@ async function fetchScoped(dpFilter: DpFilter): Promise<LongtailDbRow[]> {
  *  jauh di bawah 1000; root cause sebenarnya adalah kolom "Sudah" sempat
  *  keliru di-scope ke hari ini padahal seharusnya cumulative - lihat commit
  *  history. Paginasi ini tetap dipertahankan sbg pencegahan ke depan.) */
-async function fetchTodayActivityLog(dpFilter: DpFilter, today: string): Promise<{ waybill: string }[]> {
+async function fetchTodayActivityLog(matchValues: string[] | null, today: string): Promise<{ waybill: string }[]> {
   const PAGE = 1000;
   const out: { waybill: string }[] = [];
   for (let from = 0; ; from += PAGE) {
@@ -55,8 +64,7 @@ async function fetchTodayActivityLog(dpFilter: DpFilter, today: string): Promise
       .lte('created_at', `${today}T23:59:59.999+07:00`)
       .order('id')
       .range(from, from + PAGE - 1);
-    if (Array.isArray(dpFilter)) q = q.in('dp', dpFilter);
-    else if (dpFilter) q = q.eq('dp', dpFilter);
+    if (matchValues) q = q.in('dp', matchValues);
     const { data, error } = await q;
     if (error) throw new ApiError('INTERNAL_ERROR', error.message);
     const batch = (data ?? []) as { waybill: string }[];
@@ -113,6 +121,7 @@ export async function getDashboardPublic(): Promise<DashboardData> {
 async function computeDashboard(dpFilter: DpFilter, role: string, dropPoint: string): Promise<DashboardData> {
   // Progress Hari Ini: waybill (yang masih ada, ter-scope) dengan Manual Feedback hari ini (Jakarta).
   const today = jakartaTodayIso();
+  const matchValues = await resolveDpMatchValues(dpFilter);
 
   // fetchScoped() (longtail) & fetchTodayActivityLog() (activity_log) di atas
   // SALING INDEPENDEN (activity_log tak butuh hasil longtail sama sekali,
@@ -122,7 +131,7 @@ async function computeDashboard(dpFilter: DpFilter, role: string, dropPoint: str
   // sequential, masih urutan yg sama dari fetchScoped) - yang paralel murni
   // fetch-nya. Keduanya sudah dipaginasi masing-masing (lihat komentar
   // fetchTodayActivityLog).
-  const [rows, alData] = await Promise.all([fetchScoped(dpFilter), fetchTodayActivityLog(dpFilter, today)]);
+  const [rows, alData] = await Promise.all([fetchScoped(matchValues), fetchTodayActivityLog(matchValues, today)]);
 
   const total = rows.length;
   let sudah = 0, clearTTD = 0, lebih3 = 0, paketTertua = 0, paketTertuaWb = '';

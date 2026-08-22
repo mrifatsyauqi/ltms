@@ -168,6 +168,16 @@
   --aging-3: #7f1d1d;
   --aging-3-fg: #fca5a5;
   --brand-muted: #450a0a;
+
+  /* Sidebar GELAP */
+  --sidebar: #0d1420;
+  --sidebar-foreground: #cbd5e1;
+  --sidebar-primary: #E2231A;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1f2937;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: #1f2937;
+  --sidebar-ring: #E2231A;
 }
 
 @utility no-scrollbar {

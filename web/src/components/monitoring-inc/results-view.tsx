@@ -1,9 +1,9 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
-  Share2,
+  Send,
   Download,
   FileText,
   CheckCircle2,
@@ -11,6 +11,7 @@ import {
   Percent,
   MapPin,
   Lock,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
@@ -18,9 +19,10 @@ import { toPng } from 'html-to-image';
 import { IncRow, IncStats, AVAILABLE_CITIES } from './types';
 import { MonitoringIncTable } from './monitoring-inc-table';
 import { ReportImageCanvas } from './report-image-canvas';
-import { SmartShareModal, SmartShareStage } from './smart-share-modal';
 import { FeishuShareDialog, FeishuShareStage } from './feishu-share-dialog';
 import { FeishuGroup } from '@/services/communication/communication.types';
+import type { DropPointRow } from '@/lib/data/drop-points';
+import { normalizeKecamatan } from '@/lib/kecamatan';
 
 interface ResultsViewProps {
   data: IncRow[];
@@ -31,7 +33,10 @@ interface ResultsViewProps {
   onTargetKotaChange: (city: string) => void;
   isCityLocked?: boolean;
   userDropPoint?: string;
+  dropPoints?: DropPointRow[];
 }
+
+type DpMatch = { kodeDp: string; namaDp: string };
 
 export function ResultsView({
   data,
@@ -42,18 +47,76 @@ export function ResultsView({
   onTargetKotaChange,
   isCityLocked,
   userDropPoint,
+  dropPoints = [],
 }: ResultsViewProps) {
   const hiddenCanvasRef = useRef<HTMLDivElement>(null);
 
+  // Judul title bar excel-style tabel (sama formula dgn ReportImageCanvas).
+  const dpDisplayName = userDropPoint && userDropPoint !== 'SEMUA DP' ? userDropPoint : `DP ${targetKota}`;
+
   // Feishu Communication Share Dialog state
   const [isFeishuShareOpen, setIsFeishuShareOpen] = useState(false);
-
-  // Smart Share state
-  const [isSmartShareOpen, setIsSmartShareOpen] = useState(false);
-  const [smartShareStage, setSmartShareStage] = useState<SmartShareStage>('idle');
-  const [smartShareProgress, setSmartShareProgress] = useState(0);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
-  const [generatedCaption, setGeneratedCaption] = useState<string>('');
+  const [copyingImage, setCopyingImage] = useState(false);
+
+  // Disambiguasi "Drop Point Tujuan": dp_delivery (dari kolom "DP Delivery"
+  // di file JMS) sbg penentu UTAMA, cocokkan thd Kode DP ATAU Nama DP -
+  // fallback ke pemetaan Kecamatan -> DP (drop_point_kecamatan, lihat Master
+  // Drop Point) kalau dp_delivery kosong. Kalau keduanya tak cocok, baris
+  // tetap dikelompokkan per Kecamatan mentah spt sekarang (TIDAK digabung ke
+  // grup DP manapun yg sudah teridentifikasi).
+  const { dpByCode, dpByKecamatan } = useMemo(() => {
+    const byCode = new Map<string, DpMatch>();
+    const byKec = new Map<string, DpMatch>();
+    for (const dp of dropPoints) {
+      const match: DpMatch = { kodeDp: dp['Kode DP'], namaDp: dp['Nama DP'] };
+      byCode.set(normalizeKecamatan(dp['Kode DP']), match);
+      byCode.set(normalizeKecamatan(dp['Nama DP']), match);
+      for (const kec of dp['Kecamatan']) byKec.set(normalizeKecamatan(kec), match);
+    }
+    return { dpByCode: byCode, dpByKecamatan: byKec };
+  }, [dropPoints]);
+
+  function resolveDpForRow(row: IncRow): DpMatch | null {
+    if (row.dpDelivery) {
+      const match = dpByCode.get(normalizeKecamatan(row.dpDelivery));
+      if (match) return match;
+    }
+    return dpByKecamatan.get(normalizeKecamatan(row.tempatTujuan)) ?? null;
+  }
+
+  /** Satu fungsi dipakai baik oleh Send sungguhan maupun Preview Share Dialog,
+   *  supaya keduanya TIDAK PERNAH berbeda (Single Source of Truth, sama spt
+   *  render pipeline kartu). Label baris = Nama DP kalau ter-resolve, kalau
+   *  tidak fallback ke nama Kecamatan mentah. `kodeDp` ikut disertakan per
+   *  baris (kalau ter-resolve) supaya pipeline mention di server TIDAK perlu
+   *  menebak ulang DP dari label yang ambigu (Nama DP vs Kecamatan mentah,
+   *  keduanya sama-sama string biasa dari sudut pandang server). `hasPending`
+   *  = true kalau DP itu MASIH punya AWB berstatus BELUM/LATE (belum Clear
+   *  TTD) - dipakai server utk memutuskan apakah baris ini perlu di-mention
+   *  sama sekali (DP yg semua AWB-nya sudah Clear TTD TIDAK perlu di-mention,
+   *  lihat card-compiler.service.ts). */
+  function buildSubdistrictBreakdown(
+    rows: IncRow[],
+    limit: number
+  ): Array<{ name: string; count: string; kodeDp?: string; hasPending: boolean }> {
+    const countMap = new Map<string, { count: number; kodeDp?: string; hasPending: boolean }>();
+    for (const r of rows) {
+      const match = resolveDpForRow(r);
+      const label = match ? match.namaDp : (r.tempatTujuan?.trim() || 'Lainnya');
+      const existing = countMap.get(label);
+      const isPendingRow = r.status !== 'CLEAR';
+      countMap.set(label, {
+        count: (existing?.count || 0) + 1,
+        kodeDp: match?.kodeDp,
+        hasPending: (existing?.hasPending ?? false) || isPendingRow,
+      });
+    }
+    return Array.from(countMap.entries())
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, limit)
+      .map(([name, v]) => ({ name, count: `${v.count} AWB`, kodeDp: v.kodeDp, hasPending: v.hasPending }));
+  }
 
   // Auto Caption Generator (Clean format, WhatsApp/Feishu ready, NO dashboard links)
   const buildSmartCaption = () => {
@@ -102,79 +165,13 @@ Mohon seluruh DP segera melakukan follow up terhadap seluruh paket yang belum TT
 Terima kasih.`;
   };
 
-  // 1-Click Smart Share Handler
-  const handleSmartShare = async () => {
-    if (!hiddenCanvasRef.current || smartShareStage === 'rendering') return;
-
-    try {
-      setIsSmartShareOpen(true);
-      setSmartShareStage('preparing');
-      setSmartShareProgress(15);
-      await new Promise((r) => setTimeout(r, 200));
-
-      setSmartShareStage('generating');
-      setSmartShareProgress(35);
-      await new Promise((r) => setTimeout(r, 250));
-
-      // Render Canvas to HD Image
-      setSmartShareStage('rendering');
-      setSmartShareProgress(60);
-      const node = hiddenCanvasRef.current;
-      const dataUrl = await toPng(node, {
-        quality: 1,
-        pixelRatio: 2,
-        backgroundColor: '#FFFFFF',
-      });
-      setGeneratedImageUrl(dataUrl);
-      await new Promise((r) => setTimeout(r, 250));
-
-      // Build Caption
-      setSmartShareStage('captioning');
-      setSmartShareProgress(80);
-      const caption = buildSmartCaption();
-      setGeneratedCaption(caption);
-      await new Promise((r) => setTimeout(r, 200));
-
-      // Auto Copy Caption to Clipboard
-      setSmartShareStage('copying');
-      setSmartShareProgress(95);
-      try {
-        await navigator.clipboard.writeText(caption);
-        toast.success('✔ Caption berhasil disalin ke clipboard!', {
-          description: 'Format WhatsApp/Feishu siap dibagikan.',
-          position: 'bottom-right',
-        });
-      } catch (clipErr) {
-        console.warn('Clipboard write error:', clipErr);
-        toast.error('Gagal otomatis menyalin caption. Anda dapat menyalinnya manual di popup.');
-      }
-
-      setSmartShareProgress(100);
-      await new Promise((r) => setTimeout(r, 200));
-      setSmartShareStage('success');
-    } catch (err) {
-      console.error('Smart Share error:', err);
-      setSmartShareStage('error');
-      toast.error('Gagal memproses Smart Share.');
-    }
-  };
-
-  // Download Report PNG
-  const handleDownloadPng = () => {
-    if (!generatedImageUrl) return;
-    const link = document.createElement('a');
-    link.download = `MONITORING_INC_${targetKota}_${Date.now()}.png`;
-    link.href = generatedImageUrl;
-    link.click();
-    toast.success('Gambar laporan berhasil diunduh!');
-  };
-
   // Export Excel (.xlsx)
   const handleExportExcel = () => {
     try {
       const exportRows = data.map((row) => ({
         'AWB': row.awb,
         'Tempat Tujuan': row.tempatTujuan,
+        'DP Delivery': row.dpDelivery || '-',
         'Nama Penerima': row.namaPenerima,
         'Alamat Penerima': row.alamatPenerima,
         'COD': row.cod,
@@ -219,7 +216,8 @@ Terima kasih.`;
   // Handler Pengiriman Laporan ke Feishu Group
   const handleExecuteFeishuSend = async (
     selectedGroup: FeishuGroup,
-    updateStage: (stage: FeishuShareStage, progress: number) => void
+    updateStage: (stage: FeishuShareStage, progress: number) => void,
+    selectedCardTemplateId?: string
   ) => {
     if (!hiddenCanvasRef.current) {
       throw new Error('Canvas visual report belum siap dirender.');
@@ -240,22 +238,14 @@ Terima kasih.`;
     setGeneratedImageUrl(dataUrl);
     await new Promise((r) => setTimeout(r, 200));
 
-    // 3. Generating Caption
+    // 3. Generating Caption & Subdistricts
     updateStage('generating_caption', 55);
     const caption = buildSmartCaption();
-    setGeneratedCaption(caption);
     await new Promise((r) => setTimeout(r, 200));
 
-    // Ekstrak Top 5 Kecamatan
-    const kecCountMap = new Map<string, number>();
-    data.forEach((r) => {
-      const kec = r.tempatTujuan?.trim() || 'Lainnya';
-      kecCountMap.set(kec, (kecCountMap.get(kec) || 0) + 1);
-    });
-    const topKecamatan = Array.from(kecCountMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([kec]) => kec);
+    // Ekstrak Drop Point Tujuan breakdown (dp_delivery > Kecamatan->DP > Kecamatan mentah)
+    const subdistricts = buildSubdistrictBreakdown(data, 10);
+    const topKecamatan = subdistricts.map((s) => s.name);
 
     // 4. Uploading Image to Feishu
     updateStage('uploading_image', 75);
@@ -268,26 +258,82 @@ Terima kasih.`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         channel: 'feishu',
-        chatId: selectedGroup.chatId,
+        chatId: selectedGroup.chatId || (selectedGroup as any).chat_id,
         messageType: 'interactive_card',
+        cardTemplateId: selectedCardTemplateId,
         data: {
+          module: 'monitoring_inc',
+          targetScope: {
+            type: 'kota',
+            name: targetKota,
+          },
           targetKota,
-          total: stats.total,
-          belum: stats.belum,
-          late: stats.late,
-          clear: stats.clear,
-          percent: stats.percent,
+          pickup_dp: userDropPoint || 'BATANG01',
+          target_city: targetKota,
+          total_inc: stats.total,
+          clear_ttd: stats.clear,
+          pending_ttd: stats.belum,
+          over_sla: stats.late,
+          sla_percentage: stats.percent,
+          subdistricts,
           topKecamatan,
           generateTime,
+          generated_at: generateTime,
           imageBase64: dataUrl,
           caption,
         },
       }),
     });
 
-    const json = await res.json();
-    if (!res.ok || !json.ok) {
-      throw new Error(json.error || 'Gagal mengirim pesan ke API Feishu.');
+    // Respons non-2xx dari platform (mis. 413 Request Entity Too Large saat
+    // body kegedean) berupa teks biasa, bukan JSON - res.json() akan lempar
+    // SyntaxError kriptik ("Unexpected token...") kalau langsung dipanggil.
+    const rawBody = await res.text();
+    let json: any = null;
+    try {
+      json = rawBody ? JSON.parse(rawBody) : null;
+    } catch {
+      // bukan JSON - kemungkinan besar respons platform (413/502/dst)
+    }
+    if (!res.ok || !json || (!json.ok && !json.success)) {
+      throw new Error(
+        json?.error ||
+          (!json
+            ? `Gagal mengirim (${res.status} ${res.statusText || ''}). Kemungkinan gambar lampiran terlalu besar - coba lagi dengan data lebih sedikit.`
+            : 'Gagal mengirim pesan ke API Feishu.')
+      );
+    }
+  };
+
+  /**
+   * Fallback manual saat "Kirim ke Feishu" gagal (mis. 400) - salin GAMBAR
+   * saja (image/png), pola sama persis dgn handleCopyImage Monitoring
+   * Delivery (monitoring-client.tsx). Render dari hiddenCanvasRef yg SAMA &
+   * parameter toPng yg SAMA (quality/pixelRatio/backgroundColor) dgn
+   * handleExecuteFeishuSend di atas, supaya gambar hasil salin identik dgn
+   * lampiran Feishu - bukan render terpisah.
+   */
+  const handleCopyImage = async () => {
+    const node = hiddenCanvasRef.current;
+    if (!node) return;
+    try {
+      setCopyingImage(true);
+      const imagePromise = (async () => {
+        await new Promise((r) => setTimeout(r, 20)); // beri main-thread merender "Menyalin…"
+        const dataUrl = await toPng(node, {
+          quality: 1,
+          pixelRatio: 2,
+          backgroundColor: '#FFFFFF',
+        });
+        return (await fetch(dataUrl)).blob();
+      })();
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': imagePromise })]);
+      toast.success('Gambar laporan disalin — tempel di chat (Feishu/WA).');
+    } catch (error) {
+      console.error('Gagal copy gambar', error);
+      toast.error('Gagal menyalin gambar. Pastikan bukan mode Incognito & browser mendukung Clipboard API.');
+    } finally {
+      setCopyingImage(false);
     }
   };
 
@@ -300,7 +346,6 @@ Terima kasih.`;
           data={data}
           stats={stats}
           targetKota={targetKota}
-          generateTime={generateTime}
           userDropPoint={userDropPoint}
         />
       </div>
@@ -310,29 +355,30 @@ Terima kasih.`;
         isOpen={isFeishuShareOpen}
         onClose={() => setIsFeishuShareOpen(false)}
         targetKota={targetKota}
+        generateTime={generateTime}
+        summaryData={{
+          total: stats.total,
+          belum: stats.belum,
+          late: stats.late,
+          clear: stats.clear,
+          percent: stats.percent,
+          subdistricts: buildSubdistrictBreakdown(data, 10),
+          topKecamatan: buildSubdistrictBreakdown(data, 5).map((s) => s.name),
+        }}
+        captionPreview={buildSmartCaption()}
+        imagePreviewUrl={generatedImageUrl}
         onExecuteSend={handleExecuteFeishuSend}
       />
 
-      {/* Smart Share Modal */}
-      <SmartShareModal
-        isOpen={isSmartShareOpen}
-        onClose={() => setIsSmartShareOpen(false)}
-        stage={smartShareStage}
-        progress={smartShareProgress}
-        imageUrl={generatedImageUrl}
-        captionText={generatedCaption}
-        onDownload={handleDownloadPng}
-      />
-
       {/* 1. Header Bar with Integrated Action Toolbar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-border">
         <div>
-          <h1 className="text-lg md:text-xl font-semibold tracking-tight text-slate-900">
+          <h1 className="text-lg md:text-xl font-semibold tracking-tight text-foreground">
             Monitoring INC
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Monitoring pengiriman Inter City (INC) SLA maksimal 24 jam • Terakhir digenerate:{' '}
-            <span className="font-medium text-slate-700">{generateTime}</span>
+            <span className="font-medium text-foreground">{generateTime}</span>
           </p>
         </div>
 
@@ -342,25 +388,25 @@ Terima kasih.`;
           <button
             type="button"
             onClick={onReset}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs font-medium shadow-2xs transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-border bg-card hover:bg-muted active:scale-[0.98] text-foreground text-xs font-medium shadow-2xs transition-all cursor-pointer"
           >
-            <ArrowLeft className="size-3.5 text-slate-500" />
+            <ArrowLeft className="size-3.5 text-muted-foreground" />
             Upload File Baru
           </button>
 
           {/* Target Kota Selector */}
-          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-[6px] px-2.5 py-1.5 shadow-2xs text-xs font-medium text-slate-800">
+          <div className="flex items-center gap-1.5 bg-card border border-border rounded-[6px] px-2.5 py-1.5 shadow-2xs text-xs font-medium text-foreground">
             <MapPin className="size-3.5 text-[#E2231A]" />
             {isCityLocked ? (
               <div className="flex items-center gap-1">
                 <span>{targetKota}</span>
-                <Lock className="size-3 text-slate-400" />
+                <Lock className="size-3 text-muted-foreground" />
               </div>
             ) : (
               <select
                 value={targetKota}
                 onChange={(e) => onTargetKotaChange(e.target.value)}
-                className="bg-transparent font-semibold text-slate-900 focus:outline-none cursor-pointer"
+                className="bg-transparent font-semibold text-foreground focus:outline-none cursor-pointer"
               >
                 {AVAILABLE_CITIES.map((c) => (
                   <option key={c} value={c}>
@@ -371,32 +417,33 @@ Terima kasih.`;
             )}
           </div>
 
-          {/* BAGIKAN KE FEISHU Button (Primary Outbound Action) */}
+          {/* KIRIM KE FEISHU Button (Primary Outbound Action, Feishu brand blue) */}
           <button
             type="button"
             onClick={() => setIsFeishuShareOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[6px] bg-[#E2231A] hover:bg-[#C91C15] active:scale-[0.98] text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[6px] bg-[#3370FF] hover:bg-[#2B5CD9] active:scale-[0.98] text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
           >
-            <Share2 className="size-3.5" />
-            Bagikan
+            <Send className="size-3.5" />
+            Kirim ke Feishu
           </button>
 
-          {/* SMART SHARE Button (Quick Canvas & Caption Copy) */}
+          {/* Salin Gambar - fallback manual kalau Kirim ke Feishu gagal (mis. 400) */}
           <button
             type="button"
-            disabled={smartShareStage === 'rendering'}
-            onClick={handleSmartShare}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs font-medium shadow-2xs transition-all cursor-pointer"
+            onClick={handleCopyImage}
+            disabled={copyingImage}
+            title="Salin gambar laporan (sama persis dgn lampiran Kirim ke Feishu) - tempel manual (Ctrl+V) di chat Feishu"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-border bg-card hover:bg-muted active:scale-[0.98] text-foreground text-xs font-medium shadow-2xs transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Share2 className="size-3.5 text-slate-500" />
-            Smart Share
+            <ImageIcon className="size-3.5 text-muted-foreground" />
+            {copyingImage ? 'Menyalin…' : 'Salin Gambar'}
           </button>
 
           {/* Export Excel */}
           <button
             type="button"
             onClick={handleExportExcel}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 active:scale-[0.98] text-slate-700 text-xs font-medium shadow-2xs transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-border bg-card hover:bg-muted active:scale-[0.98] text-foreground text-xs font-medium shadow-2xs transition-all cursor-pointer"
           >
             <Download className="size-3.5 text-emerald-600" />
             Ekspor Excel
@@ -407,37 +454,37 @@ Terima kasih.`;
       {/* 2. 4 KPI Metric Cards Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Card 1: Total AWB INC */}
-        <div className="bg-white rounded-[8px] border border-slate-200 p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-slate-300">
+        <div className="bg-card rounded-[8px] border border-border p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-border">
           <div className="size-9 rounded-[6px] bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
             <FileText className="size-4.5" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-slate-500 uppercase tracking-tight">Total AWB INC</p>
-            <p className="text-xl font-bold text-slate-900 leading-tight font-mono">{stats.total.toLocaleString('id-ID')}</p>
-            <p className="text-[11px] text-slate-400">Total Pengiriman</p>
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">Total AWB INC</p>
+            <p className="text-xl font-bold text-foreground leading-tight font-mono">{stats.total.toLocaleString('id-ID')}</p>
+            <p className="text-[11px] text-muted-foreground">Total Pengiriman</p>
           </div>
         </div>
 
         {/* Card 2: Clear TTD */}
-        <div className="bg-white rounded-[8px] border border-slate-200 p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-slate-300">
+        <div className="bg-card rounded-[8px] border border-border p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-border">
           <div className="size-9 rounded-[6px] bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
             <CheckCircle2 className="size-4.5" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-slate-500 uppercase tracking-tight">Clear TTD (≤24 Jam)</p>
-            <p className="text-xl font-bold text-slate-900 leading-tight font-mono">{stats.clear.toLocaleString('id-ID')}</p>
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">Clear TTD (≤24 Jam)</p>
+            <p className="text-xl font-bold text-foreground leading-tight font-mono">{stats.clear.toLocaleString('id-ID')}</p>
             <p className="text-[11px] font-medium text-emerald-600">{stats.percent}% Tepat Waktu</p>
           </div>
         </div>
 
         {/* Card 3: Belum TTD / Telat */}
-        <div className="bg-white rounded-[8px] border border-slate-200 p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-slate-300">
+        <div className="bg-card rounded-[8px] border border-border p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-border">
           <div className="size-9 rounded-[6px] bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
             <Clock className="size-4.5" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-slate-500 uppercase tracking-tight">Belum TTD / Telat</p>
-            <p className="text-xl font-bold text-slate-900 leading-tight font-mono">{(stats.belum + stats.late).toLocaleString('id-ID')}</p>
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">Belum TTD / Telat</p>
+            <p className="text-xl font-bold text-foreground leading-tight font-mono">{(stats.belum + stats.late).toLocaleString('id-ID')}</p>
             <p className="text-[11px] font-medium text-amber-600">
               {stats.total > 0 ? Math.round(((stats.belum + stats.late) / stats.total) * 100) : 0}% Belum Selesai
             </p>
@@ -445,12 +492,12 @@ Terima kasih.`;
         </div>
 
         {/* Card 4: Presentase (Paling Kanan) */}
-        <div className="bg-white rounded-[8px] border border-slate-200 p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-slate-300">
+        <div className="bg-card rounded-[8px] border border-border p-3.5 shadow-xs flex items-center gap-3 transition-all hover:border-border">
           <div className="size-9 rounded-[6px] bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
             <Percent className="size-4.5" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-slate-500 uppercase tracking-tight">Presentase</p>
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-tight">Presentase</p>
             <p className="text-xl font-bold text-indigo-900 leading-tight font-mono">{stats.percent}%</p>
             <p className="text-[11px] font-medium text-indigo-600">Pencapaian SLA</p>
           </div>
@@ -458,7 +505,7 @@ Terima kasih.`;
       </div>
 
       {/* 3. Modern Data Table with TanStack Table Sorting */}
-      <MonitoringIncTable data={data} />
+      <MonitoringIncTable data={data} title={dpDisplayName} />
     </div>
   );
 }

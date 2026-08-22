@@ -1,0 +1,253 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import {
+  History,
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Send,
+  AlertCircle,
+  Loader2,
+  Eye,
+  EyeOff,
+} from 'lucide-react';
+import { commApi } from '@/lib/communication-client';
+import { InteractiveCardPreview } from './interactive-card-preview';
+
+interface CommunicationLogItem {
+  id: string;
+  channel: string;
+  chat_id: string;
+  message_type: string;
+  status: 'SUCCESS' | 'FAILED';
+  error_message?: string | null;
+  response_time_ms?: number | null;
+  sender_email?: string | null;
+  payload_summary?: {
+    targetKota?: string;
+    total?: number;
+    belum?: number;
+    late?: number;
+    percent?: number;
+    endpoint?: string;
+    statusCode?: number;
+    messageId?: string;
+    requestId?: string;
+  } | null;
+  card_json?: Record<string, any> | null;
+  created_at: string;
+}
+
+export interface FeishuHistoryDialogProps {
+  open?: boolean;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onClose?: () => void;
+  moduleName?: string;
+}
+
+export function FeishuHistoryDialog(props: FeishuHistoryDialogProps) {
+  const open = props.open ?? props.isOpen ?? false;
+  const handleOpenChange = (val: boolean) => {
+    if (props.onOpenChange) props.onOpenChange(val);
+    if (!val && props.onClose) props.onClose();
+  };
+  const {
+    data: logs = [],
+    isLoading: loading,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: ['communication-logs'],
+    queryFn: () => commApi<CommunicationLogItem[]>('/api/communication/logs?limit=30'),
+    enabled: open,
+    staleTime: 15 * 1000,
+  });
+  const error = queryError ? (queryError as Error).message || 'Gagal mengambil riwayat komunikasi.' : null;
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+
+  const formatDate = (isoString: string) => {
+    try {
+      const d = new Date(isoString);
+      return new Intl.DateTimeFormat('id-ID', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }).format(d);
+    } catch {
+      return isoString;
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-0 overflow-hidden rounded-[10px]">
+        {/* Header */}
+        <div className="p-5 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-[8px] bg-muted flex items-center justify-center text-foreground">
+              <History className="w-5 h-5" />
+            </div>
+            <div>
+              <DialogTitle className="text-base font-semibold text-foreground">
+                Riwayat Pengiriman Laporan
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Audit log komunikasi pengiriman laporan ke Feishu Open Platform
+              </DialogDescription>
+            </div>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={loading}
+            className="h-8 px-3 text-xs gap-1.5 rounded-[6px]"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
+
+        {/* Content Body */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-3">
+          {loading && logs.length === 0 ? (
+            <div className="py-16 flex flex-col items-center justify-center text-center">
+              <Loader2 className="w-7 h-7 text-[#E2231A] animate-spin mb-3" />
+              <p className="text-sm font-medium text-foreground">
+                Memuat riwayat pengiriman...
+              </p>
+            </div>
+          ) : error ? (
+            <div className="p-4 rounded-[8px] bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <p className="font-semibold">Gagal memuat log</p>
+                <p>{error}</p>
+              </div>
+            </div>
+          ) : logs.length === 0 ? (
+            <div className="py-16 flex flex-col items-center justify-center text-center text-muted-foreground">
+              <Send className="w-10 h-10 stroke-[1.2] mb-3 text-muted-foreground/60" />
+              <p className="text-sm font-medium text-foreground">
+                Belum ada riwayat pengiriman
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Laporan yang berhasil atau gagal dikirim ke Feishu akan tercatat di sini.
+              </p>
+            </div>
+          ) : (
+            <div className="border border-border rounded-[8px] overflow-hidden">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-muted border-b border-border text-muted-foreground font-medium">
+                  <tr>
+                    <th className="py-2.5 px-3">Waktu (WIB)</th>
+                    <th className="py-2.5 px-3">Target Scope</th>
+                    <th className="py-2.5 px-3">Grup / Chat ID</th>
+                    <th className="py-2.5 px-3">Status</th>
+                    <th className="py-2.5 px-3">Latency</th>
+                    <th className="py-2.5 px-3">Pengirim</th>
+                    <th className="py-2.5 px-3 text-right">Kartu</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {logs.map((log) => {
+                    const isSuccess = log.status === 'SUCCESS';
+                    const targetKota =
+                      log.payload_summary?.targetKota || 'Laporan Umum';
+                    const isExpanded = expandedLogId === log.id;
+
+                    return (
+                      <React.Fragment key={log.id}>
+                        <tr className="hover:bg-muted/70 transition-colors">
+                          <td className="py-3 px-3 whitespace-nowrap text-muted-foreground font-mono text-[11px]">
+                            {formatDate(log.created_at)}
+                          </td>
+                          <td className="py-3 px-3 font-medium text-foreground">
+                            {targetKota}
+                          </td>
+                          <td className="py-3 px-3 font-mono text-[11px] text-muted-foreground truncate max-w-[140px]" title={log.chat_id}>
+                            {log.chat_id}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {isSuccess ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                                <CheckCircle2 className="w-3 h-3" /> Berhasil
+                              </span>
+                            ) : (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
+                                title={log.error_message || 'Pengiriman gagal'}
+                              >
+                                <XCircle className="w-3 h-3" /> Gagal
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap text-muted-foreground font-mono text-[11px]">
+                            {log.response_time_ms ? `${log.response_time_ms}ms` : '-'}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap text-muted-foreground text-[11px] truncate max-w-[120px]" title={log.sender_email || ''}>
+                            {log.sender_email?.split('@')[0] || '-'}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <button
+                              type="button"
+                              disabled={!log.card_json}
+                              onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                              title={log.card_json ? 'Lihat kartu yang dikirim' : 'Kartu tidak tersimpan untuk log ini'}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              {isExpanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              {isExpanded ? 'Tutup' : 'Lihat'}
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded && log.card_json && (
+                          <tr className="bg-muted/60">
+                            <td colSpan={7} className="p-4">
+                              <div className="max-w-sm mx-auto">
+                                <InteractiveCardPreview cardJson={log.card_json} />
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 bg-muted/50 border-t border-border flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleOpenChange(false)}
+            className="rounded-[6px] h-8 px-4 text-xs"
+          >
+            Tutup
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

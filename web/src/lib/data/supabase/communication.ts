@@ -20,6 +20,7 @@ export interface CommunicationLogRecord {
   response_time_ms?: number | null;
   sender_email?: string | null;
   payload_summary?: Record<string, any> | null;
+  card_json?: Record<string, any> | null;
   created_at: string;
 }
 
@@ -39,6 +40,7 @@ export interface CommunicationLogInsertInput {
   response_time_ms?: number | null;
   sender_email?: string | null;
   payload_summary?: Record<string, any> | null;
+  card_json?: Record<string, any> | null;
 }
 
 /**
@@ -119,6 +121,7 @@ export async function insertCommunicationLog(
           response_time_ms: log.response_time_ms || 0,
           sender_email: log.sender_email || null,
           payload_summary: log.payload_summary || null,
+          card_json: log.card_json || null,
         },
       ])
       .select('*')

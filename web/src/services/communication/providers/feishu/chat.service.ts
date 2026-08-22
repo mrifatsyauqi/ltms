@@ -1,15 +1,15 @@
 import { feishuAuthService } from './auth.service';
 import { withRetry } from '../../utils/retry';
+import { fetchWithTimeout } from '../../utils/fetch-timeout';
+import { COMMUNICATION_CONFIG, getFeishuCredentials } from '../../communication.config';
+import { FeishuChatListResponseSchema } from '../../communication.schemas';
 import {
   listFeishuGroups,
   upsertFeishuGroups,
 } from '@/lib/data/supabase/communication';
 import type {
-  FeishuChatListResponse,
   FeishuGroup,
 } from '../../communication.types';
-
-const FEISHU_API_BASE = 'https://open.feishu.cn/open-apis';
 
 export class FeishuChatService {
   /**
@@ -28,39 +28,87 @@ export class FeishuChatService {
     }));
   }
 
+  public async getActiveGroups(): Promise<FeishuGroup[]> {
+    return this.getGroups();
+  }
+
+  public async syncGroups(): Promise<FeishuGroup[]> {
+    return this.syncChats();
+  }
+
   /**
-   * Menyinkronkan seluruh daftar Group dari Feishu Open Platform ke database Supabase.
+   * Menyinkronkan seluruh daftar Group dari Feishu Open Platform ke database Supabase
+   * Menggunakan pagination loop lengkap (page_token) sesuai dokumentasi resmi IM v1.
    */
   public async syncChats(): Promise<FeishuGroup[]> {
+    const { baseUrl } = getFeishuCredentials();
+
     // 1. Ambil Token
     const token = await feishuAuthService.getTenantAccessToken();
 
-    // 2. Fetch seluruh Group yang diikuti oleh bot (dengan pagination jika ada)
-    const items = await withRetry(async () => {
-      const response = await fetch(`${FEISHU_API_BASE}/im/v1/chats?page_size=100`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json; charset=utf-8',
+    const allItems: Array<{
+      chat_id: string;
+      name?: string | null;
+      avatar?: string | null;
+      user_count?: string | number | null;
+    }> = [];
+
+    let hasMore = true;
+    let pageToken: string | undefined = undefined;
+
+    // 2. Loop pagination hingga seluruh grup terambil
+    while (hasMore) {
+      const currentToken = pageToken;
+      const url = new URL(`${baseUrl}/im/v1/chats`);
+      url.searchParams.set('page_size', '100');
+      if (currentToken) {
+        url.searchParams.set('page_token', currentToken);
+      }
+
+      const pageResult = await withRetry(
+        async () => {
+          const response = await fetchWithTimeout(url.toString(), {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json; charset=utf-8',
+            },
+            timeoutMs: COMMUNICATION_CONFIG.DEFAULT_TIMEOUT_MS,
+          });
+
+          if (!response.ok) {
+            throw new Error(`Feishu Get Chats HTTP Error: ${response.status} ${response.statusText}`);
+          }
+
+          const rawJson = await response.json();
+          const parsed = FeishuChatListResponseSchema.safeParse(rawJson);
+
+          if (!parsed.success) {
+            throw new Error(`Feishu Chat List Schema Mismatch: ${parsed.error.message}`);
+          }
+
+          const result = parsed.data;
+
+          if (result.code !== 0) {
+            throw new Error(`Feishu Get Chats Error [Code ${result.code}]: ${result.msg || 'Gagal memuat grup'}`);
+          }
+
+          return result.data;
         },
-      });
+        { maxAttempts: 3, initialDelayMs: 500 }
+      );
 
-      if (!response.ok) {
-        throw new Error(`Feishu Get Chats HTTP Error: ${response.status} ${response.statusText}`);
+      if (pageResult?.items && pageResult.items.length > 0) {
+        allItems.push(...pageResult.items);
       }
 
-      const result: FeishuChatListResponse = await response.json();
-
-      if (result.code !== 0) {
-        throw new Error(`Feishu Get Chats Error [${result.code}]: ${result.msg}`);
-      }
-
-      return result.data?.items || [];
-    }, { maxAttempts: 3, initialDelayMs: 500 });
+      hasMore = Boolean(pageResult?.has_more && pageResult?.page_token);
+      pageToken = pageResult?.page_token;
+    }
 
     // 3. Transform & Upsert ke Supabase
-    if (items.length > 0) {
-      const groupsToUpsert = items.map((item) => ({
+    if (allItems.length > 0) {
+      const groupsToUpsert = allItems.map((item) => ({
         chat_id: item.chat_id,
         group_name: item.name || 'Grup Tanpa Nama',
         avatar: item.avatar || null,

@@ -8,7 +8,12 @@ import type { ManageableRole, MenuKey } from '@/lib/data/supabase/permissions';
 export type DropPointRow = {
   'Kode DP': string;
   'Nama DP': string;
+  /** Turunan dari `Kecamatan` (join ', ') - dipertahankan utk tampilan/cari
+   *  ringkas yang sudah ada. Sumber kebenaran sebenarnya adalah `Kecamatan`. */
   'Wilayah/Cabang': string;
+  /** Daftar Kecamatan terstruktur yang ditangani DP ini (tabel
+   *  drop_point_kecamatan) - satu Kecamatan cuma boleh milik 1 DP. */
+  'Kecamatan': string[];
   'Status Aktif': string;
   /** '' = belum di-assign ke Kota manapun (lihat cabang.ts). */
   'Kode Kota': string;
@@ -24,13 +29,13 @@ export type DropPointRow = {
 export type CreateDropPointInput = {
   kodeDp: string;
   namaDp: string;
-  wilayah?: string;
+  kecamatan?: string[];
   kodeKota?: string | null;
   spvDropPointUserId?: string | null;
 };
 export type UpdateDropPointInput = Partial<{
   namaDp: string;
-  wilayah: string;
+  kecamatan: string[];
   statusAktif: boolean;
   kodeKota: string | null;
   spvDropPointUserId: string | null;
@@ -181,6 +186,20 @@ export type UpdateLongTailInput = Partial<{
 export type ResetPreview = { dryRun: true; counts: Record<string, number> };
 export type ResetResult = { cleared: Record<string, number> };
 
+// ---- Bulk Feedback ------------------------------------------------------
+/** `baseVersion` per waybill = LongTailRow['__version'] yang dimiliki
+ *  client SAAT tabel di-load/checkbox dicentang - dipakai optimistic
+ *  locking yang SAMA seperti submit satu-per-satu (submitFeedback). */
+export type BulkFeedbackItem = { waybill: string; baseVersion?: string };
+export type BulkFeedbackResultRow =
+  | { waybill: string; ok: true; data: LongTailRow }
+  | { waybill: string; ok: false; error: string; code?: string };
+export type BulkFeedbackResult = {
+  results: BulkFeedbackResultRow[];
+  successCount: number;
+  failCount: number;
+};
+
 // ---- Import -----------------------------------------------------------------
 export type ImportResult = {
   batchId: string;
@@ -220,6 +239,16 @@ export type ImportBatchRow = {
   Gagal: number;
   Status: string;
   Keterangan: string;
+  /** File ASLI (bukan hasil parse) yang tersimpan di Storage utk batch ini -
+   *  kosong kalau upload file gagal/dilewati atau sudah lewat retensi 7 hari
+   *  (baris import_batch_file-nya sudah dihapus cron, tapi baris
+   *  import_batch sendiri tetap ada sbg riwayat). */
+  Files: ImportBatchFileRow[];
+};
+export type ImportBatchFileRow = {
+  id: string;
+  namaFile: string;
+  sizeBytes: number;
 };
 export type MappingTemplate = {
   namaTemplate: string;

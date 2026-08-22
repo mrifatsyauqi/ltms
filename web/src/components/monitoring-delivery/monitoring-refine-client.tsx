@@ -19,10 +19,12 @@ async function fetchDropPoints(): Promise<DropPointRow[]> {
   return body.data;
 }
 
-const normalize = (s: string) => s.trim().toLowerCase();
+// Underscore & spasi disamakan (mis. "GRINGSING_LAMA" vs "Gringsing Lama")
+// supaya pencocokan tetap kena walau ejaan sumbernya tak seragam.
+const normalize = (s: string) => s.trim().toLowerCase().replace(/[\s_]+/g, '_');
 
 export function MonitoringRefineClient() {
-  const { data: dropPoints } = useQuery({
+  const { data: dropPoints, isLoading: dropPointsLoading } = useQuery({
     queryKey: ['drop-points'],
     queryFn: fetchDropPoints,
     staleTime: SLOW_STALE_TIME,
@@ -32,107 +34,158 @@ export function MonitoringRefineClient() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [isGenerated, setIsGenerated] = useState(false);
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
+  const [namaKota, setNamaKota] = useState('');
   const [copying, setCopying] = useState<null | 'img' | 'table'>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const handleFileUpload = (fileList: FileList | File[]) => {
-    const file = fileList[0];
-    if (!file) return;
+  const handleFileUpload = async (fileList: FileList | File[]) => {
+    if (!fileList || fileList.length === 0) return;
 
-    setFileName(file.name);
-    setIsGenerated(false);
-
-    const kodeDpByNormalized = new Map<string, string>();
-    for (const dp of dropPoints ?? []) {
-      kodeDpByNormalized.set(normalize(dp['Kode DP']), dp['Kode DP']);
+    // Master Drop Point (dipakai lookup Kode DP di bawah) diambil lewat React
+    // Query - kalau file di-upload SEBELUM query itu selesai (mis. langsung
+    // setelah halaman dibuka), dropPoints masih undefined -> SEMUA baris bakal
+    // gagal cocok. Tolak upload dulu & minta coba lagi drpd diam-diam
+    // menghasilkan Kode DP kosong semua.
+    if (dropPointsLoading) {
+      toast.error('Data Master Drop Point masih dimuat, coba lagi sesaat lagi.');
+      return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = e.target?.result;
-        const workbook = xlsx.read(data, { type: 'binary' });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
+    const files = Array.from(fileList);
+    setFileName(files.length > 1 ? `${files.length} file dipilih` : files[0].name);
+    setIsGenerated(false);
 
-        const rows = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
-        const dataRows = rows.slice(2); // 2 baris header (grup + sub-kolom) format Refine Total
+    // Kode DP ("BGG09", dst) TIDAK sama dgn teks "DP Delivery" di file JMS
+    // ("GRINGSING_LAMA", dst) - itu cocok dgn "Nama DP" master. Cocokkan ke
+    // Nama DP dulu (kasus utama), "Kode DP" jadi fallback kalau kebetulan
+    // teksnya memang sudah berupa kode.
+    const kodeDpByNamaDp = new Map<string, string>();
+    const kodeDpByKodeDp = new Map<string, string>();
+    // Nama Kota utk judul tabel - diambil dari DP yang cocok (lihat di
+    // bawah), BUKAN diketik manual, supaya otomatis benar siapa pun yang
+    // upload & DP apa pun yang muncul di file.
+    const namaKotaByNamaDp = new Map<string, string>();
+    for (const dp of dropPoints ?? []) {
+      kodeDpByNamaDp.set(normalize(dp['Nama DP']), dp['Kode DP']);
+      kodeDpByKodeDp.set(normalize(dp['Kode DP']), dp['Kode DP']);
+      if (dp['Nama Kota']) namaKotaByNamaDp.set(normalize(dp['Nama DP']), dp['Nama Kota']);
+    }
+    const lookupKodeDp = (dpDelivery: string) =>
+      kodeDpByNamaDp.get(normalize(dpDelivery)) ?? kodeDpByKodeDp.get(normalize(dpDelivery)) ?? '';
+    const lookupNamaKota = (dpDelivery: string) => namaKotaByNamaDp.get(normalize(dpDelivery)) ?? '';
 
-        const groupMap = new Map<string, RefineRow>();
-        const unmatched = new Set<string>();
+    const groupMap = new Map<string, RefineRow>();
+    const unmatched = new Set<string>();
+    const namaKotaCount = new Map<string, number>();
 
-        for (const row of dataRows) {
-          if (!row || row.length < 15) continue;
-          const rawDp = row[2];
-          if (typeof rawDp !== 'string' || !rawDp.trim()) continue;
-          const dpDelivery = rawDp.trim();
-          if (dpDelivery.toLowerCase().startsWith('total')) continue; // lewati baris ringkasan kalau ada
+    const readPromise = (file: File) => new Promise<void>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = e.target?.result;
+          const workbook = xlsx.read(data, { type: 'binary' });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
 
-          const num = (i: number) => Number(row[i]) || 0;
-          const parsed = {
-            totalDelivery: num(3),
-            ttdNormalTotal: num(4),
-            ttdNormalAdaFoto: num(5),
-            ttdNormalTidakAdaFoto: num(6),
-            scanRetorTotal: num(7),
-            scanRetorAdaFoto: num(8),
-            scanRetorTidakAdaFoto: num(9),
-            belumJumlahAwb: num(10),
-            belumJumlahInventory: num(11),
-            belumTinggalGudang: num(12),
-            belumPaketBermasalah: num(13),
-            belumInputAwb: num(14),
-          };
+          const rows = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
+          const dataRows = rows.slice(2); // 2 baris header (grup + sub-kolom) format Refine Total
 
-          const existing = groupMap.get(dpDelivery);
-          if (existing) {
-            groupMap.set(dpDelivery, {
-              ...existing,
-              totalDelivery: existing.totalDelivery + parsed.totalDelivery,
-              ttdNormalTotal: existing.ttdNormalTotal + parsed.ttdNormalTotal,
-              ttdNormalAdaFoto: existing.ttdNormalAdaFoto + parsed.ttdNormalAdaFoto,
-              ttdNormalTidakAdaFoto: existing.ttdNormalTidakAdaFoto + parsed.ttdNormalTidakAdaFoto,
-              scanRetorTotal: existing.scanRetorTotal + parsed.scanRetorTotal,
-              scanRetorAdaFoto: existing.scanRetorAdaFoto + parsed.scanRetorAdaFoto,
-              scanRetorTidakAdaFoto: existing.scanRetorTidakAdaFoto + parsed.scanRetorTidakAdaFoto,
-              belumJumlahAwb: existing.belumJumlahAwb + parsed.belumJumlahAwb,
-              belumJumlahInventory: existing.belumJumlahInventory + parsed.belumJumlahInventory,
-              belumTinggalGudang: existing.belumTinggalGudang + parsed.belumTinggalGudang,
-              belumPaketBermasalah: existing.belumPaketBermasalah + parsed.belumPaketBermasalah,
-              belumInputAwb: existing.belumInputAwb + parsed.belumInputAwb,
-            });
-          } else {
-            const kodeDp = kodeDpByNormalized.get(normalize(dpDelivery)) ?? '';
-            if (!kodeDp) unmatched.add(dpDelivery);
-            groupMap.set(dpDelivery, { kodeDp, dpDelivery, ...parsed });
+          for (const row of dataRows) {
+            if (!row || row.length < 15) continue;
+            const rawDp = row[2];
+            if (typeof rawDp !== 'string' || !rawDp.trim()) continue;
+            const dpDelivery = rawDp.trim();
+            if (dpDelivery.toLowerCase().startsWith('total')) continue; // lewati baris ringkasan kalau ada
+
+            const num = (i: number) => Number(row[i]) || 0;
+            const parsed = {
+              totalDelivery: num(3),
+              ttdNormalTotal: num(4),
+              ttdNormalAdaFoto: num(5),
+              ttdNormalTidakAdaFoto: num(6),
+              scanRetorTotal: num(7),
+              scanRetorAdaFoto: num(8),
+              scanRetorTidakAdaFoto: num(9),
+              belumJumlahAwb: num(10),
+              belumJumlahInventory: num(11),
+              belumTinggalGudang: num(12),
+              belumPaketBermasalah: num(13),
+              belumInputAwb: num(14),
+            };
+
+            const existing = groupMap.get(dpDelivery);
+            if (existing) {
+              groupMap.set(dpDelivery, {
+                ...existing,
+                totalDelivery: existing.totalDelivery + parsed.totalDelivery,
+                ttdNormalTotal: existing.ttdNormalTotal + parsed.ttdNormalTotal,
+                ttdNormalAdaFoto: existing.ttdNormalAdaFoto + parsed.ttdNormalAdaFoto,
+                ttdNormalTidakAdaFoto: existing.ttdNormalTidakAdaFoto + parsed.ttdNormalTidakAdaFoto,
+                scanRetorTotal: existing.scanRetorTotal + parsed.scanRetorTotal,
+                scanRetorAdaFoto: existing.scanRetorAdaFoto + parsed.scanRetorAdaFoto,
+                scanRetorTidakAdaFoto: existing.scanRetorTidakAdaFoto + parsed.scanRetorTidakAdaFoto,
+                belumJumlahAwb: existing.belumJumlahAwb + parsed.belumJumlahAwb,
+                belumJumlahInventory: existing.belumJumlahInventory + parsed.belumJumlahInventory,
+                belumTinggalGudang: existing.belumTinggalGudang + parsed.belumTinggalGudang,
+                belumPaketBermasalah: existing.belumPaketBermasalah + parsed.belumPaketBermasalah,
+                belumInputAwb: existing.belumInputAwb + parsed.belumInputAwb,
+              });
+            } else {
+              const kodeDp = lookupKodeDp(dpDelivery);
+              if (!kodeDp) unmatched.add(dpDelivery);
+              const namaKota = lookupNamaKota(dpDelivery);
+              if (namaKota) namaKotaCount.set(namaKota, (namaKotaCount.get(namaKota) ?? 0) + 1);
+              groupMap.set(dpDelivery, { kodeDp, dpDelivery, ...parsed });
+            }
           }
+          resolve();
+        } catch (error) {
+          reject(error);
         }
+      };
+      reader.onerror = () => reject(new Error(`Failed to read file ${file.name}`));
+      reader.readAsBinaryString(file);
+    });
 
-        const parsedData = Array.from(groupMap.values());
-        parsedData.sort((a, b) => {
-          const ra = a.totalDelivery > 0 ? (a.ttdNormalTotal + a.scanRetorTotal) / a.totalDelivery : 0;
-          const rb = b.totalDelivery > 0 ? (b.ttdNormalTotal + b.scanRetorTotal) / b.totalDelivery : 0;
-          return rb - ra;
-        });
+    try {
+      await Promise.all(files.map(readPromise));
 
-        setStagedData(parsedData);
-        if (parsedData.length === 0) {
-          toast.warning('Tidak ada baris DP Delivery yang terbaca. Pastikan file adalah laporan Refine Total dari JMS.');
-        } else {
-          toast.success(`Berhasil memproses file. Ditemukan ${parsedData.length} Drop Point.`);
-          if (unmatched.size > 0) {
-            toast.warning(`Kode DP tidak ditemukan di Master Drop Point: ${Array.from(unmatched).join(', ')}`);
-          }
+      const parsedData = Array.from(groupMap.values());
+      parsedData.sort((a, b) => {
+        const ra = a.totalDelivery > 0 ? (a.ttdNormalTotal + a.scanRetorTotal) / a.totalDelivery : 0;
+        const rb = b.totalDelivery > 0 ? (b.ttdNormalTotal + b.scanRetorTotal) / b.totalDelivery : 0;
+        return rb - ra;
+      });
+
+      // Kota terbanyak di antara DP yang cocok (biasanya seragam - satu
+      // cabang = satu kota, lihat master_cabang - tapi diambil mode-nya
+      // buat jaga-jaga kalau ada campuran).
+      let dominantNamaKota = '';
+      let dominantCount = 0;
+      for (const [nama, count] of namaKotaCount) {
+        if (count > dominantCount) {
+          dominantNamaKota = nama;
+          dominantCount = count;
         }
-      } catch (error) {
-        console.error('Error parsing file:', error);
-        toast.error('Gagal memproses file Excel.');
       }
-    };
-    reader.readAsBinaryString(file);
+      setNamaKota(dominantNamaKota);
+
+      setStagedData(parsedData);
+      if (parsedData.length === 0) {
+        toast.warning('Tidak ada baris DP Delivery yang terbaca. Pastikan file adalah laporan Refine Total dari JMS.');
+      } else {
+        toast.success(`Berhasil memproses file. Ditemukan ${parsedData.length} Drop Point.`);
+        if (unmatched.size > 0) {
+          toast.warning(`Kode DP tidak ditemukan di Master Drop Point: ${Array.from(unmatched).join(', ')}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error parsing files:', error);
+      toast.error('Gagal memproses file Excel.');
+    }
   };
 
   const handleCopyImage = async () => {
@@ -210,14 +263,24 @@ export function MonitoringRefineClient() {
               <p className="text-muted-foreground text-xs">
                 Gunakan laporan JMS Refine Total (16 kolom: TTD Normal, Scan TTD Retur, Belum TTD, Rasio TTD).
               </p>
-              <Button type="button" variant="outline" onClick={() => inputRef.current?.click()}>
+              {dropPointsLoading && (
+                <p className="text-muted-foreground text-xs">Memuat data Master Drop Point…</p>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => inputRef.current?.click()}
+                disabled={dropPointsLoading}
+              >
                 Pilih File Excel
               </Button>
               <input
                 ref={inputRef}
                 type="file"
+                multiple
                 accept=".xlsx,.xls,.csv"
                 className="hidden"
+                disabled={dropPointsLoading}
                 onChange={(e) => {
                   if (e.target.files) handleFileUpload(e.target.files);
                   e.target.value = '';
@@ -227,7 +290,7 @@ export function MonitoringRefineClient() {
             </div>
 
             {stagedData.length > 0 && (
-              <div className="p-4 border rounded-lg bg-slate-50">
+              <div className="p-4 border border-border rounded-lg bg-muted">
                 <Button
                   onClick={() => {
                     setGeneratedAt(new Date());
@@ -261,7 +324,9 @@ export function MonitoringRefineClient() {
             </div>
           </CardHeader>
           <CardContent className="overflow-x-auto">
-            {generatedAt && <MonitoringRefineTable ref={tableRef} data={stagedData} generatedAt={generatedAt} />}
+            {generatedAt && (
+              <MonitoringRefineTable ref={tableRef} data={stagedData} generatedAt={generatedAt} namaKota={namaKota} />
+            )}
           </CardContent>
         </Card>
       )}

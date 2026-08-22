@@ -22,12 +22,24 @@ export type RefineRow = {
 interface MonitoringRefineTableProps {
   data: RefineRow[];
   generatedAt: Date;
+  /** Nama kota (mis. "BATANG") - dihitung di MonitoringRefineClient dari Nama
+   *  Kota milik DP yang cocok, BUKAN diketik manual. Kosong kalau tak ada
+   *  satu pun DP yang cocok ke Master Drop Point. */
+  namaKota?: string;
 }
 
-const BRANCH_LABEL = 'BATANG (BGG)';
+const MONTHS_FULL = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+];
 
+// "d MMMM yyyy, HH.mm" di zona Jakarta (UTC+7 tetap, tanpa DST) - format
+// TETAP dipakai (bukan Intl.toLocaleString) supaya hasilnya presisi sama
+// persis lintas browser, mis. "30 Juli 2026, 12.00".
 function formatGeneratedAt(d: Date) {
-  return d.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' });
+  const j = new Date(d.getTime() + 7 * 3600 * 1000);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${j.getUTCDate()} ${MONTHS_FULL[j.getUTCMonth()]} ${j.getUTCFullYear()}, ${p(j.getUTCHours())}.${p(j.getUTCMinutes())}`;
 }
 
 // Ambang beda dari tabel Rekap Standar: hijau >=95%, kuning 85-94,99%, merah <85%.
@@ -49,7 +61,7 @@ function rasioTtd(row: { ttdNormalTotal: number; scanRetorTotal: number; totalDe
   return row.totalDelivery > 0 ? ((row.ttdNormalTotal + row.scanRetorTotal) / row.totalDelivery) * 100 : 0;
 }
 
-export const MonitoringRefineTable = forwardRef<HTMLTableElement, MonitoringRefineTableProps>(({ data, generatedAt }, ref) => {
+export const MonitoringRefineTable = forwardRef<HTMLTableElement, MonitoringRefineTableProps>(({ data, generatedAt, namaKota }, ref) => {
   const totals = data.reduce(
     (acc, row) => ({
       totalDelivery: acc.totalDelivery + row.totalDelivery,
@@ -91,7 +103,7 @@ export const MonitoringRefineTable = forwardRef<HTMLTableElement, MonitoringRefi
         <thead>
           <tr className="bg-[#4f6272] text-white">
             <th colSpan={16} className="border border-gray-400 px-3 py-2.5 text-center align-middle text-lg font-bold tracking-wide uppercase whitespace-nowrap">
-              MONITORING DELIVERY {BRANCH_LABEL} {formatGeneratedAt(generatedAt)}
+              MONITORING DELIVERY {namaKota ? `(${namaKota}) ` : ''}| {formatGeneratedAt(generatedAt)}
             </th>
           </tr>
           <tr className="bg-gray-100">
@@ -111,7 +123,7 @@ export const MonitoringRefineTable = forwardRef<HTMLTableElement, MonitoringRefi
             <th className={`${cell} text-center font-semibold`}>Total</th>
             <th className={`${cell} text-center font-semibold`}>Ada Foto<br />TTD</th>
             <th className={`${cell} text-center font-semibold`}>Tidak Ada<br />Foto TTD</th>
-            <th className={`${cell} text-center font-semibold`}>Jumlah<br />AWB</th>
+            <th className={`${cell} text-center font-semibold`}>Jumlah</th>
             <th className={`${cell} text-center font-semibold`}>Jumlah<br />Inventory</th>
             <th className={`${cell} text-center font-semibold`}>Tinggal<br />Gudang</th>
             <th className={`${cell} text-center font-semibold`}>Paket<br />Bermasalah</th>

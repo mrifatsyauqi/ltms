@@ -8,12 +8,11 @@ interface ReportImageCanvasProps {
   data: IncRow[];
   stats: IncStats;
   targetKota: string;
-  generateTime: string;
   userDropPoint?: string;
 }
 
 export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasProps>(
-  ({ data, stats, targetKota, generateTime, userDropPoint }, ref) => {
+  ({ data, stats, targetKota, userDropPoint }, ref) => {
     const formatCurrency = (val: number) => {
       if (!val || val === 0) return '0';
       return new Intl.NumberFormat('id-ID').format(val);
@@ -23,61 +22,27 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
       ? userDropPoint
       : `DP ${targetKota}`;
 
-    // Hitung Top Kecamatan breakdown
-    const kecamatanMap = new Map<string, { total: number; belum: number; late: number; clear: number }>();
-    data.forEach((row) => {
-      const kec = row.tempatTujuan?.trim() || 'Lainnya';
-      const existing = kecamatanMap.get(kec) || { total: 0, belum: 0, late: 0, clear: 0 };
-      existing.total += 1;
-      if (row.status === 'CLEAR') existing.clear += 1;
-      if (row.status === 'BELUM') existing.belum += 1;
-      if (row.status === 'LATE') existing.late += 1;
-      kecamatanMap.set(kec, existing);
-    });
-
-    const topKecamatan = Array.from(kecamatanMap.entries())
-      .sort((a, b) => b[1].total - a[1].total)
-      .slice(0, 6);
+    // Batas baris di SCREENSHOT (bukan tabel di layar/Ekspor Excel - itu
+    // tetap tampilkan semua baris). Tanpa batas, toPng() bisa menghasilkan
+    // gambar raksasa (data ratusan/ribuan baris x pixelRatio 2) yang base64-nya
+    // menembus limit body request platform (413 Request Entity Too Large,
+    // gagal kirim ke Feishu). 60 baris tetap jauh lebih banyak dari batas
+    // lama (8) tanpa berisiko gambar kegedean.
+    const SCREENSHOT_ROW_LIMIT = 60;
+    const visibleRows = data.slice(0, SCREENSHOT_ROW_LIMIT);
+    const hiddenRowCount = data.length - visibleRows.length;
 
     return (
       <div
         ref={ref}
-        style={{ width: '1200px', minHeight: '900px', backgroundColor: '#FFFFFF' }}
-        className="p-8 text-slate-900 font-sans flex flex-col justify-between"
+        style={{ width: 'max-content', minWidth: '1200px', backgroundColor: '#FFFFFF' }}
+        className="p-8 text-slate-900 font-sans"
       >
         <div>
-          {/* 1. Modern Enterprise Header */}
-          <div className="flex items-center justify-between border-b border-slate-200 pb-5 mb-6">
-            <div className="flex items-center gap-3.5">
-              <div className="size-11 rounded-[8px] bg-[#E2231A] text-white flex items-center justify-center font-black text-lg shadow-sm">
-                LT
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-bold tracking-tight text-slate-900 uppercase">
-                    Monitoring INC
-                  </h1>
-                  <span className="px-2 py-0.5 rounded-full bg-slate-900 text-white text-[11px] font-bold">
-                    {targetKota}
-                  </span>
-                </div>
-                <p className="text-xs font-medium text-slate-500 mt-0.5">
-                  Unit / Drop Point: <strong className="text-slate-800">{dpDisplayName}</strong> • Last Mile Delivery Logistics
-                </p>
-              </div>
-            </div>
-
-            <div className="text-right">
-              <span className="inline-block text-[11px] uppercase font-bold text-slate-400 tracking-wider">
-                Waktu Generate
-              </span>
-              <p className="text-sm font-bold text-slate-800 font-mono mt-0.5">
-                {generateTime}
-              </p>
-            </div>
-          </div>
-
-          {/* 2. 4 KPI Summary Cards Grid */}
+          {/* 1. 4 KPI Summary Cards Grid - elemen paling atas gambar (logo +
+              judul enterprise header + footer dihapus). Tinggi kanvas TIDAK
+              dipaksa minHeight lagi - selalu mengikuti tinggi konten asli
+              (KPI + tabel), tanpa space kosong di bawah. */}
           <div className="grid grid-cols-4 gap-3.5 mb-6">
             {/* Card 1: Total Resi */}
             <div className="bg-slate-50/80 rounded-[8px] p-4 border border-slate-200 flex items-center gap-3.5 shadow-2xs">
@@ -128,83 +93,57 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
             </div>
           </div>
 
-          {/* 3. Top Kecamatan Summary Section */}
-          {topKecamatan.length > 0 && (
-            <div className="bg-slate-50/60 rounded-[8px] border border-slate-200 p-4 mb-6">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-3 flex items-center justify-between">
-                <span>Distribusi Wilayah & Tempat Tujuan</span>
-                <span className="text-[11px] font-normal text-slate-500">Top {topKecamatan.length} Kecamatan</span>
-              </h3>
-              <div className="grid grid-cols-3 gap-3">
-                {topKecamatan.map(([kec, info]) => {
-                  const pct = stats.total > 0 ? Math.round((info.total / stats.total) * 100) : 0;
-                  return (
-                    <div key={kec} className="bg-white rounded-[6px] p-2.5 border border-slate-200/80 shadow-2xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-800 truncate max-w-[180px]" title={kec}>
-                          {kec}
-                        </span>
-                        <span className="text-[11px] font-bold text-slate-900 font-mono">
-                          {info.total} resi
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2 overflow-hidden">
-                        <div
-                          className="bg-[#E2231A] h-full rounded-full"
-                          style={{ width: `${Math.max(5, Math.min(100, pct))}%` }}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1.5">
-                        <span>Clear: <strong className="text-emerald-700">{info.clear}</strong></span>
-                        <span>Pending/Late: <strong className="text-rose-700">{info.belum + info.late}</strong></span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+          {/* 3. Tabel penuh semua AWB, gaya Excel - REUSE title bar & grid
+              style persis dari MonitoringTable (Monitoring Delivery), sama
+              dgn tabel on-screen (monitoring-inc-table.tsx). GANTI blok
+              "Drop Point Tujuan"/breakdown Kecamatan yang dulu ada di sini
+              (blok itu TETAP ADA di kartu Interactive Feishu yang dikirim,
+              cuma dihapus dari versi gambar/screenshot ini). Font +30%,
+              padding baris dirapatkan. */}
+          <div className="rounded-[8px] border border-gray-400 overflow-hidden shadow-2xs">
+            <div className="bg-[#4f6272] text-white px-3 py-2 text-center text-[15px] font-bold uppercase tracking-wide">
+              Monitoring INC {dpDisplayName}
             </div>
-          )}
-
-          {/* 4. Table Preview with Crisp Borders */}
-          <div className="rounded-[8px] border border-slate-200 overflow-hidden shadow-2xs">
-            <table className="w-full text-left text-[11px] border-collapse">
-              <thead className="bg-slate-100 border-b border-slate-200">
-                <tr className="text-slate-700 uppercase font-bold text-[10px] tracking-wider">
-                  <th className="py-2.5 px-3 font-bold">AWB</th>
-                  <th className="py-2.5 px-3 font-bold">Tempat Tujuan</th>
-                  <th className="py-2.5 px-3 font-bold">Nama Penerima</th>
-                  <th className="py-2.5 px-3 font-bold">Alamat Penerima</th>
-                  <th className="py-2.5 px-3 font-bold text-right">COD</th>
-                  <th className="py-2.5 px-3 font-bold">Waktu TTD</th>
-                  <th className="py-2.5 px-3 font-bold">Maksimal TTD</th>
-                  <th className="py-2.5 px-3 font-bold">Waktu Upload ke Sistem</th>
-                  <th className="py-2.5 px-3 font-bold text-center">Status</th>
+            <table className="w-full text-left text-[14px] border-collapse border border-gray-400">
+              <thead className="bg-white border-b border-gray-400">
+                <tr className="text-black uppercase font-bold text-[13px] tracking-wider">
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap text-center">No</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">AWB</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Tempat Tujuan</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Nama Penerima</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Alamat Penerima</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap text-right">COD</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Waktu TTD</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Maksimal TTD</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap">Waktu Upload ke Sistem</th>
+                  <th className="py-1.5 px-3 font-bold border border-gray-400 whitespace-nowrap text-center">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {data.slice(0, 8).map((row, idx) => (
+              <tbody>
+                {visibleRows.map((row, idx) => (
                   <tr key={`${row.awb}-${idx}`} className="even:bg-slate-50/50">
-                    <td className="py-2 px-3 font-mono font-bold text-slate-900">{row.awb}</td>
-                    <td className="py-2 px-3 font-medium text-slate-800">{row.tempatTujuan}</td>
-                    <td className="py-2 px-3 text-slate-700">{row.namaPenerima}</td>
-                    <td className="py-2 px-3 text-slate-600 max-w-[200px] truncate">{row.alamatPenerima}</td>
-                    <td className="py-2 px-3 font-mono text-right text-slate-800">{formatCurrency(row.cod)}</td>
-                    <td className="py-2 px-3 font-mono text-slate-600">{row.waktuTtd || '-'}</td>
-                    <td className="py-2 px-3 font-mono text-slate-600">{row.maksimalTtd || '-'}</td>
-                    <td className="py-2 px-3 font-mono text-slate-600">{row.waktuUploadSistem || '-'}</td>
-                    <td className="py-2 px-3 text-center">
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap text-center text-slate-500 font-medium">{idx + 1}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-mono font-bold text-slate-900">{row.awb}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-medium text-slate-800">{row.tempatTujuan}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap text-slate-700">{row.namaPenerima}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap text-slate-600">{row.alamatPenerima}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-mono text-right text-slate-800">{formatCurrency(row.cod)}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-mono text-slate-600">{row.waktuTtd || '-'}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-mono text-slate-600">{row.maksimalTtd || '-'}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap font-mono text-slate-600">{row.waktuUploadSistem || '-'}</td>
+                    <td className="py-1 px-3 border border-gray-400 whitespace-nowrap text-center">
                       {row.status === 'CLEAR' && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        <span className="px-2 py-0.5 rounded-full text-[13px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
                           Clear TTD
                         </span>
                       )}
                       {row.status === 'BELUM' && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                        <span className="px-2 py-0.5 rounded-full text-[13px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">
                           Belum TTD
                         </span>
                       )}
                       {row.status === 'LATE' && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-800 border border-rose-300">
+                        <span className="px-2 py-0.5 rounded-full text-[13px] font-semibold bg-rose-100 text-rose-800 border border-rose-300">
                           Telat SLA
                         </span>
                       )}
@@ -213,18 +152,12 @@ export const ReportImageCanvas = forwardRef<HTMLDivElement, ReportImageCanvasPro
                 ))}
               </tbody>
             </table>
-            {data.length > 8 && (
-              <div className="bg-slate-50 py-1.5 px-3 text-center text-[11px] text-slate-500 font-medium border-t border-slate-200">
-                Menampilkan 8 dari {data.length.toLocaleString('id-ID')} total paket
+            {hiddenRowCount > 0 && (
+              <div className="bg-slate-50 py-1.5 px-3 text-center text-[13px] text-slate-500 font-medium border-t border-gray-400">
+                +{hiddenRowCount.toLocaleString('id-ID')} baris lainnya - lihat tabel lengkap di layar atau Ekspor Excel
               </div>
             )}
           </div>
-        </div>
-
-        {/* Footer info in graphic */}
-        <div className="pt-4 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-400 font-medium">
-          <span>LTMS Enterprise • Logistics Task & Monitoring System</span>
-          <span>Target Kota: {targetKota}</span>
         </div>
       </div>
     );

@@ -1,6 +1,10 @@
 export type IncRow = {
   awb: string;
   tempatTujuan: string;
+  /** Kolom opsional "DP Delivery" dari file tarikan JMS (Kode/Nama DP) -
+   *  dipakai sbg disambiguator UTAMA saat 1 Kecamatan dipakai >1 DP. Kosong
+   *  utk file lama yg belum punya kolom ini - fallback ke Kecamatan. */
+  dpDelivery?: string;
   namaPenerima: string;
   alamatPenerima: string;
   cod: number;
@@ -41,18 +45,6 @@ export type UploadedFileInfo = {
   uploadTimestamp: string;
   targetKota: string;
   file?: File;
-};
-
-export type RecentUploadHistoryItem = {
-  id: string;
-  fileName: string;
-  targetKota: string;
-  totalResi: number; // Filtered count
-  rawTotalResi?: number;
-  uploadTimestamp: string;
-  createdAt: number; // Unix timestamp in milliseconds for 7-day retention
-  status: 'Processing' | 'Success' | 'Failed' | 'Berhasil' | 'Gagal';
-  dataUrl?: string;
 };
 
 export type ProcessingStep = {
