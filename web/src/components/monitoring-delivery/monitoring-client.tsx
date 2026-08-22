@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import * as xlsx from 'xlsx';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
-import { Image as ImageIcon, Table2, Send, Settings2, PhoneForwarded } from 'lucide-react';
+import { Image as ImageIcon, Table2, Send, PhoneForwarded } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { MonitoringRow, MonitoringTable } from './monitoring-table';
 import { FeishuShareDialog, FeishuShareStage } from '@/components/communication/feishu-share-dialog';
 import type { FeishuGroup } from '@/services/communication/communication.types';
+import { PushMasKurirModal } from './push-mas-kurir-modal';
 
 type Props = {
   dpName: string;
@@ -29,6 +30,7 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
   const [isGenerated, setIsGenerated] = useState(false);
   const [copying, setCopying] = useState<null | 'img' | 'table'>(null);
   const [isFeishuShareOpen, setIsFeishuShareOpen] = useState(false);
+  const [isPushMasKurirOpen, setIsPushMasKurirOpen] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   
   const inputRef = useRef<HTMLInputElement>(null);
@@ -77,9 +79,6 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
         }
 
         if (isCabang) {
-          // Format JMS "per Drop Point" (Admin Cabang): tiap baris = 1 DP.
-          // Kolom: [2] DP Delivery, [3] Total Delivery, [4] TTD Normal (Total),
-          // [13] Paket Bermasalah. Baris dgn DP sama (mis. beda tanggal) dijumlahkan.
           for (const row of dataRows) {
             if (!row || row.length < 14) continue;
             const rawDp = row[2];
@@ -91,9 +90,6 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
             addRow(dp, waybillDelivery, tandaTerima, paketBermasalah);
           }
         } else {
-          // Format JMS "per Sprinter" (Admin DP): hanya baris kurir ("Mtr…").
-          // Kolom: [4] Sprinter, [5] Total Delivery, [6] TTD Normal (Total),
-          // [15] Paket Bermasalah.
           for (const row of dataRows) {
             if (!row || row.length < 17) continue;
             const rawSprinter = row[4];
@@ -139,25 +135,13 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
     setIsGenerated(true);
   };
 
-  /**
-   * Salin GAMBAR saja (image/png). Wajib format tunggal: kalau digabung dgn
-   * text/html atau text/plain, app chat (WhatsApp, Feishu) memilih teks
-   * sehingga yang ter-paste teks — bukan gambar. Dengan hanya image/png, app
-   * chat pasti menempel gambar tabel.
-   *
-   * Promise diberikan LANGSUNG ke ClipboardItem supaya navigator.clipboard.write
-   * dipanggil sinkron (user-gesture terjaga di Safari/iOS), render berat toPng
-   * berjalan di latar (fix INP).
-   */
   const handleCopyImage = async () => {
     const el = tableRef.current;
     if (!el) return;
     try {
       setCopying('img');
       const imagePromise = (async () => {
-        await new Promise((r) => setTimeout(r, 20)); // beri main-thread merender "Menyalin…"
-        // Tangkap LEBAR PENUH tabel (scrollWidth) + overflow visible supaya
-        // kolom tak terpotong saat tabel lebih lebar dari area layar.
+        await new Promise((r) => setTimeout(r, 20));
         const fullWidth = el.scrollWidth;
         const dataUrl = await toPng(el, {
           quality: 1,
@@ -180,11 +164,6 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
     }
   };
 
-  /**
-   * Salin TABEL (text/html + text/plain) untuk ditempel sebagai sel di
-   * Excel/Google Sheets. Sengaja TANPA image/png supaya spreadsheet menempel
-   * tabel yang bisa diedit, bukan gambar.
-   */
   const handleCopyTable = async () => {
     const el = tableRef.current;
     if (!el) return;
@@ -202,7 +181,6 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
     }
   };
 
-  // Totals for Feishu Share
   const totalDelivery = stagedData.reduce((acc, r) => acc + r.waybillDelivery, 0);
   const totalTtd = stagedData.reduce((acc, r) => acc + r.tandaTerima, 0);
   const totalBelum = stagedData.reduce((acc, r) => acc + r.belumDiterima, 0);
@@ -272,20 +250,6 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
     if (!res.ok || (!json.ok && !json.success)) {
       throw new Error(json.error || 'Gagal mengirim pesan ke API Feishu.');
     }
-  };
-
-  const handlePushMasKurir = () => {
-    const payload = stagedData.map(r => ({
-      sprinter_id: r.groupName,
-      name: r.groupName,
-      drop_point_id: dpName,
-      total_delivery: r.waybillDelivery,
-      clear_ttd: r.tandaTerima,
-      belum_ttd: r.belumDiterima,
-      persentase_ttd: r.waybillDelivery > 0 ? (r.tandaTerima / r.waybillDelivery) * 100 : 0
-    }));
-    sessionStorage.setItem('pushMasKurirData', JSON.stringify(payload));
-    router.push('/communication/push-mas-kurir');
   };
 
   return (
@@ -384,7 +348,7 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
                 <span>Kirim ke Feishu</span>
               </Button>
               <Button
-                onClick={handlePushMasKurir}
+                onClick={() => setIsPushMasKurirOpen(true)}
                 className="bg-[#25D366] hover:bg-[#1DA851] text-white font-bold gap-1.5 shadow-sm"
               >
                 <PhoneForwarded className="size-4" />
@@ -398,7 +362,6 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
         </Card>
       )}
 
-      {/* Feishu Share Dialog */}
       <FeishuShareDialog
         isOpen={isFeishuShareOpen}
         onClose={() => setIsFeishuShareOpen(false)}
@@ -414,6 +377,13 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
         }}
         imagePreviewUrl={generatedImageUrl}
         onExecuteSend={handleExecuteFeishuSend}
+      />
+
+      <PushMasKurirModal
+        isOpen={isPushMasKurirOpen}
+        onClose={() => setIsPushMasKurirOpen(false)}
+        data={stagedData}
+        dpName={dpName}
       />
     </div>
   );

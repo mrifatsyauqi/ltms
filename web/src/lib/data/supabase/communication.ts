@@ -164,3 +164,99 @@ export async function listCommunicationLogs(
     return [];
   }
 }
+
+// ==========================================
+// WhatsApp Sender Connections
+// ==========================================
+
+export interface WhatsappSenderConnectionRecord {
+  id: string;
+  sender_id: string;
+  phone?: string | null;
+  display_name?: string | null;
+  status: string;
+  created_by?: string | null;
+  created_at: string;
+  last_seen: string;
+}
+
+export interface WhatsappSenderUpsertInput {
+  sender_id: string;
+  phone?: string | null;
+  display_name?: string | null;
+  status?: string;
+}
+
+export async function listWhatsappSenders(): Promise<WhatsappSenderConnectionRecord[]> {
+  try {
+    const supabase = db();
+    const { data, error } = await supabase
+      .from('whatsapp_sender_connections')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching whatsapp_sender_connections:', error);
+      return [];
+    }
+
+    return (data || []) as WhatsappSenderConnectionRecord[];
+  } catch (err) {
+    console.error('Database error listing whatsapp senders:', err);
+    return [];
+  }
+}
+
+export async function upsertWhatsappSenders(
+  senders: WhatsappSenderUpsertInput[],
+  userId?: string
+): Promise<WhatsappSenderConnectionRecord[]> {
+  if (!senders || senders.length === 0) return [];
+
+  try {
+    const supabase = db();
+    const records = senders.map((s) => ({
+      sender_id: s.sender_id,
+      phone: s.phone || null,
+      display_name: s.display_name || null,
+      status: s.status || 'disconnected',
+      created_by: userId || 'system',
+      last_seen: new Date().toISOString(),
+    }));
+
+    const { data, error } = await supabase
+      .from('whatsapp_sender_connections')
+      .upsert(records, { onConflict: 'sender_id' })
+      .select('*');
+
+    if (error) {
+      console.error('Error upserting whatsapp_sender_connections:', error);
+      throw new Error(`Failed to upsert WhatsApp senders: ${error.message}`);
+    }
+
+    return (data || []) as WhatsappSenderConnectionRecord[];
+  } catch (err) {
+    console.error('Database error upserting whatsapp senders:', err);
+    throw err;
+  }
+}
+
+export async function deleteWhatsappSender(id: string): Promise<boolean> {
+  try {
+    const supabase = db();
+    const { error } = await supabase
+      .from('whatsapp_sender_connections')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting whatsapp sender:', error);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Database error deleting whatsapp sender:', err);
+    return false;
+  }
+}

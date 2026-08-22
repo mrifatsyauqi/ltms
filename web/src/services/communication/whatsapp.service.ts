@@ -48,7 +48,8 @@ export class WhatsappService {
     template: WhatsappTemplate, 
     threshold: number, 
     operator: string,
-    userEmail: string
+    userEmail: string,
+    senderCode: string
   ) {
     const validTargets = targets.filter(t => t.phone_number && t.phone_number.trim() !== '');
     if (validTargets.length === 0) {
@@ -75,6 +76,7 @@ export class WhatsappService {
 
     try {
       const response = await bablastService.sendBulk({
+        sender_code: senderCode,
         message: messageContent,
         contacts,
         delay: 3000

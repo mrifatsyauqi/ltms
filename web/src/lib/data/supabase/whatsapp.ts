@@ -6,6 +6,7 @@ export type WhatsappContact = {
   name: string;
   phone_number: string;
   drop_point_id: string;
+  is_active: boolean;
   status: 'active' | 'inactive';
   created_at: string;
   updated_at: string;
@@ -53,9 +54,14 @@ export type WhatsappLog = {
   updated_at: string;
 };
 
-export async function getWhatsappContacts(dropPointIds?: string[]): Promise<WhatsappContact[]> {
+export async function getWhatsappContacts(dropPointIds?: string[], activeOnly: boolean = false): Promise<WhatsappContact[]> {
   const supabase = db();
-  let query = supabase.from('whatsapp_contacts').select('*').eq('status', 'active');
+  let query = supabase.from('whatsapp_contacts').select('*');
+  
+  if (activeOnly) {
+    query = query.eq('is_active', true);
+  }
+  
   if (dropPointIds && dropPointIds.length > 0) {
     query = query.in('drop_point_id', dropPointIds);
   }

@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SLOW_STALE_TIME } from '@/lib/query-config';
 import type { DropPointRow } from '@/lib/data/drop-points';
 import { MonitoringRefineTable, RefineRow } from './monitoring-refine-table';
+import { PushMasKurirModal } from './push-mas-kurir-modal';
 
 async function fetchDropPoints(): Promise<DropPointRow[]> {
   const res = await fetch('/api/drop-points');
@@ -37,6 +38,7 @@ export function MonitoringRefineClient() {
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
   const [namaKota, setNamaKota] = useState('');
   const [copying, setCopying] = useState<null | 'img' | 'table'>(null);
+  const [isPushMasKurirOpen, setIsPushMasKurirOpen] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
@@ -237,20 +239,7 @@ export function MonitoringRefineClient() {
   };
 
   const handlePushMasKurir = () => {
-    const payload = stagedData.map(r => {
-      const clearTtd = r.ttdNormalTotal + r.scanRetorTotal;
-      return {
-        sprinter_id: r.dpDelivery, // In refine total, group is DP
-        name: r.dpDelivery,
-        drop_point_id: r.kodeDp || r.dpDelivery,
-        total_delivery: r.totalDelivery,
-        clear_ttd: clearTtd,
-        belum_ttd: r.belumJumlahAwb,
-        persentase_ttd: r.totalDelivery > 0 ? (clearTtd / r.totalDelivery) * 100 : 0
-      };
-    });
-    sessionStorage.setItem('pushMasKurirData', JSON.stringify(payload));
-    router.push('/communication/push-mas-kurir');
+    setIsPushMasKurirOpen(true);
   };
 
   return (
@@ -356,6 +345,12 @@ export function MonitoringRefineClient() {
           </CardContent>
         </Card>
       )}
+
+      <PushMasKurirModal
+        isOpen={isPushMasKurirOpen}
+        onClose={() => setIsPushMasKurirOpen(false)}
+        data={stagedData}
+      />
     </div>
   );
 }

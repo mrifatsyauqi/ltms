@@ -1,6 +1,7 @@
 import { getBablastCredentials } from '../../communication.config';
 import { ApiError } from '@/lib/errors';
 import { fetchWithTimeout } from '../../utils/fetch-timeout';
+import { BablastClient } from '@bablast/client';
 
 export interface BablastBulkContact {
   nama: string;
@@ -13,6 +14,7 @@ export interface BablastBulkRequest {
   message: string;
   delay?: number;
   kode?: string;
+  sender_code?: string;
   contacts: BablastBulkContact[];
 }
 
@@ -34,10 +36,41 @@ export class BablastService {
     };
   }
 
-  async checkStatus(): Promise<boolean> {
-    const { baseUrl } = getBablastCredentials();
+  private getSdkClient(): BablastClient {
+    const { apiKey, isConfigured } = getBablastCredentials();
+    if (!isConfigured) {
+      throw new ApiError('500', 'Bablast API Key is not configured');
+    }
+    return new BablastClient({ apiKey });
+  }
+
+  async listSenders(): Promise<any[]> {
     try {
-      const response = await fetchWithTimeout(`${baseUrl}/connector/status`, {
+      const client = this.getSdkClient();
+      const senders = await client.wa.senders.list();
+      return senders || [];
+    } catch (error) {
+      console.error('Failed to list Bablast senders via SDK:', error);
+      throw new ApiError('500', 'Failed to fetch senders from Bablast');
+    }
+  }
+
+  async getSenderStatus(senderCode: string): Promise<any> {
+    try {
+      const client = this.getSdkClient();
+      const status = await client.wa.senders.getStatus(senderCode);
+      return status;
+    } catch (error) {
+      console.error(`Failed to get status for sender ${senderCode}:`, error);
+      throw new ApiError('500', 'Failed to fetch sender status from Bablast');
+    }
+  }
+
+  async checkStatus(): Promise<boolean> {
+    const { baseUrl, senderId } = getBablastCredentials();
+    try {
+      // Legacy status check logic - maintained to not break existing flow if it works
+      const response = await fetchWithTimeout(`${baseUrl}/device/status?senderId=${senderId}`, {
         method: 'GET',
         headers: this.getHeaders()
       });
@@ -52,6 +85,7 @@ export class BablastService {
   async sendBulk(payload: BablastBulkRequest): Promise<BablastBulkResponse> {
     const { baseUrl } = getBablastCredentials();
     try {
+      // Intentionally keeping the existing POST /send/bulk endpoint to avoid breaking changes
       const response = await fetchWithTimeout(`${baseUrl}/send/bulk`, {
         method: 'POST',
         headers: this.getHeaders(),

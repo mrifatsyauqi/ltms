@@ -3,8 +3,13 @@ import { db } from '@/lib/data/supabase/client';
 
 export async function POST(request: Request) {
   try {
-    // 1. In a real scenario, verify X-Webhook-Signature here using BABLAST_WEBHOOK_SECRET
-    // const signature = request.headers.get('X-Webhook-Signature');
+    const secret = process.env.BABLAST_WEBHOOK_SECRET;
+    const authHeader = request.headers.get('Authorization');
+    
+    // Validate if secret is configured
+    if (secret && authHeader !== `Bearer ${secret}`) {
+      return NextResponse.json({ ok: false, error: 'Invalid webhook signature or token' }, { status: 401 });
+    }
     
     const body = await request.json();
     const { event, blast_id, data } = body;

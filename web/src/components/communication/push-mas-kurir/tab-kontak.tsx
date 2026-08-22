@@ -1,138 +1,269 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Search, Plus, Edit, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { SendTarget } from '@/services/communication/whatsapp.service';
 
 export function TabKontak() {
   const queryClient = useQueryClient();
-  const [sessionData, setSessionData] = useState<SendTarget[]>([]);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editPhone, setEditPhone] = useState('');
-
-  useEffect(() => {
-    const data = sessionStorage.getItem('pushMasKurirData');
-    if (data) {
-      try {
-        setSessionData(JSON.parse(data));
-      } catch (e) {
-        console.error('Failed to parse pushMasKurirData', e);
-      }
-    }
-  }, []);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Dialog state
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    sprinter_id: '',
+    name: '',
+    phone_number: '',
+    drop_point_id: '',
+    is_active: true
+  });
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data: contactsResponse, isLoading } = useQuery({
-    queryKey: ['whatsapp_contacts'],
+    queryKey: ['whatsapp_contacts_all'],
+    // Fetch without DP filter, the API will scope it to the user's DP if they are Admin DP/SPV
     queryFn: () => fetch('/api/communication/whatsapp/contacts').then(res => res.json())
   });
 
-  const contactsMap = new Map((contactsResponse?.data || []).map((c: any) => [c.sprinter_id, c.phone_number]));
+  const contacts = contactsResponse?.data || [];
+  
+  const filteredContacts = contacts.filter((c: any) => 
+    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.sprinter_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.phone_number.includes(searchQuery)
+  );
 
-  const combinedList: SendTarget[] = sessionData.map(t => ({
-    ...t,
-    phone_number: String(contactsMap.get(t.sprinter_id) || '')
-  }));
+  const openAddDialog = () => {
+    setFormData({ sprinter_id: '', name: '', phone_number: '', drop_point_id: '', is_active: true });
+    setIsEditing(false);
+    setIsDialogOpen(true);
+  };
 
-  const handleSave = async (target: SendTarget) => {
-    if (!editPhone || editPhone.trim() === '') {
-      toast.error('Nomor telepon tidak boleh kosong');
-      return;
-    }
+  const openEditDialog = (contact: any) => {
+    setFormData({
+      sprinter_id: contact.sprinter_id,
+      name: contact.name,
+      phone_number: contact.phone_number,
+      drop_point_id: contact.drop_point_id,
+      is_active: contact.is_active !== undefined ? contact.is_active : true
+    });
+    setIsEditing(true);
+    setIsDialogOpen(true);
+  };
 
+  const handleToggleStatus = async (contact: any, newStatus: boolean) => {
     try {
       const res = await fetch('/api/communication/whatsapp/contacts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sprinter_id: target.sprinter_id,
-          name: target.name,
-          phone_number: editPhone.trim(),
-          drop_point_id: target.drop_point_id
+          ...contact,
+          is_active: newStatus
         })
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error);
+      }
+      
+      toast.success('Status kontak diperbarui');
+      queryClient.invalidateQueries({ queryKey: ['whatsapp_contacts_all'] });
+      // Also invalidate scoped contacts used in the modal
+      queryClient.invalidateQueries({ queryKey: ['whatsapp_contacts'] });
+    } catch (error: any) {
+      toast.error(error.message || 'Gagal mengubah status');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.sprinter_id || !formData.name || !formData.phone_number || !formData.drop_point_id) {
+      toast.error('Semua kolom wajib diisi');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/communication/whatsapp/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
       toast.success('Kontak berhasil disimpan');
-      setEditingId(null);
-      setEditPhone('');
+      setIsDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['whatsapp_contacts_all'] });
       queryClient.invalidateQueries({ queryKey: ['whatsapp_contacts'] });
     } catch (error: any) {
       toast.error(error.message || 'Gagal menyimpan kontak');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Kontak Target</CardTitle>
-        <CardDescription>Atur nomor WhatsApp target dari data yang diunggah saat ini.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {sessionData.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">Belum ada data terpilih.</p>
-        ) : (
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Manajemen Kontak</h2>
+          <p className="text-sm text-muted-foreground">
+            Kelola nomor WhatsApp Sprinter untuk pengiriman pesan otomatis.
+          </p>
+        </div>
+        
+        <Button onClick={openAddDialog}>
+          <Plus className="mr-2 h-4 w-4" />
+          Tambah Kontak
+        </Button>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <div className="p-4 border-b">
+            <div className="relative w-full max-w-sm">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Cari ID, Nama, atau Nomor WA..."
+                className="pl-8"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+          
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Sprinter ID</TableHead>
+                <TableHead>Nama</TableHead>
+                <TableHead>Drop Point</TableHead>
+                <TableHead>Nomor WA</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-[100px]">Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
                 <TableRow>
-                  <TableHead>Target ID</TableHead>
-                  <TableHead>Nama</TableHead>
-                  <TableHead>Drop Point</TableHead>
-                  <TableHead>Nomor WA</TableHead>
-                  <TableHead className="w-[100px]">Aksi</TableHead>
+                  <TableCell colSpan={6} className="text-center h-24">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {combinedList.map(t => (
-                  <TableRow key={t.sprinter_id}>
-                    <TableCell>{t.sprinter_id}</TableCell>
-                    <TableCell>{t.name}</TableCell>
-                    <TableCell>{t.drop_point_id}</TableCell>
+              ) : filteredContacts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
+                    Tidak ada kontak ditemukan.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredContacts.map((c: any) => (
+                  <TableRow key={c.sprinter_id}>
+                    <TableCell className="font-medium">{c.sprinter_id}</TableCell>
+                    <TableCell>{c.name}</TableCell>
+                    <TableCell>{c.drop_point_id}</TableCell>
+                    <TableCell>{c.phone_number}</TableCell>
                     <TableCell>
-                      {editingId === t.sprinter_id ? (
-                        <Input 
-                          value={editPhone} 
-                          onChange={e => setEditPhone(e.target.value)} 
-                          placeholder="628..." 
-                          className="w-full min-w-[150px]"
+                      <div className="flex items-center space-x-2">
+                        <Switch 
+                          checked={c.is_active !== false} 
+                          onCheckedChange={(checked) => handleToggleStatus(c, checked)}
                         />
-                      ) : (
-                        t.phone_number ? (
-                          <span>{String(t.phone_number)}</span>
-                        ) : (
-                          <span className="text-rose-500 text-sm font-medium">Belum ada</span>
-                        )
-                      )}
+                        <span className="text-sm text-muted-foreground">
+                          {c.is_active !== false ? 'Aktif' : 'Nonaktif'}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell>
-                      {editingId === t.sprinter_id ? (
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={() => handleSave(t)}>Simpan</Button>
-                          <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Batal</Button>
-                        </div>
-                      ) : (
-                        <Button size="sm" variant="outline" onClick={() => {
-                          setEditingId(t.sprinter_id);
-                          setEditPhone(t.phone_number || '');
-                        }}>
-                          Edit
-                        </Button>
-                      )}
+                      <Button variant="ghost" size="sm" onClick={() => openEditDialog(c)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{isEditing ? 'Edit Kontak' : 'Tambah Kontak Baru'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="sprinter_id">Sprinter ID</Label>
+              <Input 
+                id="sprinter_id" 
+                value={formData.sprinter_id}
+                onChange={e => setFormData({...formData, sprinter_id: e.target.value})}
+                disabled={isEditing}
+                placeholder="Misal: S-12345"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="name">Nama Lengkap</Label>
+              <Input 
+                id="name" 
+                value={formData.name}
+                onChange={e => setFormData({...formData, name: e.target.value})}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Nomor WhatsApp</Label>
+              <Input 
+                id="phone" 
+                value={formData.phone_number}
+                onChange={e => setFormData({...formData, phone_number: e.target.value})}
+                placeholder="62812xxxx"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dp">Drop Point ID</Label>
+              <Input 
+                id="dp" 
+                value={formData.drop_point_id}
+                onChange={e => setFormData({...formData, drop_point_id: e.target.value})}
+                placeholder="Misal: JX01"
+                required
+              />
+            </div>
+            <div className="flex items-center space-x-2 pt-2">
+              <Switch 
+                id="active" 
+                checked={formData.is_active} 
+                onCheckedChange={c => setFormData({...formData, is_active: c})}
+              />
+              <Label htmlFor="active">Kontak Aktif</Label>
+            </div>
+            <DialogFooter className="pt-4">
+              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Batal</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Simpan
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
