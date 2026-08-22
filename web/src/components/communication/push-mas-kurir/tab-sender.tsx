@@ -9,6 +9,7 @@ import { Loader2, RefreshCw, Smartphone, QrCode, Hash, CheckCircle2, XCircle, Lo
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import QRCode from 'react-qr-code';
 
 interface SenderConnection {
   id: string;
@@ -191,7 +192,7 @@ export function TabSender() {
       try {
         const res = await fetch(`/api/communication/whatsapp/connection/status?phone=${connectPhone}`);
         const data = await res.json();
-        if (data.ok && data.data?.status === 'connected') {
+        if (data.ok && data.mappedStatus === 'connected') {
           setPairingStatus('connected');
           stopPolling();
           toast.success('WhatsApp Terhubung!', { description: `${connectPhone} berhasil dipairing.` });
@@ -593,8 +594,8 @@ export function TabSender() {
                         <p className="font-semibold">Berhasil Terhubung!</p>
                       </div>
                     ) : (
-                      <div className="p-4 bg-white border rounded-xl shadow-sm">
-                        <img src={pairingData.qr} alt="WhatsApp QR Code" className="w-64 h-64 object-contain" />
+                      <div className="p-4 bg-white border rounded-xl shadow-sm flex items-center justify-center">
+                        <QRCode value={pairingData.qr} size={256} />
                       </div>
                     )}
                     <div className="text-center">

@@ -105,8 +105,25 @@ export class BablastService {
         body: JSON.stringify({ method, phone })
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw this.handleBablastError(response.status, data.message);
-      return data;
+      if (!response.ok) {
+        throw this.handleBablastError(response.status, data.message);
+      }
+      
+      // Normalize PairingResponse -> PairingResult for frontend
+      // Bablast returns the raw string in `data` (e.g. "https://wa.me/...")
+      const result: any = { method };
+      
+      if (method === 'qr' && data.data) {
+        result.qr = data.data; // Raw string to be rendered as QR Code by frontend
+      } else if (method === 'code' && data.data) {
+        result.pairing_code = data.data; // Assuming code is also returned here
+      } else {
+        // Fallback if structure is different
+        result.qr = data.qr || data.qrCode || data.data;
+        result.pairing_code = data.pairing_code || data.pairingCode || data.data;
+      }
+      
+      return result;
     } catch (error) {
       console.error('Bablast pairing error:', error);
       throw error;

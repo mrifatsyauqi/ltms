@@ -80,8 +80,14 @@ export async function GET(
       
       // Map bablast status to our DB status
       let mappedStatus = 'disconnected';
-      if (data?.status === 'connected') mappedStatus = 'connected';
-      else if (data?.status === 'connecting' || data?.status === 'pending') mappedStatus = 'connecting';
+      const actualStatus = data?.data?.status;
+      const isConnected = data?.data?.isConnected;
+      
+      if (isConnected === true || actualStatus === 'connected' || actualStatus === 'open') {
+        mappedStatus = 'connected';
+      } else if (actualStatus === 'connecting' || actualStatus === 'pending' || actualStatus === 'pending_config' || actualStatus === 'close') {
+        mappedStatus = 'connecting';
+      }
       
       // Update DB with latest status
       if (mappedStatus === 'connected' || mappedStatus === 'disconnected') {
@@ -92,7 +98,7 @@ export async function GET(
         });
       }
 
-      return NextResponse.json({ ok: true, data });
+      return NextResponse.json({ ok: true, data, mappedStatus });
     }
 
     return NextResponse.json({ ok: false, error: 'Invalid action' }, { status: 404 });
