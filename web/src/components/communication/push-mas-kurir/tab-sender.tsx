@@ -56,6 +56,14 @@ export function TabSender() {
   const [disconnectSender, setDisconnectSender] = useState<SenderConnection | null>(null);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
 
+  // Test Kirim Modal States
+  const [testKirimSender, setTestKirimSender] = useState<SenderConnection | null>(null);
+  const [isTestKirimModalOpen, setIsTestKirimModalOpen] = useState(false);
+  const [testKirimPhone, setTestKirimPhone] = useState('');
+  const [testKirimMessage, setTestKirimMessage] = useState('Halo, ini pesan test dari LTMS melalui Bablast API.');
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [testKirimResult, setTestKirimResult] = useState<any>(null);
+
   const fetchConfigStatus = async () => {
     setIsConfigLoading(true);
     try {
@@ -235,29 +243,107 @@ export function TabSender() {
       setIsRefreshing(false);
     }
   };
-
+  // --- Disconnect Flow ---
   const handleDisconnect = async () => {
-    if (!disconnectSender || !disconnectSender.phone) return;
+    if (!disconnectSender) return;
     setIsDisconnecting(true);
     try {
       const res = await fetch('/api/communication/whatsapp/connection/logout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: disconnectSender.phone })
+        body: JSON.stringify({ phone: disconnectSender.sender_id })
       });
       const data = await res.json();
-      
       if (data.ok) {
-        toast.success('Berhasil Diputuskan', { description: 'Koneksi WhatsApp telah diakhiri.' });
-        fetchSenders();
+        toast.success('Sender diputus', { description: `${disconnectSender.phone} berhasil di-disconnect.` });
         setDisconnectSender(null);
+        fetchSenders();
       } else {
-        toast.error('Gagal Memutuskan', { description: data.error || data.message });
+        toast.error('Gagal disconnect', { description: data.error });
       }
-    } catch (error: any) {
-      toast.error('Error', { description: error.message });
+    } catch (e) {
+      toast.error('Gagal disconnect');
     } finally {
       setIsDisconnecting(false);
+    }
+  };
+
+  // --- Test Kirim Flow ---
+  const handleOpenTestKirim = (sender: SenderConnection) => {
+    if (sender.status !== 'connected') {
+      toast.error('Sender Belum Siap', { description: 'Sender belum terhubung. Silakan lakukan pairing terlebih dahulu.' });
+      return;
+    }
+    setTestKirimSender(sender);
+    setTestKirimPhone('');
+    setTestKirimMessage('Halo, ini pesan test dari LTMS melalui Bablast API.');
+    setTestKirimResult(null);
+    setIsTestKirimModalOpen(true);
+  };
+
+  const handleSendTest = async () => {
+    if (!testKirimSender) return;
+    
+    // Normalize phone (08 -> 628)
+    let phone = testKirimPhone.replace(/\D/g, '');
+    if (phone.startsWith('0')) {
+      phone = '62' + phone.substring(1);
+    } else if (phone.startsWith('8')) {
+      phone = '62' + phone;
+    }
+    
+    if (!phone) {
+      toast.error('Nomor tujuan harus diisi');
+      return;
+    }
+    
+    setIsSendingTest(true);
+    setTestKirimResult(null);
+    
+    try {
+      // Refresh status first just to be sure
+      const statusRes = await fetch(`/api/communication/whatsapp/connection/status?phone=${testKirimSender.sender_id}`);
+      const statusData = await statusRes.json();
+      if (!statusData.ok || statusData.mappedStatus !== 'connected') {
+        toast.error('Sender belum siap digunakan', { description: 'Status sender di backend bukan connected.' });
+        setIsSendingTest(false);
+        return;
+      }
+
+      // We pass the phone or ID as sender_code
+      const res = await fetch('/api/communication/whatsapp/test-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          phone: phone, 
+          message: testKirimMessage,
+          sender_code: testKirimSender.sender_id, // For diagnostic, we just use sender_id as sender_code
+          sender_id: testKirimSender.sender_id
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok && data.ok) {
+        toast.success('Pesan berhasil masuk antrean Bablast.');
+        setTestKirimResult({ success: true, data });
+      } else {
+        if (res.status === 404 || data.status === 404) {
+          toast.error('Bablast mengembalikan 404 saat mengirim pesan.', { duration: 5000 });
+        } else if (res.status === 401 || data.status === 401) {
+          toast.error('API Key Bablast tidak valid atau tidak memiliki permission.');
+        } else if (res.status === 403 || data.status === 403) {
+          toast.error('API Key tidak memiliki izin untuk mengirim pesan.');
+        } else {
+          toast.error(data.error || 'Gagal mengirim pesan test');
+        }
+        setTestKirimResult({ success: false, data, status: res.status });
+      }
+    } catch (e: any) {
+      toast.error('Gagal mengirim pesan', { description: e.message });
+      setTestKirimResult({ success: false, error: e.message });
+    } finally {
+      setIsSendingTest(false);
     }
   };
 
@@ -418,28 +504,36 @@ export function TabSender() {
                       </span>
                     </div>
                   </div>
-                </CardContent>
-                <CardFooter className="pt-0 flex gap-2 border-t border-border/50 p-4 bg-muted/10">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex-1 bg-white hover:bg-muted"
-                    onClick={() => refreshStatus(sender.phone || sender.sender_id)}
-                    disabled={isRefreshing}
-                  >
-                    <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50 bg-white border-red-200"
-                    onClick={() => setDisconnectSender(sender)}
-                  >
-                    <LogOut className="mr-2 h-3.5 w-3.5" />
-                    Disconnect
-                  </Button>
-                </CardFooter>
+                  </CardContent>
+                  <CardFooter className="bg-slate-50 border-t p-3 flex justify-between gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full text-xs"
+                      onClick={() => refreshStatus(sender.sender_id)}
+                      disabled={isRefreshing}
+                    >
+                      <RefreshCw className={`w-3 h-3 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full text-xs"
+                      disabled={sender.status !== 'connected'}
+                      onClick={() => handleOpenTestKirim(sender)}
+                    >
+                      Test Kirim
+                    </Button>
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      className="w-full text-xs bg-red-50 hover:bg-red-100 text-red-600 border-red-200"
+                      onClick={() => setDisconnectSender(sender)}
+                    >
+                      Disconnect
+                    </Button>
+                  </CardFooter>
               </Card>
             ))}
           </div>
@@ -591,7 +685,44 @@ export function TabSender() {
                     ) : pairingStatus === 'connected' ? (
                       <div className="p-8 border border-dashed border-green-200 rounded-lg bg-green-50 text-center w-64 h-64 flex flex-col items-center justify-center text-green-700">
                         <CheckCircle2 className="h-12 w-12 mb-4" />
-                        <p className="font-semibold">Berhasil Terhubung!</p>
+                        <p className="font-semibold mb-4">Berhasil Terhubung!</p>
+                        <div className="flex flex-col gap-2 w-full mt-2">
+                          <Button 
+                            variant="default" 
+                            size="sm"
+                            className="w-full text-xs" 
+                            onClick={() => {
+                              setIsConnectModalOpen(false);
+                              fetchSenders().then(() => {
+                                // Find the sender we just paired and open test kirim
+                                const phoneNum = pairingData?.phone || connectPhone;
+                                if (phoneNum) {
+                                  // The sender list might not be instantly updated, we'll try to find it
+                                  setTimeout(() => {
+                                    setSenders(current => {
+                                      const found = current.find(s => s.phone === phoneNum || s.sender_id === phoneNum || s.sender_id === pairingData?.sender_id);
+                                      if (found) handleOpenTestKirim(found);
+                                      return current;
+                                    });
+                                  }, 500);
+                                }
+                              });
+                            }}
+                          >
+                            Test Kirim Pesan
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="bg-white w-full text-xs" 
+                            onClick={() => {
+                              setIsConnectModalOpen(false);
+                              fetchSenders();
+                            }}
+                          >
+                            Selesai & Tutup
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <div className="p-4 bg-white border rounded-xl shadow-sm flex items-center justify-center">
@@ -614,7 +745,42 @@ export function TabSender() {
                     ) : pairingStatus === 'connected' ? (
                       <div className="p-8 border border-dashed border-green-200 rounded-lg bg-green-50 text-center w-full flex flex-col items-center justify-center text-green-700">
                         <CheckCircle2 className="h-12 w-12 mb-4" />
-                        <p className="font-semibold">Berhasil Terhubung!</p>
+                        <p className="font-semibold mb-4">Berhasil Terhubung!</p>
+                        <div className="flex flex-col gap-2 w-full mt-2">
+                          <Button 
+                            variant="default" 
+                            size="sm"
+                            className="w-full text-xs" 
+                            onClick={() => {
+                              setIsConnectModalOpen(false);
+                              fetchSenders().then(() => {
+                                const phoneNum = pairingData?.phone || connectPhone;
+                                if (phoneNum) {
+                                  setTimeout(() => {
+                                    setSenders(current => {
+                                      const found = current.find(s => s.phone === phoneNum || s.sender_id === phoneNum || s.sender_id === pairingData?.sender_id);
+                                      if (found) handleOpenTestKirim(found);
+                                      return current;
+                                    });
+                                  }, 500);
+                                }
+                              });
+                            }}
+                          >
+                            Test Kirim Pesan
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="bg-white w-full text-xs" 
+                            onClick={() => {
+                              setIsConnectModalOpen(false);
+                              fetchSenders();
+                            }}
+                          >
+                            Selesai & Tutup
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <>
@@ -664,6 +830,77 @@ export function TabSender() {
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Memutuskan...</>
               ) : (
                 'Putuskan Koneksi'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Test Kirim Modal */}
+      <Dialog open={isTestKirimModalOpen} onOpenChange={(open) => !open && !isSendingTest && setIsTestKirimModalOpen(false)}>
+        <DialogContent className="sm:max-w-[475px]">
+          <DialogHeader>
+            <DialogTitle>Test Kirim Pesan</DialogTitle>
+            <DialogDescription>
+              Uji coba pengiriman pesan menggunakan sender <strong>{testKirimSender?.phone || testKirimSender?.sender_id}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="test-phone">Nomor Tujuan</Label>
+              <Input 
+                id="test-phone" 
+                placeholder="Contoh: 628123456789" 
+                value={testKirimPhone}
+                onChange={(e) => setTestKirimPhone(e.target.value)}
+                disabled={isSendingTest}
+              />
+              <p className="text-xs text-muted-foreground">Format nomor akan dinormalisasi secara otomatis (08... &rarr; 628...).</p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="test-msg">Isi Pesan</Label>
+              <textarea 
+                id="test-msg"
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                value={testKirimMessage}
+                onChange={(e) => setTestKirimMessage(e.target.value)}
+                disabled={isSendingTest}
+              />
+            </div>
+            
+            {testKirimResult && (
+              <div className={`p-3 rounded-md text-sm border ${testKirimResult.success ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                <div className="font-semibold mb-1">
+                  {testKirimResult.success ? 'Berhasil Terkirim' : 'Gagal Mengirim'}
+                </div>
+                {testKirimResult.success ? (
+                  <p className="text-xs">Message ID: {testKirimResult.data?.data?.message_id || 'OK'}</p>
+                ) : (
+                  <div className="text-xs space-y-1">
+                    <p><strong>Status:</strong> HTTP {testKirimResult.status}</p>
+                    <p><strong>Response:</strong> {JSON.stringify(testKirimResult.data || testKirimResult.error)}</p>
+                    {testKirimResult.status === 404 && (
+                      <p className="mt-2 pt-2 border-t border-red-200">
+                        *Catatan: 404 dari Bablast mengindikasikan sender_code belum disinkronisasi sepenuhnya, atau menggunakan channel (WABA) yang memiliki flow/endpoint berbeda.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsTestKirimModalOpen(false)} disabled={isSendingTest}>
+              Tutup
+            </Button>
+            <Button onClick={handleSendTest} disabled={isSendingTest}>
+              {isSendingTest ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Mengirim...</>
+              ) : (
+                'Kirim Pesan'
               )}
             </Button>
           </DialogFooter>

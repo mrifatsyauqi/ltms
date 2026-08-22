@@ -208,6 +208,43 @@ export class BablastService {
       throw error;
     }
   }
+
+  async sendTestMessage(payload: { phone: string, message: string, sender_code: string }): Promise<any> {
+    const { baseUrl } = await getBablastCredentials();
+    try {
+      const headers = await this.getHeaders();
+      const response = await fetchWithTimeout(`${baseUrl}/send`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+      
+      const data = await response.json().catch(() => ({}));
+      
+      // Do not throw Bablast error natively so the frontend can catch the exact 404
+      if (!response.ok) {
+        return {
+          ok: false,
+          status: response.status,
+          error: data.message || `API Request failed with status ${response.status}`,
+          data
+        };
+      }
+
+      return {
+        ok: true,
+        status: response.status,
+        data
+      };
+    } catch (error: any) {
+      console.error('Bablast test send error:', error);
+      return {
+        ok: false,
+        status: 500,
+        error: error.message || 'Internal error'
+      };
+    }
+  }
 }
 
 export const bablastService = new BablastService();
