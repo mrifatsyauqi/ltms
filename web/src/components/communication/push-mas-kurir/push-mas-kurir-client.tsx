@@ -12,12 +12,14 @@ export function PushMasKurirClient() {
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-      <TabsList className="bg-muted flex-wrap h-auto p-1">
-        <TabsTrigger value="sender">WhatsApp Sender</TabsTrigger>
-        <TabsTrigger value="kontak">Kontak Sprinter</TabsTrigger>
-        <TabsTrigger value="template">Template Pesan</TabsTrigger>
-        <TabsTrigger value="riwayat">Riwayat Pengiriman</TabsTrigger>
-      </TabsList>
+      <div className="w-full overflow-x-auto pb-2 -mb-2 no-scrollbar">
+        <TabsList className="inline-flex w-max bg-muted/50 p-1 rounded-lg">
+          <TabsTrigger value="sender" className="px-4 py-2 text-sm">WhatsApp Sender</TabsTrigger>
+          <TabsTrigger value="kontak" className="px-4 py-2 text-sm">Kontak Sprinter</TabsTrigger>
+          <TabsTrigger value="template" className="px-4 py-2 text-sm">Template Pesan</TabsTrigger>
+          <TabsTrigger value="riwayat" className="px-4 py-2 text-sm">Riwayat Pengiriman</TabsTrigger>
+        </TabsList>
+      </div>
 
       <TabsContent value="sender" className="m-0">
         <TabSender />

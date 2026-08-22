@@ -1,6 +1,6 @@
 'use server';
 
-import { getRecentBatches, getBatchLogs } from '@/lib/data/supabase/whatsapp';
+import { getRecentBatches, getBatchLogs, getRecentLogs } from '@/lib/data/supabase/whatsapp';
 import { auth } from '@/auth';
 
 export async function fetchRecentBatchesAction() {
@@ -13,4 +13,10 @@ export async function fetchBatchLogsAction(batchId: string) {
   const session = await auth();
   if (!session) throw new Error('Unauthorized');
   return getBatchLogs(batchId);
+}
+
+export async function fetchRecentLogsAction() {
+  const session = await auth();
+  if (!session) throw new Error('Unauthorized');
+  return getRecentLogs();
 }

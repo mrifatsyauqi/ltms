@@ -1,5 +1,15 @@
 import { db } from './client';
 
+export type WhatsappSender = {
+  id: string;
+  sender_id: string;
+  phone: string;
+  display_name: string;
+  status: string;
+  created_by: string;
+  created_at: string;
+  last_seen: string;
+};
 export type WhatsappContact = {
   id: string;
   sprinter_id: string;
@@ -68,6 +78,27 @@ export async function getWhatsappContacts(dropPointIds?: string[], activeOnly: b
   const { data, error } = await query;
   if (error) throw error;
   return data || [];
+}
+
+export async function upsertWhatsappSender(sender: Partial<WhatsappSender>): Promise<WhatsappSender> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_sender_connections')
+    .upsert({
+      sender_id: sender.sender_id,
+      phone: sender.phone,
+      display_name: sender.display_name,
+      status: sender.status,
+      created_by: sender.created_by,
+      last_seen: sender.last_seen || new Date().toISOString()
+    }, {
+      onConflict: 'sender_id'
+    })
+    .select()
+    .single();
+    
+  if (error) throw error;
+  return data;
 }
 
 export async function upsertWhatsappContact(contact: Partial<WhatsappContact> & { sprinter_id: string }): Promise<WhatsappContact> {
@@ -159,7 +190,24 @@ export async function getBatchLogs(batchId: string): Promise<WhatsappLog[]> {
     .from('whatsapp_send_logs')
     .select('*')
     .eq('batch_id', batchId)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getRecentLogs(): Promise<any[]> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_send_logs')
+    .select(`
+      *,
+      batch:whatsapp_send_batches(
+        created_by,
+        template:whatsapp_message_templates(name)
+      )
+    `)
+    .order('created_at', { ascending: false })
+    .limit(50);
   if (error) throw error;
   return data || [];
 }

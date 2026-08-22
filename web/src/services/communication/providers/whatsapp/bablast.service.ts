@@ -55,21 +55,65 @@ export class BablastService {
     }
   }
 
-  async getSenderStatus(senderCode: string): Promise<any> {
+  // =========================================================================
+  // CORE CONNECTOR API
+  // =========================================================================
+
+  async requestPairing(phone: string, method: 'qr' | 'code'): Promise<any> {
+    const { baseUrl } = getBablastCredentials();
     try {
-      const client = this.getSdkClient();
-      const status = await client.wa.senders.getStatus(senderCode);
-      return status;
+      const response = await fetchWithTimeout(`${baseUrl}/connector/pairing`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ method, phone })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new ApiError(String(response.status), data.message || 'Failed to request pairing');
+      return data;
     } catch (error) {
-      console.error(`Failed to get status for sender ${senderCode}:`, error);
+      console.error('Bablast pairing error:', error);
+      throw error;
+    }
+  }
+
+  async getSenderStatus(phone?: string): Promise<any> {
+    const { baseUrl } = getBablastCredentials();
+    try {
+      // API rule states GET /connector/status 
+      // If the API requires phone, we append it, otherwise just hit the endpoint
+      const url = phone ? `${baseUrl}/connector/status?phone=${phone}` : `${baseUrl}/connector/status`;
+      const response = await fetchWithTimeout(url, {
+        method: 'GET',
+        headers: this.getHeaders()
+      });
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Bablast status check error:', error);
       throw new ApiError('500', 'Failed to fetch sender status from Bablast');
     }
   }
 
+  async logout(phone?: string): Promise<any> {
+    const { baseUrl } = getBablastCredentials();
+    try {
+      const response = await fetchWithTimeout(`${baseUrl}/connector/logout`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: phone ? JSON.stringify({ phone }) : undefined
+      });
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Bablast logout error:', error);
+      throw error;
+    }
+  }
+
+  // Legacy fallback status check
   async checkStatus(): Promise<boolean> {
     const { baseUrl, senderId } = getBablastCredentials();
     try {
-      // Legacy status check logic - maintained to not break existing flow if it works
       const response = await fetchWithTimeout(`${baseUrl}/device/status?senderId=${senderId}`, {
         method: 'GET',
         headers: this.getHeaders()
@@ -77,7 +121,7 @@ export class BablastService {
       const data = await response.json();
       return data?.status === 'connected' || data?.data?.status === 'connected';
     } catch (error) {
-      console.error('Failed to check Bablast status:', error);
+      console.error('Failed to check Bablast legacy status:', error);
       return false;
     }
   }
@@ -85,7 +129,6 @@ export class BablastService {
   async sendBulk(payload: BablastBulkRequest): Promise<BablastBulkResponse> {
     const { baseUrl } = getBablastCredentials();
     try {
-      // Intentionally keeping the existing POST /send/bulk endpoint to avoid breaking changes
       const response = await fetchWithTimeout(`${baseUrl}/send/bulk`, {
         method: 'POST',
         headers: this.getHeaders(),
