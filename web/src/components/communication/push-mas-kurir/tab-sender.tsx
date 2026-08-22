@@ -27,6 +27,7 @@ interface ConfigStatus {
   provider: string;
   connection: string;
   maskedKey: string;
+  isSuperAdmin?: boolean;
 }
 
 export function TabSender() {
