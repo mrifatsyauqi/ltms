@@ -51,12 +51,12 @@ export function PushMasKurirModal({ isOpen, onClose, data, dpName }: PushMasKuri
     const total_delivery = isRefine ? r.totalDelivery : r.waybillDelivery;
     const clear_ttd = isRefine ? (r.ttdNormalTotal + r.scanRetorTotal) : r.tandaTerima;
     const belum_ttd = isRefine ? r.belumJumlahAwb : r.belumDiterima;
-    const sprinter_id = isRefine ? r.dpDelivery : r.groupName;
+    const monitoring_name = isRefine ? r.dpDelivery : r.groupName;
     const currentDpName = isRefine ? (r.kodeDp || r.dpDelivery) : dpName;
 
     return {
-      sprinter_id,
-      name: sprinter_id,
+      sprinter_id: monitoring_name, // keep this property for UI/table if needed, but not mapping
+      name: monitoring_name,
       drop_point_id: currentDpName,
       total_delivery,
       clear_ttd,
@@ -65,7 +65,14 @@ export function PushMasKurirModal({ isOpen, onClose, data, dpName }: PushMasKuri
     };
   });
 
-  const contactsMap = new Map((contactsResponse?.data || []).map((c: any) => [c.sprinter_id, c.phone_number]));
+  const { normalizeContactName } = require('@/lib/string-utils');
+
+  // Build a map of normalized(name)_dpID to phone_number
+  const contactsMap = new Map((contactsResponse?.data || []).map((c: any) => [
+    `${normalizeContactName(c.name)}_${c.drop_point_id}`, 
+    c.phone_number
+  ]));
+
   const template = templatesResponse?.data;
   const activeSenders = sendersResponse?.data?.filter((s: any) => s.status === 'connected') || [];
 
@@ -73,7 +80,7 @@ export function PushMasKurirModal({ isOpen, onClose, data, dpName }: PushMasKuri
   
   const processedTargets = eligibleTargets.map(t => ({
     ...t,
-    phone_number: String(contactsMap.get(t.sprinter_id) || '')
+    phone_number: String(contactsMap.get(`${normalizeContactName(t.name)}_${t.drop_point_id}`) || '')
   }));
 
   const missingContacts = processedTargets.filter(t => !t.phone_number);

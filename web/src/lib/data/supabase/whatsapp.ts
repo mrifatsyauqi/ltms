@@ -127,6 +127,29 @@ export async function upsertWhatsappContact(contact: Partial<WhatsappContact> & 
   return data;
 }
 
+export async function createWhatsappContact(contact: Omit<WhatsappContact, 'id' | 'created_at' | 'updated_at'>): Promise<WhatsappContact> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_contacts')
+    .insert(contact)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateWhatsappContact(id: string, contact: Partial<WhatsappContact>): Promise<WhatsappContact> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_contacts')
+    .update({ ...contact, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function getActiveTemplate(): Promise<WhatsappTemplate | null> {
   const supabase = db();
   const { data, error } = await supabase

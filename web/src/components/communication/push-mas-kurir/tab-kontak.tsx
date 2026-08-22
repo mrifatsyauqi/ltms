@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Search, Plus, Edit, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-
+import { useDashboardScope, ALL_SCOPE } from '@/components/dashboard/scope-context';
 export function TabKontak() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
@@ -19,10 +19,9 @@ export function TabKontak() {
   // Dialog state
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
-    sprinter_id: '',
+    id: '',
     name: '',
     phone_number: '',
-    drop_point_id: '',
     is_active: true
   });
   const [isEditing, setIsEditing] = useState(false);
@@ -35,25 +34,28 @@ export function TabKontak() {
   });
 
   const contacts = contactsResponse?.data || [];
-  
+  const { scope } = useDashboardScope();
+
   const filteredContacts = contacts.filter((c: any) => 
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.sprinter_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.phone_number.includes(searchQuery)
   );
 
   const openAddDialog = () => {
-    setFormData({ sprinter_id: '', name: '', phone_number: '', drop_point_id: '', is_active: true });
+    if (scope === ALL_SCOPE) {
+      toast.error('Pilih Drop Point aktif terlebih dahulu di panel Scope Filter untuk menambah kontak.');
+      return;
+    }
+    setFormData({ id: '', name: '', phone_number: '', is_active: true });
     setIsEditing(false);
     setIsDialogOpen(true);
   };
 
   const openEditDialog = (contact: any) => {
     setFormData({
-      sprinter_id: contact.sprinter_id,
+      id: contact.id || '',
       name: contact.name,
       phone_number: contact.phone_number,
-      drop_point_id: contact.drop_point_id,
       is_active: contact.is_active !== undefined ? contact.is_active : true
     });
     setIsEditing(true);
@@ -87,8 +89,13 @@ export function TabKontak() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.sprinter_id || !formData.name || !formData.phone_number || !formData.drop_point_id) {
+    if (!formData.name || !formData.phone_number) {
       toast.error('Semua kolom wajib diisi');
+      return;
+    }
+
+    if (scope === ALL_SCOPE) {
+      toast.error('Gagal: Scope aktif saat ini adalah Semua DP.');
       return;
     }
 
@@ -97,7 +104,7 @@ export function TabKontak() {
       const res = await fetch('/api/communication/whatsapp/contacts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({ ...formData, drop_point_id: scope })
       });
 
       const data = await res.json();
@@ -124,7 +131,7 @@ export function TabKontak() {
           </p>
         </div>
         
-        <Button onClick={openAddDialog}>
+        <Button onClick={openAddDialog} disabled={scope === ALL_SCOPE}>
           <Plus className="mr-2 h-4 w-4" />
           Tambah Kontak
         </Button>
@@ -137,7 +144,7 @@ export function TabKontak() {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Cari ID, Nama, atau Nomor WA..."
+                placeholder="Cari Nama atau Nomor WA..."
                 className="pl-8"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -148,7 +155,6 @@ export function TabKontak() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Sprinter ID</TableHead>
                 <TableHead>Nama</TableHead>
                 <TableHead>Drop Point</TableHead>
                 <TableHead>Nomor WA</TableHead>
@@ -171,9 +177,8 @@ export function TabKontak() {
                 </TableRow>
               ) : (
                 filteredContacts.map((c: any) => (
-                  <TableRow key={c.sprinter_id}>
-                    <TableCell className="font-medium">{c.sprinter_id}</TableCell>
-                    <TableCell>{c.name}</TableCell>
+                  <TableRow key={c.id || Math.random()}>
+                    <TableCell className="font-medium">{c.name}</TableCell>
                     <TableCell>{c.drop_point_id}</TableCell>
                     <TableCell>{c.phone_number}</TableCell>
                     <TableCell>
@@ -207,15 +212,8 @@ export function TabKontak() {
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="sprinter_id">Sprinter ID</Label>
-              <Input 
-                id="sprinter_id" 
-                value={formData.sprinter_id}
-                onChange={e => setFormData({...formData, sprinter_id: e.target.value})}
-                disabled={isEditing}
-                placeholder="Misal: S-12345"
-                required
-              />
+              <Label>Kode DP</Label>
+              <div className="text-sm font-medium p-2 bg-muted rounded-md border">{scope}</div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="name">Nama Lengkap</Label>
@@ -233,16 +231,6 @@ export function TabKontak() {
                 value={formData.phone_number}
                 onChange={e => setFormData({...formData, phone_number: e.target.value})}
                 placeholder="62812xxxx"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="dp">Drop Point ID</Label>
-              <Input 
-                id="dp" 
-                value={formData.drop_point_id}
-                onChange={e => setFormData({...formData, drop_point_id: e.target.value})}
-                placeholder="Misal: JX01"
                 required
               />
             </div>
