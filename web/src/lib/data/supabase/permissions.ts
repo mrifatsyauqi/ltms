@@ -32,6 +32,7 @@ export const MENU_KEYS = [
   'riwayat_feedback',
   'pengaturan',
   'role_akses',
+  'push_mas_kurir',
 ] as const;
 export type MenuKey = (typeof MENU_KEYS)[number];
 

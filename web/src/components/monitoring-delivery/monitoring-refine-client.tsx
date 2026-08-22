@@ -5,7 +5,8 @@ import * as xlsx from 'xlsx';
 import { useQuery } from '@tanstack/react-query';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
-import { Image as ImageIcon, Table2 } from 'lucide-react';
+import { Image as ImageIcon, Table2, PhoneForwarded } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SLOW_STALE_TIME } from '@/lib/query-config';
@@ -39,6 +40,7 @@ export function MonitoringRefineClient() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+  const router = useRouter();
   const [dragOver, setDragOver] = useState(false);
 
   const handleFileUpload = async (fileList: FileList | File[]) => {
@@ -234,6 +236,23 @@ export function MonitoringRefineClient() {
     }
   };
 
+  const handlePushMasKurir = () => {
+    const payload = stagedData.map(r => {
+      const clearTtd = r.ttdNormalTotal + r.scanRetorTotal;
+      return {
+        sprinter_id: r.dpDelivery, // In refine total, group is DP
+        name: r.dpDelivery,
+        drop_point_id: r.kodeDp || r.dpDelivery,
+        total_delivery: r.totalDelivery,
+        clear_ttd: clearTtd,
+        belum_ttd: r.belumJumlahAwb,
+        persentase_ttd: r.totalDelivery > 0 ? (clearTtd / r.totalDelivery) * 100 : 0
+      };
+    });
+    sessionStorage.setItem('pushMasKurirData', JSON.stringify(payload));
+    router.push('/communication/push-mas-kurir');
+  };
+
   return (
     <div className="mt-6 space-y-6">
       {!isGenerated && (
@@ -320,6 +339,13 @@ export function MonitoringRefineClient() {
               <Button onClick={handleCopyImage} disabled={copying !== null} title="Tempel sebagai gambar di WhatsApp / Feishu">
                 <ImageIcon className="size-4" aria-hidden />
                 {copying === 'img' ? 'Menyalin…' : 'Salin Gambar (Chat)'}
+              </Button>
+              <Button
+                onClick={handlePushMasKurir}
+                className="bg-[#25D366] hover:bg-[#1DA851] text-white font-bold gap-1.5 shadow-sm"
+              >
+                <PhoneForwarded className="size-4" />
+                <span>Push Mas Kurir</span>
               </Button>
             </div>
           </CardHeader>

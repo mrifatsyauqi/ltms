@@ -4,7 +4,8 @@ import { useRef, useState } from 'react';
 import * as xlsx from 'xlsx';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
-import { Image as ImageIcon, Table2, Send } from 'lucide-react';
+import { Image as ImageIcon, Table2, Send, Settings2, PhoneForwarded } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -32,6 +33,7 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
   
   const inputRef = useRef<HTMLInputElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+  const router = useRouter();
   const [dragOver, setDragOver] = useState(false);
 
   const handleFileUpload = (fileList: FileList | File[]) => {
@@ -272,6 +274,20 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
     }
   };
 
+  const handlePushMasKurir = () => {
+    const payload = stagedData.map(r => ({
+      sprinter_id: r.groupName,
+      name: r.groupName,
+      drop_point_id: dpName,
+      total_delivery: r.waybillDelivery,
+      clear_ttd: r.tandaTerima,
+      belum_ttd: r.belumDiterima,
+      persentase_ttd: r.waybillDelivery > 0 ? (r.tandaTerima / r.waybillDelivery) * 100 : 0
+    }));
+    sessionStorage.setItem('pushMasKurirData', JSON.stringify(payload));
+    router.push('/communication/push-mas-kurir');
+  };
+
   return (
     <div className="mt-6 space-y-6">
       {!isGenerated && (
@@ -366,6 +382,13 @@ export function MonitoringClient({ dpName, isCabang }: Props) {
               >
                 <Send className="size-4" />
                 <span>Kirim ke Feishu</span>
+              </Button>
+              <Button
+                onClick={handlePushMasKurir}
+                className="bg-[#25D366] hover:bg-[#1DA851] text-white font-bold gap-1.5 shadow-sm"
+              >
+                <PhoneForwarded className="size-4" />
+                <span>Push Mas Kurir</span>
               </Button>
             </div>
           </CardHeader>

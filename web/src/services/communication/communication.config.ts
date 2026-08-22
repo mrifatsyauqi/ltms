@@ -25,6 +25,11 @@ export const COMMUNICATION_CONFIG = {
   // Token Cache TTL
   TOKEN_CACHE_KEY: 'feishu_tenant_access_token',
   TOKEN_BUFFER_SECONDS: 300, // Buffer 5 menit sebelum expire
+
+  // Bablast API Config
+  BABLAST_API_URL: (process.env.BABLAST_API_URL || 'https://api.bablast.id').replace(/\/+$/, ''),
+  BABLAST_API_KEY: (process.env.BABLAST_API_KEY || '').trim(),
+  BABLAST_SENDER_ID: (process.env.BABLAST_SENDER_ID || '').trim(),
 } as const;
 
 export function getFeishuCredentials() {
@@ -39,5 +44,18 @@ export function getFeishuCredentials() {
     appSecret,
     baseUrl,
     isConfigured: Boolean(appId && appSecret),
+  };
+}
+
+export function getBablastCredentials() {
+  const apiKey = COMMUNICATION_CONFIG.BABLAST_API_KEY;
+  const baseUrl = COMMUNICATION_CONFIG.BABLAST_API_URL;
+  const senderId = COMMUNICATION_CONFIG.BABLAST_SENDER_ID;
+  
+  return {
+    apiKey,
+    baseUrl,
+    senderId,
+    isConfigured: Boolean(apiKey),
   };
 }
