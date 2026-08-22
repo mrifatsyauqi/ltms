@@ -239,16 +239,26 @@ export async function upsertWhatsappSenders(
 
   try {
     const supabase = db();
-    const records = senders.map((s) => ({
-      sender_id: s.sender_id,
-      phone: s.phone || null,
-      display_name: s.display_name || null,
-      status: s.status || 'disconnected',
-      sender_code: s.sender_code || null,
-      channel_type: s.channel_type || null,
-      created_by: userId || 'system',
-      last_seen: new Date().toISOString(),
-    }));
+    const records = senders.map((s) => {
+      const record: any = {
+        sender_id: s.sender_id,
+        phone: s.phone || null,
+        display_name: s.display_name || null,
+        status: s.status || 'disconnected',
+        created_by: userId || 'system',
+        last_seen: new Date().toISOString(),
+      };
+      
+      // Prevent overwriting existing values with NULL during sync
+      if (s.sender_code !== undefined) {
+        record.sender_code = s.sender_code || null;
+      }
+      if (s.channel_type !== undefined) {
+        record.channel_type = s.channel_type || null;
+      }
+      
+      return record;
+    });
 
     const { data, error } = await supabase
       .from('whatsapp_sender_connections')

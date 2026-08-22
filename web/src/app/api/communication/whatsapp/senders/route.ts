@@ -21,17 +21,17 @@ export async function GET(req: NextRequest) {
     const mergedSenders = dbSenders.map(dbSender => {
       // Find matching sender by phone or sender_id
       const liveData = bablastSenders.find((s: any) => 
-        s.phone === dbSender.phone || 
-        s.phone === '+' + dbSender.phone ||
-        String(s.id) === String(dbSender.sender_id) ||
-        s.sender_code === dbSender.sender_id
+        (s.phone && dbSender.phone && (s.phone === dbSender.phone || s.phone === '+' + dbSender.phone)) ||
+        (s.id && dbSender.sender_id && String(s.id) === String(dbSender.sender_id)) ||
+        (s.sender_code && dbSender.sender_code && s.sender_code === dbSender.sender_code)
       );
 
       return {
         ...dbSender,
         bablast_live_id: liveData?.id || null,
-        sender_code: liveData?.sender_code || null,
-        channel_type: liveData?.channelType || liveData?.channel_type || null,
+        // MUST prioritize dbSender.sender_code because Bablast GET /senders API does NOT return sender_code
+        sender_code: dbSender.sender_code || liveData?.sender_code || null,
+        channel_type: dbSender.channel_type || liveData?.channelType || liveData?.channel_type || null,
         // Optional: you can also sync the live status if you want
         // live_status: liveData?.status || 'unknown'
       };
