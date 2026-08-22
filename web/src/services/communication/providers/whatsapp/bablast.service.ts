@@ -60,7 +60,7 @@ export class BablastService {
       
       const data = await response.json();
       if (!response.ok) {
-        throw new ApiError(data.message || 'Failed to send bulk message via Bablast', response.status);
+        throw new ApiError(String(response.status), data.message || 'Failed to send bulk message via Bablast');
       }
 
       return {
