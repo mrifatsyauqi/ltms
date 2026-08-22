@@ -5,9 +5,13 @@ import { getBablastCredentials } from '@/services/communication/communication.co
 import { bablastService } from '@/services/communication/providers/whatsapp/bablast.service';
 import { upsertWhatsappConfig } from '@/lib/data/supabase/whatsapp';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) return unauthenticated();
+
+  if ((session.user as any).role !== 'Super Admin') {
+    return NextResponse.json({ success: false, message: 'Forbidden: Super Admin only' }, { status: 403 });
+  }
 
   try {
     const { apiKey, isConfigured } = await getBablastCredentials();
@@ -36,6 +40,10 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) return unauthenticated();
+
+  if ((session.user as any).role !== 'Super Admin') {
+    return NextResponse.json({ success: false, message: 'Forbidden: Super Admin only' }, { status: 403 });
+  }
 
   try {
     const { apiKey } = await req.json().catch(() => ({}));

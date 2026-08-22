@@ -9,7 +9,12 @@ export async function GET(req: NextRequest) {
   if (!session?.user?.email) return unauthenticated();
 
   try {
-    const dbSenders = await listWhatsappSenders();
+    const userRole = (session.user as any).role || 'Admin DP';
+    const userDpId = (session.user as any).dropPoint;
+    const isSuperAdmin = userRole === 'Super Admin';
+
+    // If Super Admin, fetch all. Otherwise, fetch scoped to DP.
+    const dbSenders = await listWhatsappSenders(isSuperAdmin ? undefined : userDpId);
     let bablastSenders: any[] = [];
     try {
       bablastSenders = await bablastService.listSenders();
@@ -54,6 +59,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { sender_id, phone, display_name, status, sender_code, channel_type } = body;
+    const userDpId = (session.user as any).dropPoint;
 
     if (!phone || !sender_code) {
       return NextResponse.json({ success: false, message: 'Phone and sender_code are required' }, { status: 400 });
@@ -66,7 +72,8 @@ export async function POST(req: NextRequest) {
       display_name: display_name || phone,
       status: status || 'connected',
       sender_code,
-      channel_type
+      channel_type,
+      drop_point_id: userDpId || null
     }], session.user.email);
 
     return NextResponse.json({

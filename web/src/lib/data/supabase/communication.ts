@@ -177,6 +177,7 @@ export interface WhatsappSenderConnectionRecord {
   status: string;
   sender_code?: string | null;
   channel_type?: string | null;
+  drop_point_id?: string | null;
   created_by?: string | null;
   created_at: string;
   last_seen: string;
@@ -189,15 +190,22 @@ export interface WhatsappSenderUpsertInput {
   status?: string;
   sender_code?: string | null;
   channel_type?: string | null;
+  drop_point_id?: string | null;
 }
 
-export async function listWhatsappSenders(): Promise<WhatsappSenderConnectionRecord[]> {
+export async function listWhatsappSenders(dropPointId?: string): Promise<WhatsappSenderConnectionRecord[]> {
   try {
     const supabase = db();
-    const { data, error } = await supabase
+    let query = supabase
       .from('whatsapp_sender_connections')
       .select('*')
       .order('created_at', { ascending: false });
+
+    if (dropPointId) {
+      query = query.eq('drop_point_id', dropPointId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Error fetching whatsapp_sender_connections:', error);
@@ -255,6 +263,9 @@ export async function upsertWhatsappSenders(
       }
       if (s.channel_type !== undefined) {
         record.channel_type = s.channel_type || null;
+      }
+      if (s.drop_point_id !== undefined) {
+        record.drop_point_id = s.drop_point_id || null;
       }
       
       return record;
