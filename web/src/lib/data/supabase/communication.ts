@@ -175,6 +175,8 @@ export interface WhatsappSenderConnectionRecord {
   phone?: string | null;
   display_name?: string | null;
   status: string;
+  sender_code?: string | null;
+  channel_type?: string | null;
   created_by?: string | null;
   created_at: string;
   last_seen: string;
@@ -185,6 +187,8 @@ export interface WhatsappSenderUpsertInput {
   phone?: string | null;
   display_name?: string | null;
   status?: string;
+  sender_code?: string | null;
+  channel_type?: string | null;
 }
 
 export async function listWhatsappSenders(): Promise<WhatsappSenderConnectionRecord[]> {
@@ -207,6 +211,26 @@ export async function listWhatsappSenders(): Promise<WhatsappSenderConnectionRec
   }
 }
 
+export async function getWhatsappSenderById(id: string): Promise<WhatsappSenderConnectionRecord | null> {
+  try {
+    const supabase = db();
+    const { data, error } = await supabase
+      .from('whatsapp_sender_connections')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error fetching whatsapp sender:', error);
+      return null;
+    }
+
+    return data as WhatsappSenderConnectionRecord | null;
+  } catch (err) {
+    console.error('Database error getting whatsapp sender:', err);
+    return null;
+  }
+}
 export async function upsertWhatsappSenders(
   senders: WhatsappSenderUpsertInput[],
   userId?: string
@@ -220,6 +244,8 @@ export async function upsertWhatsappSenders(
       phone: s.phone || null,
       display_name: s.display_name || null,
       status: s.status || 'disconnected',
+      sender_code: s.sender_code || null,
+      channel_type: s.channel_type || null,
       created_by: userId || 'system',
       last_seen: new Date().toISOString(),
     }));

@@ -6,6 +6,8 @@ export type WhatsappSender = {
   phone: string;
   display_name: string;
   status: string;
+  sender_code?: string;
+  channel_type?: string;
   created_by: string;
   created_at: string;
   last_seen: string;
@@ -100,6 +102,8 @@ export async function upsertWhatsappSender(sender: Partial<WhatsappSender>): Pro
       phone: sender.phone,
       display_name: sender.display_name,
       status: sender.status,
+      sender_code: sender.sender_code,
+      channel_type: sender.channel_type,
       created_by: sender.created_by,
       last_seen: sender.last_seen || new Date().toISOString()
     }, {

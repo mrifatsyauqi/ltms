@@ -46,3 +46,36 @@ export async function GET(req: NextRequest) {
     return errorResponse(error);
   }
 }
+
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.email) return unauthenticated();
+
+  try {
+    const body = await req.json();
+    const { sender_id, phone, display_name, status, sender_code, channel_type } = body;
+
+    if (!phone || !sender_code) {
+      return NextResponse.json({ success: false, message: 'Phone and sender_code are required' }, { status: 400 });
+    }
+
+    const { upsertWhatsappSenders } = await import('@/lib/data/supabase/communication');
+    const result = await upsertWhatsappSenders([{
+      sender_id: sender_id || phone,
+      phone,
+      display_name: display_name || phone,
+      status: status || 'connected',
+      sender_code,
+      channel_type
+    }], session.user.email);
+
+    return NextResponse.json({
+      success: true,
+      data: result[0],
+      message: 'Sender successfully saved'
+    });
+  } catch (error: any) {
+    console.error('API /communication/whatsapp/senders POST error:', error);
+    return errorResponse(error);
+  }
+}
