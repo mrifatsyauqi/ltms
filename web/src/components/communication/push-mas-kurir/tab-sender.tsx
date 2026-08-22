@@ -505,34 +505,61 @@ export function TabSender() {
                     </div>
                   </div>
                   </CardContent>
-                  <CardFooter className="bg-slate-50 border-t p-3 flex justify-between gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="w-full text-xs"
-                      onClick={() => refreshStatus(sender.sender_id)}
-                      disabled={isRefreshing}
-                    >
-                      <RefreshCw className={`w-3 h-3 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-                      Refresh
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="w-full text-xs"
-                      disabled={sender.status !== 'connected'}
-                      onClick={() => handleOpenTestKirim(sender)}
-                    >
-                      Test Kirim
-                    </Button>
-                    <Button 
-                      variant="destructive" 
-                      size="sm" 
-                      className="w-full text-xs bg-red-50 hover:bg-red-100 text-red-600 border-red-200"
-                      onClick={() => setDisconnectSender(sender)}
-                    >
-                      Disconnect
-                    </Button>
+                  <CardFooter className="bg-slate-50 border-t p-3 flex flex-col gap-2">
+                    <div className="grid grid-cols-2 gap-2 w-full">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full text-xs"
+                        onClick={() => {
+                          setConnectPhone(sender.phone || sender.sender_id || '');
+                          setConnectStep(2);
+                          setConnectMethod(null);
+                          setPairingData(null);
+                          setPairingStatus('pending');
+                          setIsConnectModalOpen(true);
+                        }}
+                      >
+                        <RefreshCw className="w-3 h-3 mr-2" />
+                        Reconnect
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full text-xs"
+                        disabled={sender.status !== 'connected'}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleOpenTestKirim(sender);
+                        }}
+                      >
+                        Test Kirim
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 w-full">
+                      <Button 
+                        variant="destructive" 
+                        size="sm" 
+                        className="w-full text-xs bg-red-50 hover:bg-red-100 text-red-600 border-red-200"
+                        onClick={() => setDisconnectSender(sender)}
+                      >
+                        Putus Koneksi
+                      </Button>
+                      <Button 
+                        variant="destructive" 
+                        size="sm" 
+                        className="w-full text-xs"
+                        onClick={() => {
+                          if (confirm('Apakah Anda yakin ingin menghapus sender ini?')) {
+                            // TODO: Add actual delete logic via API
+                            alert('Hapus sender belum diimplementasi di API');
+                          }
+                        }}
+                      >
+                        Hapus Sender
+                      </Button>
+                    </div>
                   </CardFooter>
               </Card>
             ))}
