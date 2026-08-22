@@ -10,6 +10,17 @@ export type WhatsappSender = {
   created_at: string;
   last_seen: string;
 };
+
+export type WhatsappConfig = {
+  id: string;
+  provider: string;
+  api_key: string;
+  base_url: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type WhatsappContact = {
   id: string;
   sprinter_id: string;
@@ -210,4 +221,40 @@ export async function getRecentLogs(): Promise<any[]> {
     .limit(50);
   if (error) throw error;
   return data || [];
+}
+
+export async function getWhatsappConfig(provider: string = 'bablast'): Promise<WhatsappConfig | null> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_configurations')
+    .select('*')
+    .eq('provider', provider)
+    .eq('is_active', true)
+    .maybeSingle();
+    
+  if (error && error.code !== 'PGRST116') {
+    // Ignore no rows found error
+    console.error('Error fetching whatsapp config:', error);
+  }
+  return data || null;
+}
+
+export async function upsertWhatsappConfig(provider: string, apiKey: string, baseUrl: string = 'https://api.bablast.id'): Promise<WhatsappConfig> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_configurations')
+    .upsert({
+      provider,
+      api_key: apiKey,
+      base_url: baseUrl,
+      is_active: true,
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'provider'
+    })
+    .select()
+    .single();
+    
+  if (error) throw error;
+  return data;
 }

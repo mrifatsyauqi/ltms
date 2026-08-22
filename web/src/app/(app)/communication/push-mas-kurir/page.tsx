@@ -24,7 +24,7 @@ export default function PushMasKurirPage() {
             Push Mas Kurir
           </h1>
           <p className="text-sm md:text-base text-muted-foreground mt-2 max-w-3xl">
-            Kelola koneksi WhatsApp, kontak Sprinter, template pesan, dan riwayat pengiriman.
+            Kirim WhatsApp ke Sprinter yang belum mencapai target TTD.
           </p>
         </div>
 

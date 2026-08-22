@@ -2,6 +2,7 @@
  * Konfigurasi Komunikasi & Feishu Open Platform
  * Seluruh endpoint menggunakan konfigurasi terpusat dan tidak di-hardcode.
  */
+import { getWhatsappConfig } from '@/lib/data/supabase/whatsapp';
 
 export const COMMUNICATION_CONFIG = {
   // Base URL Feishu Open Platform (default resmi: https://open.feishu.cn/open-apis)
@@ -47,15 +48,28 @@ export function getFeishuCredentials() {
   };
 }
 
-export function getBablastCredentials() {
-  const apiKey = COMMUNICATION_CONFIG.BABLAST_API_KEY;
-  const baseUrl = COMMUNICATION_CONFIG.BABLAST_API_URL;
-  const senderId = COMMUNICATION_CONFIG.BABLAST_SENDER_ID;
-  
-  return {
-    apiKey,
-    baseUrl,
-    senderId,
-    isConfigured: Boolean(apiKey),
-  };
+export async function getBablastCredentials() {
+  try {
+    const config = await getWhatsappConfig('bablast');
+    
+    // Fallback to env if DB is not configured (or before migration is run)
+    const apiKey = config?.api_key || COMMUNICATION_CONFIG.BABLAST_API_KEY;
+    const baseUrl = config?.base_url || COMMUNICATION_CONFIG.BABLAST_API_URL;
+    const senderId = COMMUNICATION_CONFIG.BABLAST_SENDER_ID;
+    
+    return {
+      apiKey,
+      baseUrl,
+      senderId,
+      isConfigured: Boolean(apiKey),
+    };
+  } catch (error) {
+    console.error('Failed to get Bablast Credentials from DB:', error);
+    return {
+      apiKey: COMMUNICATION_CONFIG.BABLAST_API_KEY,
+      baseUrl: COMMUNICATION_CONFIG.BABLAST_API_URL,
+      senderId: COMMUNICATION_CONFIG.BABLAST_SENDER_ID,
+      isConfigured: Boolean(COMMUNICATION_CONFIG.BABLAST_API_KEY)
+    };
+  }
 }

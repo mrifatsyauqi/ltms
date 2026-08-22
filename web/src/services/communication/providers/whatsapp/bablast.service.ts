@@ -25,8 +25,8 @@ export interface BablastBulkResponse {
 }
 
 export class BablastService {
-  private getHeaders() {
-    const { apiKey, isConfigured } = getBablastCredentials();
+  private async getHeaders() {
+    const { apiKey, isConfigured } = await getBablastCredentials();
     if (!isConfigured) {
       throw new ApiError('500', 'Bablast API Key is not configured');
     }
@@ -36,21 +36,53 @@ export class BablastService {
     };
   }
 
-  private getSdkClient(): BablastClient {
-    const { apiKey, isConfigured } = getBablastCredentials();
+  private async getSdkClient(): Promise<BablastClient> {
+    const { apiKey, isConfigured } = await getBablastCredentials();
     if (!isConfigured) {
       throw new ApiError('500', 'Bablast API Key is not configured');
     }
     return new BablastClient({ apiKey });
   }
 
+  private handleBablastError(status: number, message: string = ''): Error {
+    switch (status) {
+      case 401: return new ApiError('401', 'API Key invalid');
+      case 403: return new ApiError('403', 'API Key tidak memiliki scope yang cukup');
+      case 404: return new ApiError('404', 'Endpoint atau resource tidak ditemukan');
+      case 409: return new ApiError('409', 'Sender atau proses pairing konflik');
+      case 429: return new ApiError('429', 'Terlalu banyak request (Rate limit)');
+      case 500: return new ApiError('500', 'Bablast server error');
+      default: return new ApiError(String(status), message || 'Bablast provider error');
+    }
+  }
+
+  async testConnection(apiKey: string): Promise<boolean> {
+    const { baseUrl } = await getBablastCredentials();
+    try {
+      // Use senders list as a lightweight ping to verify API Key scope & validity
+      const response = await fetchWithTimeout(`${baseUrl}/wa/senders`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        }
+      });
+      if (response.ok) return true;
+      throw this.handleBablastError(response.status);
+    } catch (error) {
+      console.error('Bablast test connection error:', error);
+      throw error;
+    }
+  }
+
   async listSenders(): Promise<any[]> {
     try {
-      const client = this.getSdkClient();
+      const client = await this.getSdkClient();
       const senders = await client.wa.senders.list();
       return senders || [];
-    } catch (error) {
-      console.error('Failed to list Bablast senders via SDK:', error);
+    } catch (error: any) {
+      console.error('Failed to list Bablast senders via SDK:', error.message);
+      // We don't have HTTP status here natively if SDK throws generic, so we wrap it securely
       throw new ApiError('500', 'Failed to fetch senders from Bablast');
     }
   }
@@ -60,15 +92,16 @@ export class BablastService {
   // =========================================================================
 
   async requestPairing(phone: string, method: 'qr' | 'code'): Promise<any> {
-    const { baseUrl } = getBablastCredentials();
+    const { baseUrl } = await getBablastCredentials();
     try {
+      const headers = await this.getHeaders();
       const response = await fetchWithTimeout(`${baseUrl}/connector/pairing`, {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers,
         body: JSON.stringify({ method, phone })
       });
-      const data = await response.json();
-      if (!response.ok) throw new ApiError(String(response.status), data.message || 'Failed to request pairing');
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw this.handleBablastError(response.status, data.message);
       return data;
     } catch (error) {
       console.error('Bablast pairing error:', error);
@@ -77,32 +110,34 @@ export class BablastService {
   }
 
   async getSenderStatus(phone?: string): Promise<any> {
-    const { baseUrl } = getBablastCredentials();
+    const { baseUrl } = await getBablastCredentials();
     try {
-      // API rule states GET /connector/status 
-      // If the API requires phone, we append it, otherwise just hit the endpoint
+      const headers = await this.getHeaders();
       const url = phone ? `${baseUrl}/connector/status?phone=${phone}` : `${baseUrl}/connector/status`;
       const response = await fetchWithTimeout(url, {
         method: 'GET',
-        headers: this.getHeaders()
+        headers
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw this.handleBablastError(response.status, data.message);
       return data;
     } catch (error) {
       console.error('Bablast status check error:', error);
-      throw new ApiError('500', 'Failed to fetch sender status from Bablast');
+      throw error;
     }
   }
 
   async logout(phone?: string): Promise<any> {
-    const { baseUrl } = getBablastCredentials();
+    const { baseUrl } = await getBablastCredentials();
     try {
+      const headers = await this.getHeaders();
       const response = await fetchWithTimeout(`${baseUrl}/connector/logout`, {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers,
         body: phone ? JSON.stringify({ phone }) : undefined
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw this.handleBablastError(response.status, data.message);
       return data;
     } catch (error) {
       console.error('Bablast logout error:', error);
@@ -112,13 +147,14 @@ export class BablastService {
 
   // Legacy fallback status check
   async checkStatus(): Promise<boolean> {
-    const { baseUrl, senderId } = getBablastCredentials();
+    const { baseUrl, senderId } = await getBablastCredentials();
     try {
+      const headers = await this.getHeaders();
       const response = await fetchWithTimeout(`${baseUrl}/device/status?senderId=${senderId}`, {
         method: 'GET',
-        headers: this.getHeaders()
+        headers
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       return data?.status === 'connected' || data?.data?.status === 'connected';
     } catch (error) {
       console.error('Failed to check Bablast legacy status:', error);
@@ -127,17 +163,18 @@ export class BablastService {
   }
 
   async sendBulk(payload: BablastBulkRequest): Promise<BablastBulkResponse> {
-    const { baseUrl } = getBablastCredentials();
+    const { baseUrl } = await getBablastCredentials();
     try {
+      const headers = await this.getHeaders();
       const response = await fetchWithTimeout(`${baseUrl}/send/bulk`, {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers,
         body: JSON.stringify(payload)
       });
       
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new ApiError(String(response.status), data.message || 'Failed to send bulk message via Bablast');
+        throw this.handleBablastError(response.status, data.message);
       }
 
       return {

@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Loader2, RefreshCw, Smartphone, QrCode, Hash, CheckCircle2, XCircle, LogOut } from 'lucide-react';
+import { Loader2, RefreshCw, Smartphone, QrCode, Hash, CheckCircle2, XCircle, LogOut, Key, Link as LinkIcon, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -19,11 +19,26 @@ interface SenderConnection {
   last_seen: string;
 }
 
+interface ConfigStatus {
+  configured: boolean;
+  provider: string;
+  connection: string;
+  maskedKey: string;
+}
+
 export function TabSender() {
+  const [configStatus, setConfigStatus] = useState<ConfigStatus | null>(null);
+  const [isConfigLoading, setIsConfigLoading] = useState(true);
+  
   const [senders, setSenders] = useState<SenderConnection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   
+  // API Config Modal States
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+
   // Connection Modal States
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [connectStep, setConnectStep] = useState<1 | 2 | 3>(1);
@@ -40,6 +55,21 @@ export function TabSender() {
   const [disconnectSender, setDisconnectSender] = useState<SenderConnection | null>(null);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
 
+  const fetchConfigStatus = async () => {
+    setIsConfigLoading(true);
+    try {
+      const res = await fetch('/api/communication/whatsapp/config');
+      if (res.ok) {
+        const data = await res.json();
+        setConfigStatus(data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch config status:', error);
+    } finally {
+      setIsConfigLoading(false);
+    }
+  };
+
   const fetchSenders = async () => {
     setIsLoading(true);
     try {
@@ -55,32 +85,57 @@ export function TabSender() {
     }
   };
 
-  const refreshStatus = async (phone: string) => {
-    setIsRefreshing(true);
-    try {
-      const res = await fetch(`/api/communication/whatsapp/connection/status?phone=${phone}`);
-      const data = await res.json();
-      if (data.ok) {
-        toast.success('Status Diperbarui', { description: `Status terbaru: ${data.data?.status || 'Unknown'}` });
-        fetchSenders();
-      } else {
-        toast.error('Gagal Cek Status', { description: data.error });
-      }
-    } catch (error: any) {
-      toast.error('Error', { description: error.message });
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
   useEffect(() => {
+    fetchConfigStatus();
     fetchSenders();
     return () => stopPolling();
   }, []);
 
+  // --- API Config Flow ---
+  const handleSaveConfig = async () => {
+    if (!apiKeyInput) {
+      toast.error('API Key wajib diisi');
+      return;
+    }
+
+    setIsSavingConfig(true);
+    try {
+      const res = await fetch('/api/communication/whatsapp/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: apiKeyInput })
+      });
+      const data = await res.json();
+      
+      if (data.ok) {
+        toast.success('Konfigurasi Berhasil', { description: 'API Key valid dan berhasil disimpan.' });
+        setConfigStatus(data.data);
+        setIsConfigModalOpen(false);
+        setApiKeyInput('');
+      } else {
+        toast.error('Gagal Menyimpan Konfigurasi', { description: data.error || data.message });
+      }
+    } catch (error: any) {
+      toast.error('Terjadi Kesalahan', { description: error.message });
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    // A quick way to test connection is to just refetch the config status
+    toast.promise(fetchConfigStatus(), {
+      loading: 'Menguji koneksi ke Bablast...',
+      success: 'Koneksi API valid dan terhubung.',
+      error: 'Koneksi gagal.'
+    });
+  };
+
   // --- Pairing Flow ---
   
   const handleConnectStart = () => {
+    if (!configStatus?.configured) return;
+    
     setConnectStep(1);
     setConnectPhone('');
     setConnectMethod(null);
@@ -114,7 +169,7 @@ export function TabSender() {
         startPolling();
         fetchSenders(); // Update table in background
       } else {
-        toast.error('Gagal Meminta Pairing', { description: data.error });
+        toast.error('Gagal Meminta Pairing', { description: data.error || data.message });
       }
     } catch (error: any) {
       toast.error('Error', { description: error.message });
@@ -161,7 +216,24 @@ export function TabSender() {
     setIsConnectModalOpen(false);
   };
 
-  // --- Disconnect Flow ---
+  // --- Sender Management ---
+  const refreshStatus = async (phone: string) => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch(`/api/communication/whatsapp/connection/status?phone=${phone}`);
+      const data = await res.json();
+      if (data.ok) {
+        toast.success('Status Diperbarui', { description: `Status terbaru: ${data.data?.status || 'Unknown'}` });
+        fetchSenders();
+      } else {
+        toast.error('Gagal Cek Status', { description: data.error || data.message });
+      }
+    } catch (error: any) {
+      toast.error('Error', { description: error.message });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleDisconnect = async () => {
     if (!disconnectSender || !disconnectSender.phone) return;
@@ -179,7 +251,7 @@ export function TabSender() {
         fetchSenders();
         setDisconnectSender(null);
       } else {
-        toast.error('Gagal Memutuskan', { description: data.error });
+        toast.error('Gagal Memutuskan', { description: data.error || data.message });
       }
     } catch (error: any) {
       toast.error('Error', { description: error.message });
@@ -190,249 +262,408 @@ export function TabSender() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">WhatsApp Sender</h2>
-          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Kelola nomor WhatsApp yang digunakan untuk pengiriman pesan ke Sprinter.
-          </p>
-        </div>
+      
+      {/* 1. Bablast API Config Section */}
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold tracking-tight text-foreground uppercase text-muted-foreground">Konfigurasi Sistem</h3>
         
-        <Button onClick={handleConnectStart}>
-          + Konek Sender
-        </Button>
-      </div>
-
-      {isLoading ? (
-        <div className="flex items-center justify-center p-12 bg-muted/20 rounded-xl border border-dashed">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : senders.length === 0 ? (
-        <Card className="border-dashed shadow-sm">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mb-4">
-              <Smartphone className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-semibold text-foreground">Belum Ada Sender</h3>
-            <p className="text-sm text-muted-foreground max-w-sm mt-2 mb-6">
-              Hubungkan nomor WhatsApp Anda untuk mulai menggunakan fitur Push Mas Kurir secara otomatis.
-            </p>
-            <Button onClick={handleConnectStart}>
-              + Konek Sender
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {senders.map((sender) => (
-            <Card key={sender.id} className="shadow-sm hover:shadow-md transition-shadow border-muted">
-              <CardHeader className="pb-3 flex flex-row items-start justify-between space-y-0">
-                <div className="space-y-1.5">
-                  <CardTitle className="text-base font-semibold">
-                    {sender.display_name || sender.phone || sender.sender_id}
-                  </CardTitle>
-                  <CardDescription className="text-xs font-mono bg-muted px-2 py-0.5 rounded w-max">
-                    ID: {sender.sender_id}
-                  </CardDescription>
-                </div>
-                {sender.status === 'connected' ? (
-                  <Badge className="bg-green-500/15 text-green-700 hover:bg-green-500/25 border-green-500/20">
-                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Connected
-                  </Badge>
-                ) : sender.status === 'connecting' ? (
-                  <Badge className="bg-yellow-500/15 text-yellow-700 hover:bg-yellow-500/25 border-yellow-500/20">
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Connecting
-                  </Badge>
-                ) : (
-                  <Badge variant="destructive" className="bg-red-500/10 text-red-600 hover:bg-red-500/20 border-red-500/20">
-                    <XCircle className="mr-1.5 h-3.5 w-3.5" /> Disconnected
-                  </Badge>
-                )}
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2.5 text-sm">
-                  <div className="flex justify-between items-center py-1 border-b border-border/50">
-                    <span className="text-muted-foreground">Nomor WA</span>
-                    <span className="font-medium text-foreground">{sender.phone || '-'}</span>
+        {isConfigLoading ? (
+           <div className="flex items-center p-4 bg-muted/20 rounded-xl border border-dashed h-24">
+             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mx-auto" />
+           </div>
+        ) : (
+          <Card className="shadow-sm border-muted overflow-hidden">
+            <CardContent className="p-0">
+              <div className="p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className={`p-2.5 rounded-lg shrink-0 mt-0.5 ${configStatus?.configured ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                    <Key className="w-5 h-5" />
                   </div>
-                  <div className="flex justify-between items-center py-1 border-b border-border/50">
-                    <span className="text-muted-foreground">Terakhir Dilihat</span>
-                    <span className="text-foreground">
-                      {sender.last_seen ? new Date(sender.last_seen).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
-                    </span>
+                  <div>
+                    <h4 className="font-semibold text-base flex items-center gap-2">
+                      Bablast Global API
+                      {configStatus?.configured ? (
+                        <Badge className="bg-green-500/15 text-green-700 hover:bg-green-500/25 border-green-500/20 text-[10px] uppercase font-bold py-0 h-5">Connected</Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] uppercase font-bold py-0 h-5">Belum Terhubung</Badge>
+                      )}
+                    </h4>
+                    
+                    {configStatus?.configured ? (
+                      <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground font-mono">
+                        <span className="font-medium text-foreground">API Key:</span>
+                        <span>{configStatus.maskedKey}</span>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        LTMS belum memiliki Global API Key Bablast. Hubungkan untuk mengaktifkan WhatsApp Sender.
+                      </p>
+                    )}
                   </div>
                 </div>
                 
-                <div className="flex justify-between pt-2">
+                <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
+                  {configStatus?.configured && (
+                    <Button variant="outline" size="sm" onClick={handleTestConnection}>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Test Connection
+                    </Button>
+                  )}
+                  <Button size="sm" onClick={() => setIsConfigModalOpen(true)}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    {configStatus?.configured ? 'Ubah API Key' : 'Konfigurasi API'}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </section>
+
+      {/* 2. Sender Connection Section */}
+      <section className="space-y-3 pt-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight">WhatsApp Sender</h2>
+            <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+              Kelola nomor WhatsApp yang digunakan untuk pengiriman pesan ke Sprinter.
+            </p>
+          </div>
+          
+          <Button 
+            onClick={handleConnectStart} 
+            disabled={!configStatus?.configured}
+            title={!configStatus?.configured ? "Konfigurasikan Bablast API terlebih dahulu." : ""}
+          >
+            + Konek Sender
+          </Button>
+        </div>
+
+        {isLoading || isConfigLoading ? (
+          <div className="flex items-center justify-center p-12 bg-muted/20 rounded-xl border border-dashed">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : !configStatus?.configured ? (
+          <Card className="border-dashed shadow-sm bg-amber-50/30 border-amber-200">
+            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="h-16 w-16 bg-amber-100 rounded-full flex items-center justify-center mb-4">
+                <LinkIcon className="h-8 w-8 text-amber-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-amber-900">Bablast Belum Terhubung</h3>
+              <p className="text-sm text-amber-700/80 max-w-md mt-2 mb-6">
+                Hubungkan Global API Key Bablast terlebih dahulu untuk mengaktifkan integrasi WhatsApp Sender.
+              </p>
+              <Button onClick={() => setIsConfigModalOpen(true)} className="bg-amber-600 hover:bg-amber-700 text-white">
+                Konfigurasi Bablast API
+              </Button>
+            </CardContent>
+          </Card>
+        ) : senders.length === 0 ? (
+          <Card className="border-dashed shadow-sm">
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mb-4">
+                <Smartphone className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground">Belum Ada Sender</h3>
+              <p className="text-sm text-muted-foreground max-w-sm mt-2 mb-6">
+                Hubungkan nomor WhatsApp Anda untuk mulai menggunakan fitur Push Mas Kurir secara otomatis.
+              </p>
+              <Button onClick={handleConnectStart}>
+                + Konek Sender
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {senders.map((sender) => (
+              <Card key={sender.id} className="shadow-sm hover:shadow-md transition-shadow border-muted flex flex-col h-full">
+                <CardHeader className="pb-3 flex flex-row items-start justify-between space-y-0">
+                  <div className="space-y-1.5">
+                    <CardTitle className="text-base font-semibold">
+                      {sender.display_name || sender.phone || sender.sender_id}
+                    </CardTitle>
+                    <CardDescription className="text-xs font-mono bg-muted px-2 py-0.5 rounded w-max">
+                      ID: {sender.sender_id}
+                    </CardDescription>
+                  </div>
+                  {sender.status === 'connected' ? (
+                    <Badge className="bg-green-500/15 text-green-700 hover:bg-green-500/25 border-green-500/20">
+                      <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Connected
+                    </Badge>
+                  ) : sender.status === 'connecting' ? (
+                    <Badge className="bg-yellow-500/15 text-yellow-700 hover:bg-yellow-500/25 border-yellow-500/20">
+                      <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Connecting
+                    </Badge>
+                  ) : (
+                    <Badge variant="destructive" className="bg-red-500/10 text-red-600 hover:bg-red-500/20 border-red-500/20">
+                      <XCircle className="mr-1.5 h-3.5 w-3.5" /> Disconnected
+                    </Badge>
+                  )}
+                </CardHeader>
+                <CardContent className="pb-4 flex-1">
+                  <div className="text-sm space-y-2 text-muted-foreground">
+                    <div className="flex items-center justify-between">
+                      <span>Nomor Terhubung:</span>
+                      <span className="font-medium text-foreground">{sender.phone || '-'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Provider:</span>
+                      <span className="font-medium text-foreground">Bablast</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Terakhir Dilihat:</span>
+                      <span className="text-xs">
+                        {sender.last_seen ? new Date(sender.last_seen).toLocaleString('id-ID') : '-'}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="pt-0 flex gap-2 border-t border-border/50 p-4 bg-muted/10">
                   <Button 
                     variant="outline" 
                     size="sm" 
+                    className="flex-1 bg-white hover:bg-muted"
                     onClick={() => refreshStatus(sender.phone || sender.sender_id)}
-                    disabled={isRefreshing || !sender.phone}
-                    className="text-xs"
+                    disabled={isRefreshing}
                   >
                     <RefreshCw className={`mr-2 h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    Refresh Status
+                    Refresh
                   </Button>
                   <Button 
-                    variant="ghost" 
+                    variant="outline" 
                     size="sm" 
+                    className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50 bg-white border-red-200"
                     onClick={() => setDisconnectSender(sender)}
-                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
                   >
                     <LogOut className="mr-2 h-3.5 w-3.5" />
                     Disconnect
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
 
-      {/* Connect Sender Modal */}
-      <Dialog open={isConnectModalOpen} onOpenChange={closeConnectModal}>
+      {/* --- MODALS --- */}
+
+      {/* API Config Modal */}
+      <Dialog open={isConfigModalOpen} onOpenChange={(open) => !open && !isSavingConfig && setIsConfigModalOpen(false)}>
         <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Konfigurasi Bablast API</DialogTitle>
+            <DialogDescription>
+              Masukkan Global API Key dari dashboard Bablast Anda.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="apiKey" className="mb-2 block">Global API Key</Label>
+            <Input
+              id="apiKey"
+              type="password"
+              placeholder="bk_live_..."
+              value={apiKeyInput}
+              onChange={(e) => setApiKeyInput(e.target.value)}
+              autoComplete="off"
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              Kredensial ini akan disimpan secara aman dan terenkripsi.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsConfigModalOpen(false)} disabled={isSavingConfig}>
+              Batal
+            </Button>
+            <Button onClick={handleSaveConfig} disabled={isSavingConfig || !apiKeyInput}>
+              {isSavingConfig ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Mengetes & Menyimpan...</>
+              ) : (
+                'Test & Simpan'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Connection Flow Modal */}
+      <Dialog open={isConnectModalOpen} onOpenChange={(open) => !open && closeConnectModal()}>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Konek WhatsApp Sender</DialogTitle>
             <DialogDescription>
-              {connectStep === 1 && "Masukkan nomor WhatsApp yang akan digunakan sebagai pengirim pesan."}
-              {connectStep === 2 && "Pilih metode pairing yang ingin Anda gunakan."}
-              {connectStep === 3 && "Selesaikan proses pairing di aplikasi WhatsApp Anda."}
+              Ikuti langkah di bawah ini untuk menghubungkan perangkat Anda.
             </DialogDescription>
           </DialogHeader>
 
-          {connectStep === 1 && (
-            <div className="py-4 space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="phone">Nomor WhatsApp</Label>
-                <Input
-                  id="phone"
-                  placeholder="628xxxxxxxxxx"
-                  value={connectPhone}
-                  onChange={(e) => setConnectPhone(e.target.value.replace(/\D/g, ''))}
-                />
-                <p className="text-xs text-muted-foreground">Gunakan format internasional (contoh: 62822...)</p>
-              </div>
-              <DialogFooter>
-                <Button onClick={handleConnectStep1}>Lanjutkan</Button>
-              </DialogFooter>
-            </div>
-          )}
-
-          {connectStep === 2 && (
-            <div className="py-6 grid grid-cols-2 gap-4">
-              <Card 
-                className="cursor-pointer hover:border-red-500 hover:bg-red-50/50 transition-colors"
-                onClick={() => requestPairing('qr')}
-              >
-                <CardContent className="flex flex-col items-center justify-center p-6 text-center h-full">
-                  <QrCode className="h-10 w-10 text-red-600 mb-3" />
-                  <h4 className="font-semibold text-sm">QR Code</h4>
-                  <p className="text-xs text-muted-foreground mt-1">Scan menggunakan WhatsApp</p>
-                </CardContent>
-              </Card>
-              <Card 
-                className="cursor-pointer hover:border-red-500 hover:bg-red-50/50 transition-colors"
-                onClick={() => requestPairing('code')}
-              >
-                <CardContent className="flex flex-col items-center justify-center p-6 text-center h-full">
-                  <Hash className="h-10 w-10 text-red-600 mb-3" />
-                  <h4 className="font-semibold text-sm">Pairing Code</h4>
-                  <p className="text-xs text-muted-foreground mt-1">Hubungkan dengan kode pairing</p>
-                </CardContent>
-              </Card>
-              
-              {isRequestingPair && (
-                <div className="col-span-2 flex justify-center py-4">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <div className="py-4">
+            {/* Step 1: Input Phone */}
+            {connectStep === 1 && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Nomor WhatsApp Pengirim</Label>
+                  <Input 
+                    id="phone" 
+                    placeholder="Contoh: 6282211700060" 
+                    value={connectPhone}
+                    onChange={(e) => setConnectPhone(e.target.value.replace(/\D/g, ''))}
+                  />
+                  <p className="text-xs text-muted-foreground">Gunakan awalan kode negara (62).</p>
                 </div>
-              )}
-            </div>
-          )}
+                <div className="pt-4 flex justify-end">
+                  <Button onClick={handleConnectStep1}>Lanjut</Button>
+                </div>
+              </div>
+            )}
 
-          {connectStep === 3 && (
-            <div className="py-6 flex flex-col items-center text-center space-y-6">
-              {connectMethod === 'qr' && pairingData?.qr_data ? (
-                <div className="space-y-4 flex flex-col items-center">
-                  {/* Since we don't have a QR generator library installed by default in this component, 
-                      we'll render a placeholder or use an external API if we have the raw string, 
-                      or assume pairingData contains a base64 image if it's an image. 
-                      Assuming bablast gives a base64 image or a text string. */}
-                  {pairingData.qr_image ? (
-                    <img src={pairingData.qr_image} alt="QR Code" className="w-48 h-48 border rounded-lg p-2 bg-white" />
-                  ) : (
-                    <div className="w-48 h-48 border-2 border-dashed rounded-lg flex items-center justify-center bg-muted/30">
-                      <QrCode className="w-12 h-12 text-muted-foreground/50" />
-                      {/* Note: In a real implementation we'd use qrcode.react here using pairingData.qr_data */}
+            {/* Step 2: Choose Method */}
+            {connectStep === 2 && (
+              <div className="space-y-6">
+                <div className="text-center space-y-1 mb-4">
+                  <p className="text-sm font-medium">Nomor: {connectPhone}</p>
+                  <p className="text-sm text-muted-foreground">Pilih metode otentikasi</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <Card 
+                    className={`cursor-pointer hover:border-primary transition-all ${connectMethod === 'qr' ? 'border-primary ring-1 ring-primary' : ''}`}
+                    onClick={() => requestPairing('qr')}
+                  >
+                    <CardContent className="flex flex-col items-center justify-center p-6 text-center space-y-3">
+                      <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                        <QrCode className="h-6 w-6 text-primary" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-sm">QR Code</h4>
+                        <p className="text-xs text-muted-foreground mt-1">Scan menggunakan aplikasi WhatsApp</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card 
+                    className={`cursor-pointer hover:border-primary transition-all ${connectMethod === 'code' ? 'border-primary ring-1 ring-primary' : ''}`}
+                    onClick={() => requestPairing('code')}
+                  >
+                    <CardContent className="flex flex-col items-center justify-center p-6 text-center space-y-3">
+                      <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Hash className="h-6 w-6 text-primary" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-sm">Pairing Code</h4>
+                        <p className="text-xs text-muted-foreground mt-1">Gunakan kode 8 karakter</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {isRequestingPair && (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mr-2" />
+                    <span className="text-sm text-muted-foreground">Meminta data dari provider...</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 3: Action Phase */}
+            {connectStep === 3 && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between bg-muted/30 p-3 rounded-md border text-sm">
+                  <span className="text-muted-foreground">Status:</span>
+                  <Badge variant={
+                    pairingStatus === 'connected' ? 'default' :
+                    pairingStatus === 'failed' || pairingStatus === 'timeout' ? 'destructive' : 'secondary'
+                  } className="capitalize">
+                    {pairingStatus === 'pending' ? (
+                      <span className="flex items-center"><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Menunggu...</span>
+                    ) : pairingStatus}
+                  </Badge>
+                </div>
+
+                {connectMethod === 'qr' && pairingData?.qr ? (
+                  <div className="flex flex-col items-center space-y-4">
+                    {pairingStatus === 'timeout' ? (
+                      <div className="p-8 border border-dashed rounded-lg bg-muted text-center w-64 h-64 flex flex-col items-center justify-center text-muted-foreground">
+                        <XCircle className="h-8 w-8 mb-2" />
+                        <p>Sesi Berakhir</p>
+                        <Button variant="outline" size="sm" className="mt-4" onClick={() => requestPairing('qr')}>Coba Lagi</Button>
+                      </div>
+                    ) : pairingStatus === 'connected' ? (
+                      <div className="p-8 border border-dashed border-green-200 rounded-lg bg-green-50 text-center w-64 h-64 flex flex-col items-center justify-center text-green-700">
+                        <CheckCircle2 className="h-12 w-12 mb-4" />
+                        <p className="font-semibold">Berhasil Terhubung!</p>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-white border rounded-xl shadow-sm">
+                        <img src={pairingData.qr} alt="WhatsApp QR Code" className="w-64 h-64 object-contain" />
+                      </div>
+                    )}
+                    <div className="text-center">
+                      <h4 className="font-semibold text-foreground">Scan QR Code</h4>
+                      <p className="text-sm text-muted-foreground mt-1">Buka WhatsApp &gt; Tautkan Perangkat &gt; Scan QR</p>
                     </div>
-                  )}
-                  <div>
-                    <h4 className="font-semibold text-foreground">Scan QR Code</h4>
-                    <p className="text-sm text-muted-foreground mt-1">Buka WhatsApp &gt; Tautkan Perangkat &gt; Scan QR</p>
                   </div>
-                </div>
-              ) : connectMethod === 'code' && pairingData?.pairing_code ? (
-                <div className="space-y-4 flex flex-col items-center w-full">
-                  <div className="w-full bg-muted/50 p-6 rounded-xl border border-border">
-                    <h4 className="text-sm font-medium text-muted-foreground mb-2">Kode Pairing Anda</h4>
-                    <p className="text-3xl font-bold tracking-[0.2em] text-foreground">{pairingData.pairing_code}</p>
+                ) : connectMethod === 'code' && pairingData?.pairing_code ? (
+                  <div className="flex flex-col items-center space-y-6">
+                    {pairingStatus === 'timeout' ? (
+                      <div className="p-8 border border-dashed rounded-lg bg-muted text-center w-full flex flex-col items-center justify-center text-muted-foreground">
+                        <XCircle className="h-8 w-8 mb-2" />
+                        <p>Sesi Berakhir</p>
+                        <Button variant="outline" size="sm" className="mt-4" onClick={() => requestPairing('code')}>Coba Lagi</Button>
+                      </div>
+                    ) : pairingStatus === 'connected' ? (
+                      <div className="p-8 border border-dashed border-green-200 rounded-lg bg-green-50 text-center w-full flex flex-col items-center justify-center text-green-700">
+                        <CheckCircle2 className="h-12 w-12 mb-4" />
+                        <p className="font-semibold">Berhasil Terhubung!</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-center">
+                          <h4 className="font-semibold text-foreground">Kode Tautan</h4>
+                          <p className="text-sm text-muted-foreground mt-1">Masukkan kode ini pada aplikasi WhatsApp Anda.</p>
+                        </div>
+                        <div className="bg-muted px-8 py-6 rounded-xl border border-dashed w-full max-w-sm flex items-center justify-center">
+                          <span className="text-4xl font-mono font-bold tracking-[0.2em] text-primary">{pairingData.pairing_code}</span>
+                        </div>
+                        <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-1.5 ml-2">
+                          <li>Buka WhatsApp di HP Anda</li>
+                          <li>Ketuk menu tiga titik &gt; Tautkan Perangkat</li>
+                          <li>Pilih "Tautkan dengan nomor telepon saja"</li>
+                          <li>Masukkan kode di atas</li>
+                        </ol>
+                      </>
+                    )}
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Masukkan kode ini pada notifikasi Tautkan Perangkat di WhatsApp Anda.</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
-                  <p className="text-sm text-muted-foreground">Menyiapkan metode pairing...</p>
-                </div>
-              )}
-              
-              <div className="w-full pt-4 border-t border-border">
-                {pairingStatus === 'pending' && (
-                  <div className="flex items-center justify-center text-yellow-600 bg-yellow-50 py-2 px-4 rounded-full text-sm font-medium w-max mx-auto">
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                    🟡 Menunggu koneksi...
-                  </div>
-                )}
-                {pairingStatus === 'connected' && (
-                  <div className="flex items-center justify-center text-green-700 bg-green-50 py-2 px-4 rounded-full text-sm font-medium w-max mx-auto">
-                    <CheckCircle2 className="w-4 h-4 mr-2" />
-                    🟢 Berhasil Terhubung
-                  </div>
-                )}
-                {pairingStatus === 'timeout' && (
-                  <div className="flex items-center justify-center text-red-600 bg-red-50 py-2 px-4 rounded-full text-sm font-medium w-max mx-auto">
-                    <XCircle className="w-4 h-4 mr-2" />
-                    🔴 Waktu Habis
+                ) : (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Disconnect Modal */}
-      <Dialog open={!!disconnectSender} onOpenChange={(open) => !open && setDisconnectSender(null)}>
+      <Dialog open={!!disconnectSender} onOpenChange={(open) => !open && !isDisconnecting && setDisconnectSender(null)}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Putuskan WhatsApp Sender?</DialogTitle>
+            <DialogTitle>Putuskan Koneksi Sender</DialogTitle>
             <DialogDescription>
-              Nomor: <span className="font-semibold text-foreground">{disconnectSender?.phone}</span>
+              Apakah Anda yakin ingin memutus koneksi WhatsApp untuk nomor <strong>{disconnectSender?.phone || disconnectSender?.sender_id}</strong>?
+              Anda harus memindai ulang QR Code untuk menghubungkannya kembali.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4 text-sm text-muted-foreground">
-            Nomor ini tidak dapat digunakan untuk mengirim pesan Push Mas Kurir sampai dihubungkan kembali.
-          </div>
-          <DialogFooter>
+          <DialogFooter className="pt-4">
             <Button variant="outline" onClick={() => setDisconnectSender(null)} disabled={isDisconnecting}>
               Batal
             </Button>
             <Button variant="destructive" onClick={handleDisconnect} disabled={isDisconnecting}>
-              {isDisconnecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Putuskan
+              {isDisconnecting ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Memutuskan...</>
+              ) : (
+                'Putuskan Koneksi'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
