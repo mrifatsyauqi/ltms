@@ -57,21 +57,25 @@ export class BablastService {
   }
 
   async testConnection(apiKey: string): Promise<boolean> {
-    const { baseUrl } = await getBablastCredentials();
     try {
-      // Use senders list as a lightweight ping to verify API Key scope & validity
-      const response = await fetchWithTimeout(`${baseUrl}/wa/senders`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        }
-      });
-      if (response.ok) return true;
-      throw this.handleBablastError(response.status);
-    } catch (error) {
-      console.error('Bablast test connection error:', error);
-      throw error;
+      // Use SDK to verify API Key scope & validity instead of guessing REST endpoint
+      const client = new BablastClient({ apiKey });
+      const senders = await client.wa.senders.list();
+      
+      // If no error is thrown, the API Key is valid
+      return true;
+    } catch (error: any) {
+      console.error('Bablast test connection error:', error.message);
+      
+      // Attempt to map error message if possible
+      const msg = error.message?.toLowerCase() || '';
+      if (msg.includes('401') || msg.includes('unauthorized')) {
+        throw this.handleBablastError(401);
+      } else if (msg.includes('403') || msg.includes('forbidden')) {
+        throw this.handleBablastError(403);
+      }
+      
+      throw new ApiError('500', 'Gagal memvalidasi API Key ke Bablast: ' + (error.message || 'Unknown Error'));
     }
   }
 
