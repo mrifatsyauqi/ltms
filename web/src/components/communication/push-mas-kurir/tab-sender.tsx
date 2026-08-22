@@ -631,55 +631,57 @@ export function TabSender() {
     <div className="space-y-6">
       
       {/* 1. Bablast API Config Section */}
-      <section className="space-y-3">
-        <h3 className="text-sm font-semibold tracking-tight text-foreground uppercase text-muted-foreground">Konfigurasi Sistem</h3>
-        
-        {isConfigLoading ? (
-           <div className="flex items-center p-4 bg-muted/20 rounded-xl border border-dashed h-24">
-             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mx-auto" />
-           </div>
-        ) : (
-          <Card className="shadow-sm border-muted overflow-hidden">
-            <CardContent className="p-0">
-              <div className="p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  <div className={`p-2.5 rounded-lg shrink-0 mt-0.5 ${configStatus?.configured ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                    <Key className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-base flex items-center gap-2">
-                      Bablast Global API
+      {(!configStatus || configStatus.isSuperAdmin) && (
+        <section className="space-y-3">
+          <h3 className="text-sm font-semibold tracking-tight text-foreground uppercase text-muted-foreground">Konfigurasi Sistem Global</h3>
+          
+          {isConfigLoading ? (
+             <div className="flex items-center p-4 bg-muted/20 rounded-xl border border-dashed h-24">
+               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mx-auto" />
+             </div>
+          ) : (
+            <Card className="shadow-sm border-muted overflow-hidden">
+              <CardContent className="p-0">
+                <div className="p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="flex items-start gap-4">
+                    <div className={`p-2.5 rounded-lg shrink-0 mt-0.5 ${configStatus?.configured ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                      <Key className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-base flex items-center gap-2">
+                        Bablast Global API
+                        {configStatus?.configured ? (
+                          <Badge className="bg-green-500/15 text-green-700 hover:bg-green-500/25 border-green-500/20 text-[10px] uppercase font-bold py-0 h-5">Connected</Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] uppercase font-bold py-0 h-5">Belum Terhubung</Badge>
+                        )}
+                      </h4>
+                      
                       {configStatus?.configured ? (
-                        <Badge className="bg-green-500/15 text-green-700 hover:bg-green-500/25 border-green-500/20 text-[10px] uppercase font-bold py-0 h-5">Connected</Badge>
+                        <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground font-mono">
+                          <span className="font-medium text-foreground">API Key:</span>
+                          <span>{configStatus.maskedKey}</span>
+                        </div>
                       ) : (
-                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] uppercase font-bold py-0 h-5">Belum Terhubung</Badge>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          LTMS belum memiliki Global API Key Bablast. Hubungkan untuk mengaktifkan WhatsApp Sender.
+                        </p>
                       )}
-                    </h4>
-                    
-                    {configStatus?.configured ? (
-                      <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground font-mono">
-                        <span className="font-medium text-foreground">API Key:</span>
-                        <span>{configStatus.maskedKey}</span>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        LTMS belum memiliki Global API Key Bablast. Hubungkan untuk mengaktifkan WhatsApp Sender.
-                      </p>
-                    )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
+                    <Button size="sm" onClick={() => setIsConfigModalOpen(true)}>
+                      <Settings className="mr-2 h-4 w-4" />
+                      {configStatus?.configured ? 'Ubah API Key' : 'Konfigurasi API'}
+                    </Button>
                   </div>
                 </div>
-                
-                <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
-                  <Button size="sm" onClick={() => setIsConfigModalOpen(true)}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    {configStatus?.configured ? 'Ubah API Key' : 'Konfigurasi API'}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </section>
+              </CardContent>
+            </Card>
+          )}
+        </section>
+      )}
 
       {/* 2. Sender Connection Section */}
       <section className="space-y-3 pt-4">

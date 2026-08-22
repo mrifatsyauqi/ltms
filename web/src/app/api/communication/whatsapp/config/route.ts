@@ -9,16 +9,15 @@ export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) return unauthenticated();
 
-  if ((session.user as any).role !== 'Super Admin') {
-    return NextResponse.json({ success: false, message: 'Forbidden: Super Admin only' }, { status: 403 });
-  }
+  const isSuperAdmin = (session.user as any).role === 'Super Admin';
 
   try {
     const { apiKey, isConfigured } = await getBablastCredentials();
     
     // Mask the API Key to send to the browser (e.g. bk_live_12345678 -> bk_live_********)
     let maskedKey = '';
-    if (isConfigured && apiKey) {
+    // Only send masked key if user is Super Admin
+    if (isSuperAdmin && isConfigured && apiKey) {
       const prefix = apiKey.substring(0, 10); // keep prefix like "bk_live_" if any
       maskedKey = `${prefix}${'•'.repeat(16)}`;
     }
@@ -29,7 +28,8 @@ export async function GET(req: NextRequest) {
         configured: isConfigured,
         provider: 'bablast',
         connection: isConfigured ? 'connected' : 'disconnected',
-        maskedKey
+        maskedKey,
+        isSuperAdmin // UI will use this to show/hide the config section
       }
     });
   } catch (error: any) {
