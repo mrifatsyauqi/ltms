@@ -33,8 +33,9 @@ export async function POST(request: Request) {
     // 1. Temukan batch berdasarkan blast_id dari Bablast
     let batchIdToUpdate = null;
     if (blast_id) {
+      // payload aktual dari bablast menunjukkan blast_id adalah integer, bukan string "blast_xxx"
+      // tapi kita tetap handle jika sewaktu-waktu jadi string
       const incomingBlastId = String(blast_id).trim();
-      // Hanya menghapus prefix "blast_" jika formatnya terbukti demikian
       const normalizedBlastId = incomingBlastId.replace(/^blast_/i, "");
       
       const { data: batchData, error: batchError } = await supabase
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
       alternateRecipient = '62' + normalizedRecipient.substring(1);
     }
 
-    // 2. Jika tidak ada batchId (mungkin pesan satuan), fallback ke pencarian berdasarkan nomor HP terakhir
+    // 2. Cari log berdasarkan batchId dan/atau nomor HP
     let logQuery = supabase.from('whatsapp_send_logs').select('id, batch_id')
       .or(`phone_number.eq.${normalizedRecipient},phone_number.eq.${alternateRecipient}`);
       
@@ -82,39 +83,47 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, note: 'No matching log found' });
     }
 
-    // Map Bablast status to LTMS status
-    // Expected from Bablast: event: message_sent, message_failed, dll
-    let normalizedStatus = 'QUEUED'; // Default safe state
+    // 3. Map Bablast status to LTMS status
+    // Berdasarkan payload aktual: event = "message_sent" ("dikirim"), "message_delivered" ("terkirim")
+    let normalizedStatus = 'QUEUED';
+    const rawStatus = data.status ? String(data.status).toLowerCase() : '';
     
-    if (event === 'message_sent') {
+    // Gunakan prioritas: event name > status text
+    if (event === 'message_delivered' || rawStatus === 'terkirim') {
+      normalizedStatus = 'DELIVERED';
+    } else if (event === 'message_sent' || rawStatus === 'dikirim' || rawStatus === 'sent') {
       normalizedStatus = 'SENT';
-    } else if (event === 'message_failed') {
+    } else if (event === 'message_read' || rawStatus === 'dibaca' || rawStatus === 'read') {
+      normalizedStatus = 'READ';
+    } else if (event === 'message_failed' || rawStatus === 'gagal' || rawStatus === 'error' || rawStatus === 'failed') {
       normalizedStatus = 'FAILED';
+    } else if (event === 'blast_started' || rawStatus === 'progress' || rawStatus === 'pending') {
+      normalizedStatus = 'PROCESSING';
     } else {
-      // Fallback mapping based on data.status if event is unknown or not explicitly handled
-      console.log(`[WEBHOOK_UNKNOWN_EVENT] event=${event} - falling back to data.status mapping`);
-      let rawStatus = data.status ? data.status.toUpperCase() : 'SENT';
-      normalizedStatus = rawStatus;
-      if (rawStatus === 'ERROR') normalizedStatus = 'FAILED';
-      if (rawStatus === 'SUCCESS') normalizedStatus = 'SENT';
-      if (rawStatus === 'PROGRESS') normalizedStatus = 'PROCESSING';
-      if (rawStatus === 'PENDING') normalizedStatus = 'QUEUED';
+      console.log(`[WEBHOOK_UNKNOWN_EVENT] event=${event}, status=${rawStatus} - mapping as QUEUED`);
     }
 
+    // 4. Update log status
+    const messageId = data.wa_message_id || data.message_id || null;
     const { error: updateError } = await supabase
       .from('whatsapp_send_logs')
       .update({
         status: normalizedStatus,
-        bablast_message_id: data.message_id,
+        bablast_message_id: messageId,
         error_message: data.error,
         updated_at: new Date().toISOString(),
-        ...(data.status === 'sent' || data.status === 'SENT' ? { sent_at: data.timestamp || new Date().toISOString() } : {}),
-        ...(data.status === 'delivered' || data.status === 'DELIVERED' ? { delivered_at: data.timestamp || new Date().toISOString() } : {}),
-        ...(data.status === 'read' || data.status === 'READ' ? { read_at: data.timestamp || new Date().toISOString() } : {})
+        ...(normalizedStatus === 'SENT' ? { sent_at: data.timestamp || new Date().toISOString() } : {}),
+        ...(normalizedStatus === 'DELIVERED' ? { delivered_at: data.timestamp || new Date().toISOString() } : {}),
+        ...(normalizedStatus === 'READ' ? { read_at: data.timestamp || new Date().toISOString() } : {})
       })
       .eq('id', latestLog.id);
 
-    // After updating log, we should recalculate the batch progress
+    if (updateError) {
+      console.error('Failed to update webhook log:', updateError);
+      return NextResponse.json({ ok: false, error: 'Database error' }, { status: 500 });
+    }
+
+    // 5. Recalculate batch progress
     if (latestLog.batch_id && (normalizedStatus === 'SENT' || normalizedStatus === 'FAILED' || normalizedStatus === 'DELIVERED' || normalizedStatus === 'READ')) {
       const { data: logsData } = await supabase
         .from('whatsapp_send_logs')
@@ -127,6 +136,7 @@ export async function POST(request: Request) {
         let processedCount = 0;
 
         logsData.forEach((l: any) => {
+          // Hanya hitung status final ke target_count
           if (['SENT', 'DELIVERED', 'READ'].includes(l.status)) successCount++;
           if (l.status === 'FAILED') failedCount++;
           if (['SENT', 'DELIVERED', 'READ', 'FAILED'].includes(l.status)) processedCount++;
@@ -145,11 +155,6 @@ export async function POST(request: Request) {
           })
           .eq('id', latestLog.batch_id);
       }
-    }
-
-    if (updateError) {
-      console.error('Failed to update webhook log:', updateError);
-      return NextResponse.json({ ok: false, error: 'Database error' }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });
