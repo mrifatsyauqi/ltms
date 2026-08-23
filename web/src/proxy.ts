@@ -15,9 +15,10 @@ export const config = {
   // gambarnya), aset branding (public/branding/* DISAJIKAN di URL /branding/*
   // - BUKAN /public/branding/* - folder "public" Next.js bukan bagian dari
   // URL, jadi butuh pengecualian sendiri; tanpa ini logo di halaman Login
-  // sendiri ikut diblokir krn belum ada sesi), dan Link Berbagi Laporan
+  // sendiri ikut diblokir krn belum ada sesi), Link Berbagi Laporan
   // (/public/[token]/*, /api/public/[token]/*) - route publik itu SENGAJA
   // tanpa session sama sekali, keamanannya ditegakkan sendiri lewat validasi
-  // token (lihat public-share.ts), bukan NextAuth.
-  matcher: ['/((?!login|api/auth|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|branding|public|api/public).*)'],
+  // token (lihat public-share.ts), bukan NextAuth,
+  // DAN rute webhook eksternal yang di-authenticate terpisah via Webhook Secret.
+  matcher: ['/((?!login|api/auth|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|branding|public|api/public|api/communication/whatsapp/webhook).*)'],
 };
