@@ -149,4 +149,8 @@ async function handler(req: NextRequest) {
 }
 
 // Next.js QStash signature verification middleware
-export const POST = verifySignatureAppRouter(handler);
+// We provide dummy fallback values so the build doesn't crash during static analysis
+export const POST = verifySignatureAppRouter(handler, {
+  currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY || 'dummy_current_key',
+  nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY || 'dummy_next_key',
+});
