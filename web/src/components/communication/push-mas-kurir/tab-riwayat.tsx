@@ -2,16 +2,14 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { fetchRecentBatchesAction } from '@/app/(app)/communication/push-mas-kurir/actions';
-import { Search, Loader2, Calendar, User, Clock, MessageSquare, AlertCircle, RefreshCcw } from 'lucide-react';
+import { fetchRecentBatchesAction, fetchBatchLogsAction } from '@/app/(app)/communication/push-mas-kurir/actions';
+import { Search, Loader2, Calendar, User, Clock, MessageSquare, AlertCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { fetchBatchLogsAction } from '@/app/(app)/communication/push-mas-kurir/actions';
 
 export function TabRiwayat() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,13 +45,13 @@ export function TabRiwayat() {
   const getStatusBadge = (status: string) => {
     switch(status.toUpperCase()) {
       case 'COMPLETED':
-        return <Badge className="bg-green-500/15 text-green-700 hover:bg-green-500/25 border-green-500/20">Completed</Badge>;
+        return <Badge className="bg-green-500/15 text-green-700 hover:bg-green-500/25 border-green-500/20">Selesai</Badge>;
       case 'PARTIAL':
-        return <Badge className="bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 border-amber-500/20">Partial Success</Badge>;
+        return <Badge className="bg-amber-500/15 text-amber-700 hover:bg-amber-500/25 border-amber-500/20">Selesai Sebagian</Badge>;
       case 'FAILED':
-        return <Badge variant="destructive" className="bg-red-500/10 text-red-600 hover:bg-red-500/20 border-red-500/20">Failed</Badge>;
+        return <Badge variant="destructive" className="bg-red-500/10 text-red-600 hover:bg-red-500/20 border-red-500/20">Gagal</Badge>;
       case 'QUEUED':
-        return <Badge variant="secondary" className="bg-muted text-muted-foreground border-border">Queued</Badge>;
+        return <Badge variant="secondary" className="bg-muted text-muted-foreground border-border">Dalam Antrean</Badge>;
       case 'PROCESSING':
       case 'SENDING':
         return (
@@ -110,11 +108,11 @@ export function TabRiwayat() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Semua Status</SelectItem>
-              <SelectItem value="QUEUED">Queued</SelectItem>
-              <SelectItem value="PROCESSING">Processing</SelectItem>
-              <SelectItem value="COMPLETED">Completed</SelectItem>
-              <SelectItem value="PARTIAL">Partial</SelectItem>
-              <SelectItem value="FAILED">Failed</SelectItem>
+              <SelectItem value="QUEUED">Dalam Antrean</SelectItem>
+              <SelectItem value="PROCESSING">Sedang Mengirim</SelectItem>
+              <SelectItem value="COMPLETED">Selesai</SelectItem>
+              <SelectItem value="PARTIAL">Selesai Sebagian</SelectItem>
+              <SelectItem value="FAILED">Gagal</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -123,85 +121,109 @@ export function TabRiwayat() {
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
           <Loader2 className="h-8 w-8 animate-spin mb-4" />
-          <span>Memuat batch riwayat...</span>
+          <span>Memuat riwayat pengiriman...</span>
         </div>
       ) : filteredBatches.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-muted-foreground bg-muted/20 border rounded-lg border-dashed">
           <MessageSquare className="h-10 w-10 text-muted-foreground/50 mb-4" />
-          <span>Tidak ada riwayat batch ditemukan.</span>
+          <span>Tidak ada riwayat pengiriman ditemukan.</span>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredBatches.map((batch: any) => {
-            const processed = (batch.success_count || 0) + (batch.failed_count || 0);
-            const total = batch.total_messages || batch.target_count || 1; // target_count is legacy fallback
-            const percentage = Math.round((processed / total) * 100);
-            
-            return (
-              <Card key={batch.id} className="shadow-sm hover:shadow-md transition-shadow duration-200 border-border/60">
-                <CardContent className="p-5 flex flex-col gap-4">
-                  <div className="flex justify-between items-start gap-2">
-                    <div className="space-y-1 truncate">
-                      <div className="font-semibold truncate text-base flex items-center gap-2">
-                        {batch.template?.name || 'Batch Pengiriman'}
-                        <Badge variant="outline" className="text-[10px] font-mono">{batch.drop_point_id}</Badge>
+        <div className="border rounded-lg bg-background overflow-hidden shadow-sm">
+          <Table>
+            <TableHeader className="bg-muted/50">
+              <TableRow>
+                <TableHead className="w-[280px]">Batch Info</TableHead>
+                <TableHead className="w-[180px]">Konfigurasi</TableHead>
+                <TableHead className="min-w-[200px]">Progress</TableHead>
+                <TableHead className="w-[140px]">Metrik</TableHead>
+                <TableHead className="w-[140px]">Status</TableHead>
+                <TableHead className="w-[100px] text-right">Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredBatches.map((batch: any) => {
+                const successCount = batch.success_count || 0;
+                const failedCount = batch.failed_count || 0;
+                const queuedCount = batch.queued_count || 0;
+                const processed = successCount + failedCount;
+                const total = batch.total_messages || batch.target_count || 1; // target_count is legacy fallback
+                const percentage = Math.round((processed / total) * 100);
+                
+                return (
+                  <TableRow key={batch.id} className="hover:bg-muted/30">
+                    <TableCell>
+                      <div className="space-y-1.5">
+                        <div className="font-medium text-sm flex items-center gap-2 truncate max-w-[250px]" title={batch.template?.name || 'Batch Pengiriman'}>
+                          {batch.template?.name || 'Batch Pengiriman'}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-[10px] h-5 font-mono px-1.5">{batch.drop_point_id}</Badge>
+                          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {new Date(batch.created_at).toLocaleString('id-ID', {
+                              day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+                            })}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center text-xs text-muted-foreground gap-1.5">
-                        <Calendar className="w-3.5 h-3.5" />
-                        {new Date(batch.created_at).toLocaleString('id-ID', {
-                          day: 'numeric', month: 'short', year: 'numeric',
-                          hour: '2-digit', minute: '2-digit'
-                        })}
-                      </div>
-                    </div>
-                    {getStatusBadge(batch.status)}
-                  </div>
-
-                  <div className="bg-muted/30 p-3 rounded-lg border border-border/50 text-sm grid grid-cols-2 gap-y-2">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <User className="w-3.5 h-3.5" />
-                      <span className="truncate">{batch.sender_code || 'Sistem'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="w-3.5 h-3.5" />
-                      <span>{batch.delay_seconds || 0}s Delay</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-end text-sm">
-                      <span className="text-muted-foreground font-medium">{total} pesan</span>
-                      <span className="font-semibold">{processed} / {total}</span>
-                    </div>
+                    </TableCell>
                     
-                    <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden flex">
-                      <div 
-                        className="bg-green-500 h-full transition-all duration-500" 
-                        style={{ width: `${(batch.success_count / total) * 100}%` }}
-                      />
-                      <div 
-                        className="bg-red-500 h-full transition-all duration-500" 
-                        style={{ width: `${(batch.failed_count / total) * 100}%` }}
-                      />
-                      {/* Queued part remains gray/muted */}
-                    </div>
-
-                    <div className="flex items-center gap-4 text-xs font-medium pt-1">
-                      <span className="text-green-600 flex items-center gap-1">✓ Berhasil {batch.success_count || 0}</span>
-                      {batch.failed_count > 0 && <span className="text-red-600 flex items-center gap-1">✕ Gagal {batch.failed_count}</span>}
-                      {batch.queued_count > 0 && <span className="text-muted-foreground flex items-center gap-1">◷ Menunggu {batch.queued_count}</span>}
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t mt-1 flex justify-end">
-                    <Button variant="ghost" size="sm" className="text-xs h-8 text-primary" onClick={() => setSelectedBatch(batch.id)}>
-                      Lihat Detail
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                    <TableCell>
+                      <div className="space-y-1.5 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1.5">
+                          <User className="w-3 h-3" />
+                          <span className="font-mono">{batch.sender_code || 'Sistem'}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3 h-3" />
+                          <span>Delay: {batch.delay_seconds || 0}s</span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    
+                    <TableCell>
+                      <div className="space-y-2 pr-4">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="font-medium">{processed} / {total} Pesan</span>
+                          <span className="text-muted-foreground">{percentage}%</span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-2 overflow-hidden flex">
+                          <div 
+                            className="bg-green-500 h-full transition-all duration-500" 
+                            style={{ width: `${(successCount / total) * 100}%` }}
+                          />
+                          <div 
+                            className="bg-red-500 h-full transition-all duration-500" 
+                            style={{ width: `${(failedCount / total) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    </TableCell>
+                    
+                    <TableCell>
+                      <div className="flex flex-col gap-1 text-[11px] font-medium">
+                        {successCount > 0 && <span className="text-green-600">Berhasil: {successCount}</span>}
+                        {failedCount > 0 && <span className="text-red-600">Gagal: {failedCount}</span>}
+                        {queuedCount > 0 && <span className="text-muted-foreground">Menunggu: {queuedCount}</span>}
+                        {successCount === 0 && failedCount === 0 && queuedCount === 0 && <span className="text-muted-foreground">Belum ada</span>}
+                      </div>
+                    </TableCell>
+                    
+                    <TableCell>
+                      {getStatusBadge(batch.status)}
+                    </TableCell>
+                    
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" className="h-8 text-xs font-medium" onClick={() => setSelectedBatch(batch.id)}>
+                        Detail
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
       )}
 
