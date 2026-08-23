@@ -12,7 +12,10 @@ export async function POST(request: Request) {
     }
     
     const body = await request.json();
+    console.log('[WEBHOOK_RECEIVED] Raw body:', JSON.stringify(body, null, 2));
+
     const { event, blast_id, data } = body;
+    console.log(`[WEBHOOK_PARSED] event=${event}, blast_id=${blast_id}, data=`, data);
     
     if (!data || !data.recipient) {
       return NextResponse.json({ ok: false, error: 'Invalid webhook payload' }, { status: 400 });
@@ -23,18 +26,35 @@ export async function POST(request: Request) {
     // 1. Temukan batch berdasarkan blast_id dari Bablast
     let batchIdToUpdate = null;
     if (blast_id) {
-      const { data: batchData } = await supabase
+      const { data: batchData, error: batchError } = await supabase
         .from('whatsapp_send_batches')
-        .select('id')
-        .eq('blast_id', blast_id)
+        .select('id, blast_id')
+        .eq('blast_id', Number(blast_id))
         .maybeSingle();
+      if (batchError) console.error('[WEBHOOK_ERROR] Failed to fetch batch:', batchError);
       if (batchData) {
         batchIdToUpdate = batchData.id;
+        console.log(`[WEBHOOK_MAPPING] Found batch.id=${batchIdToUpdate} for blast_id=${blast_id}`);
+      } else {
+        console.warn(`[WEBHOOK_MAPPING] No batch found for blast_id=${blast_id}`);
       }
     }
 
+    // Normalisasi nomor telepon
+    let normalizedRecipient = String(data.recipient || '').replace(/\D/g, ''); // remove non-digits
+    let alternateRecipient = normalizedRecipient;
+    
+    // Jika data.recipient berawalan 62, alternatifnya berawalan 0
+    if (normalizedRecipient.startsWith('62')) {
+      alternateRecipient = '0' + normalizedRecipient.substring(2);
+    } else if (normalizedRecipient.startsWith('0')) {
+      alternateRecipient = '62' + normalizedRecipient.substring(1);
+    }
+
     // 2. Jika tidak ada batchId (mungkin pesan satuan), fallback ke pencarian berdasarkan nomor HP terakhir
-    let logQuery = supabase.from('whatsapp_send_logs').select('id, batch_id').eq('phone_number', data.recipient);
+    let logQuery = supabase.from('whatsapp_send_logs').select('id, batch_id')
+      .or(`phone_number.eq.${normalizedRecipient},phone_number.eq.${alternateRecipient}`);
+      
     if (batchIdToUpdate) {
       logQuery = logQuery.eq('batch_id', batchIdToUpdate);
     }
@@ -45,12 +65,19 @@ export async function POST(request: Request) {
       .single();
 
     if (fetchError || !latestLog) {
+      console.warn(`[WEBHOOK_MAPPING] No matching log found for phone=${data.recipient} and batch_id=${batchIdToUpdate}`);
       return NextResponse.json({ ok: true, note: 'No matching log found' });
     }
+    console.log(`[WEBHOOK_MAPPING] Found log.id=${latestLog.id} for phone=${data.recipient}`);
 
     // Map Bablast status to LTMS status
     // Expected from Bablast: sent, failed, delivered, read
-    const normalizedStatus = data.status ? data.status.toUpperCase() : 'SENT'; // e.g., SENT, FAILED
+    let rawStatus = data.status ? data.status.toUpperCase() : 'SENT';
+    let normalizedStatus = rawStatus;
+    if (rawStatus === 'ERROR') normalizedStatus = 'FAILED';
+    if (rawStatus === 'SUCCESS') normalizedStatus = 'SENT';
+    if (rawStatus === 'PROGRESS') normalizedStatus = 'PROCESSING';
+    if (rawStatus === 'PENDING') normalizedStatus = 'QUEUED';
 
     const { error: updateError } = await supabase
       .from('whatsapp_send_logs')
