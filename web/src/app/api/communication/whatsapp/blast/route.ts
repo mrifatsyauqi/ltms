@@ -34,15 +34,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Jeda pengiriman tidak valid.' }, { status: 400 });
     }
 
-    // TIMEOUT PROTECTION
-    const limits: Record<number, number> = { 0: 9999, 5: 20, 10: 15, 15: 10, 30: 5, 60: 3 };
-    const limit = limits[delaySeconds] || 9999;
-    if (targets.length > limit) {
-      return NextResponse.json({ 
-        ok: false, 
-        error: 'Jumlah penerima terlalu banyak untuk jeda pengiriman yang dipilih. Kurangi jumlah penerima atau gunakan jeda yang lebih kecil.' 
-      }, { status: 400 });
-    }
+    // TIMEOUT PROTECTION IS REMOVED (Handled by Bablast)
 
     // MULTI DROP POINT SENDER ISOLATION VALIDATION
     const supabase = db();

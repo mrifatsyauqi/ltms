@@ -108,43 +108,53 @@ export class WhatsappService {
       throw new Error('Gagal menyimpan target penerima ke database.');
     }
 
-    // Publish First Job to QStash
-    try {
-      const qstashClient = new Client({
-        token: process.env.QSTASH_TOKEN || '',
-      });
-      
-      const appUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || '';
-      if (!appUrl) {
-        throw new Error('APP_URL environment variable is not defined.');
-      }
-      
-      const firstLog = createdLogs.find((l: any) => l.sequence_number === 1);
-      if (!firstLog) throw new Error('First log not returned from insert.');
+    // Prepare Bablast Bulk Request
+    const bablastGroupCode = `LTM${Math.floor(10000 + Math.random() * 90000)}`;
+    const bablastDelay = delaySeconds * 1000;
 
-      const publishPayload = {
-        batch_id: batch.id,
-        message_id: firstLog.id,
-        sequence_number: 1
+    const bablastContacts: BablastBulkContact[] = validTargets.map(t => {
+      const vars = this.buildVariables(t, threshold);
+      // Remove 'nama_sprinter' and 'phone' from variables if they conflict, though Bablast variables just replaces {key}
+      return {
+        nama: t.name,
+        phone: t.phone_number!,
+        variables: vars
       };
+    });
 
-      await qstashClient.publishJSON({
-        url: `${appUrl}/api/worker/push-mas-kurir`,
-        body: publishPayload,
-        // No delay for the first message
+    const bablastPayload = {
+      group_name: `Push Mas Kurir - ${dropPointId}`,
+      message: messageContent,
+      delay: bablastDelay,
+      kode: bablastGroupCode,
+      sender_code: senderCode,
+      contacts: bablastContacts
+    };
+
+    try {
+      const response = await bablastService.sendBulk(bablastPayload);
+      
+      const { blast_id, group_id, group_code } = response.data || {};
+
+      // Update Batch with Bablast IDs
+      await updateBatch(batch.id, { 
+        status: 'PROCESSING',
+        blast_id: blast_id,
+        bablast_group_id: group_id,
+        group_code: group_code || bablastGroupCode
       });
 
-      console.log(`[PUSH_MAS_KURIR] [BATCH_QUEUED] batch_id=${batch.id} total=${totalMessages} first_job_published`);
+      console.log(`[PUSH_MAS_KURIR] [BULK_SUBMITTED] batch_id=${batch.id} blast_id=${blast_id} total=${totalMessages}`);
 
       return {
         success: true,
         batchId: batch.id,
-        status: 'QUEUED',
+        status: 'PROCESSING',
         totalMessages
       };
 
     } catch (error: any) {
-      console.error('[PUSH_MAS_KURIR] Fatal error publishing to QStash', error);
+      console.error('[PUSH_MAS_KURIR] Fatal error publishing to Bablast Bulk API', error);
       await updateBatch(batch.id, { status: 'FAILED' });
       throw error;
     }

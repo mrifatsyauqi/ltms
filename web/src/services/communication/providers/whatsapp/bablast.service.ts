@@ -18,10 +18,22 @@ export interface BablastBulkRequest {
   contacts: BablastBulkContact[];
 }
 
+export interface BablastBulkResponseData {
+  blast_id: number;
+  group_id: number;
+  group_code: string;
+  total_contacts: number;
+  imported: number;
+  failed: number;
+  status: string;
+  active_senders: number;
+  sender_distribution: any;
+}
+
 export interface BablastBulkResponse {
   success: boolean;
   message?: string;
-  data?: any;
+  data?: BablastBulkResponseData;
 }
 
 export class BablastService {

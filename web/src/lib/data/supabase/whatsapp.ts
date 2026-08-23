@@ -51,6 +51,8 @@ export type WhatsappBatch = {
   monitoring_reference: string;
   drop_point_id: string;
   sender_code: string;
+  group_name: string;
+  group_code: string;
   delay_seconds: number;
   template_id: string;
   filter_operator: string;
@@ -62,7 +64,9 @@ export type WhatsappBatch = {
   target_count: number; // legacy
   submitted_count: number; // legacy
   status: 'draft' | 'reviewed' | 'sending' | 'submitted' | 'QUEUED' | 'PROCESSING' | 'PARTIAL' | 'COMPLETED' | 'FAILED';
-  bablast_blast_id?: string;
+  blast_id?: number;
+  bablast_group_id?: number;
+  bablast_blast_id?: string; // legacy
   created_by: string;
   started_at?: string;
   completed_at?: string;
