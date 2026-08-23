@@ -150,6 +150,26 @@ export async function updateWhatsappContact(id: string, contact: Partial<Whatsap
   return data;
 }
 
+export async function getWhatsappContactById(id: string): Promise<WhatsappContact | null> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_contacts')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteWhatsappContact(id: string): Promise<void> {
+  const supabase = db();
+  const { error } = await supabase
+    .from('whatsapp_contacts')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}
+
 export async function getActiveTemplate(): Promise<WhatsappTemplate | null> {
   const supabase = db();
   const { data, error } = await supabase

@@ -49,7 +49,8 @@ export class WhatsappService {
     threshold: number, 
     operator: string,
     userEmail: string,
-    senderCode: string
+    senderCode: string,
+    delaySeconds: number = 0
   ) {
     const validTargets = targets.filter(t => t.phone_number && t.phone_number.trim() !== '');
     if (validTargets.length === 0) {
@@ -79,7 +80,8 @@ export class WhatsappService {
       // as bulk endpoint causes 404
       let successCount = 0;
       
-      for (const t of validTargets) {
+      for (let i = 0; i < validTargets.length; i++) {
+        const t = validTargets[i];
         console.log(`[PUSH_MAS_KURIR] dp_id=${t.drop_point_id} sender_code=${senderCode} recipient=${t.phone_number}`);
         
         let messageText = messageContent;
@@ -106,6 +108,12 @@ export class WhatsappService {
 
         if (response.ok) {
           successCount++;
+        }
+
+        // Delay logic (except for the last recipient)
+        if (delaySeconds > 0 && i < validTargets.length - 1) {
+          console.log(`[PUSH_MAS_KURIR] Delaying ${delaySeconds} seconds before next recipient...`);
+          await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
         }
       }
 

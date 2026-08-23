@@ -24,6 +24,7 @@ export function PushMasKurirModal({ isOpen, onClose, data, dpName }: PushMasKuri
   const [threshold, setThreshold] = useState(90);
   const [isSending, setIsSending] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('default');
+  const [delaySeconds, setDelaySeconds] = useState<number>(10);
 
   const { data: contactsResponse, isLoading: contactsLoading } = useQuery({
     queryKey: ['whatsapp_contacts', dpName, 'active'],
@@ -113,7 +114,8 @@ export function PushMasKurirModal({ isOpen, onClose, data, dpName }: PushMasKuri
           targets: readyTargets,
           threshold,
           operator: '<',
-          sender_code: senderCode
+          sender_code: senderCode,
+          delay_seconds: delaySeconds
         })
       });
       
@@ -267,6 +269,25 @@ export function PushMasKurirModal({ isOpen, onClose, data, dpName }: PushMasKuri
               )}
             </section>
 
+            {/* Delay Selection */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold tracking-tight text-foreground">Jeda Antar Pesan</h3>
+              <Select value={delaySeconds.toString()} onValueChange={(v) => setDelaySeconds(Number(v))}>
+                <SelectTrigger className="w-full sm:w-[300px]">
+                  <SelectValue placeholder="Pilih Jeda" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">Tanpa Jeda</SelectItem>
+                  <SelectItem value="5">5 Detik</SelectItem>
+                  <SelectItem value="10">10 Detik (Default)</SelectItem>
+                  <SelectItem value="15">15 Detik</SelectItem>
+                  <SelectItem value="30">30 Detik</SelectItem>
+                  <SelectItem value="60">60 Detik</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Pesan akan dikirim satu per satu dengan jeda yang dipilih antar penerima.</p>
+            </section>
+
             {/* Message Preview Card */}
             {template && readyTargets.length > 0 && (
               <section className="space-y-3">
@@ -305,10 +326,15 @@ export function PushMasKurirModal({ isOpen, onClose, data, dpName }: PushMasKuri
             disabled={isSending || !isReady || activeSenders.length === 0 || readyTargets.length === 0 || !template}
           >
             {isSending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Mengirim...
-              </>
+              <div className="flex flex-col items-center justify-center">
+                <div className="flex items-center">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Mengirim pesan...
+                </div>
+                {delaySeconds > 0 && (
+                  <span className="text-[10px] opacity-80 mt-1">Sistem sedang mengirim pesan secara bertahap dengan jeda {delaySeconds} detik.</span>
+                )}
+              </div>
             ) : (
               <>
                 <Send className="mr-2 h-4 w-4" />

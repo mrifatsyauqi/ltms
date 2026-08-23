@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { targets, threshold, operator, sender_code } = body;
+    const { targets, threshold, operator, sender_code, delay_seconds } = body;
     
     if (!targets || !Array.isArray(targets) || targets.length === 0) {
       return NextResponse.json({ ok: false, error: 'Target list is empty' }, { status: 400 });
@@ -24,6 +24,24 @@ export async function POST(req: NextRequest) {
     const template = await getActiveTemplate();
     if (!template) {
       return NextResponse.json({ ok: false, error: 'No active template found' }, { status: 400 });
+    }
+
+    // DELAY VALIDATION
+    const allowedDelays = [0, 5, 10, 15, 30, 60];
+    const delaySeconds = delay_seconds !== undefined ? Number(delay_seconds) : 10;
+    
+    if (!allowedDelays.includes(delaySeconds)) {
+      return NextResponse.json({ ok: false, error: 'Jeda pengiriman tidak valid.' }, { status: 400 });
+    }
+
+    // TIMEOUT PROTECTION
+    const limits: Record<number, number> = { 0: 9999, 5: 20, 10: 15, 15: 10, 30: 5, 60: 3 };
+    const limit = limits[delaySeconds] || 9999;
+    if (targets.length > limit) {
+      return NextResponse.json({ 
+        ok: false, 
+        error: 'Jumlah penerima terlalu banyak untuk jeda pengiriman yang dipilih. Kurangi jumlah penerima atau gunakan jeda yang lebih kecil.' 
+      }, { status: 400 });
     }
 
     // MULTI DROP POINT SENDER ISOLATION VALIDATION
@@ -51,7 +69,8 @@ export async function POST(req: NextRequest) {
       threshold,
       operator,
       session.user.email,
-      sender_code
+      sender_code,
+      delaySeconds
     );
 
     return NextResponse.json({ ok: true, data: result });

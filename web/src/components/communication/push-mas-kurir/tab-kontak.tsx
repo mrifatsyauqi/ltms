@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Search, Plus, Edit, Loader2 } from 'lucide-react';
+import { Search, Plus, Edit, Trash, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDashboardScope, ALL_SCOPE } from '@/components/dashboard/scope-context';
 export function TabKontak() {
@@ -26,6 +26,11 @@ export function TabKontak() {
   });
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Delete Dialog state
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [contactToDelete, setContactToDelete] = useState<any>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const { data: contactsResponse, isLoading } = useQuery({
     queryKey: ['whatsapp_contacts_all'],
@@ -121,6 +126,28 @@ export function TabKontak() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!contactToDelete) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/communication/whatsapp/contacts?id=${contactToDelete.id}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal menghapus kontak');
+      
+      toast.success('Kontak berhasil dihapus.');
+      setIsDeleteDialogOpen(false);
+      setContactToDelete(null);
+      queryClient.invalidateQueries({ queryKey: ['whatsapp_contacts_all'] });
+      queryClient.invalidateQueries({ queryKey: ['whatsapp_contacts'] });
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -193,9 +220,19 @@ export function TabKontak() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="sm" onClick={() => openEditDialog(c)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
+                      <div className="flex space-x-1">
+                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(c)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => { setContactToDelete(c); setIsDeleteDialogOpen(true); }}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -250,6 +287,31 @@ export function TabKontak() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Hapus Kontak?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground">Apakah Anda yakin ingin menghapus kontak berikut?</p>
+            {contactToDelete && (
+              <div className="text-sm space-y-2 p-3 bg-muted rounded-md border">
+                <div><span className="text-muted-foreground">Nama:</span> <span className="font-medium">{contactToDelete.name}</span></div>
+                <div><span className="text-muted-foreground">Nomor:</span> <span className="font-medium">{contactToDelete.phone_number}</span></div>
+                <div><span className="text-muted-foreground">Drop Point:</span> <span className="font-medium">{contactToDelete.drop_point_id}</span></div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Batal</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Hapus Kontak
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -108,3 +108,42 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function DELETE(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.email) return unauthenticated();
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ ok: false, error: 'Contact ID is required' }, { status: 400 });
+    }
+
+    const db = await import('@/lib/data/supabase/whatsapp');
+    
+    // FETCH THE CONTACT FIRST TO VALIDATE OWNERSHIP
+    const contact = await db.getWhatsappContactById(id);
+    if (!contact) {
+      return NextResponse.json({ ok: false, error: 'Kontak tidak ditemukan.' }, { status: 404 });
+    }
+
+    const userRole = (session.user as any).role || 'Admin DP';
+    const userDpId = (session.user as any).dropPoint;
+
+    // DP Scope Authorization for Delete
+    if (userRole === 'Admin DP' || userRole === 'SPV') {
+      if (contact.drop_point_id !== userDpId) {
+        return NextResponse.json({ ok: false, error: 'Forbidden: Anda tidak memiliki akses untuk menghapus kontak pada Drop Point ini.' }, { status: 403 });
+      }
+    }
+
+    await db.deleteWhatsappContact(id);
+
+    return NextResponse.json({ ok: true, data: { id } });
+  } catch (error: any) {
+    console.error('Delete contact error:', error);
+    return errorResponse(error);
+  }
+}
+
