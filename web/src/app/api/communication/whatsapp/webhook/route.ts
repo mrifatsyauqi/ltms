@@ -14,8 +14,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { event, blast_id, data } = body;
     
-    // Diagnostic log AMAN
-    console.log(`[WEBHOOK_RECEIVED] event=${event}, blast_id=${blast_id}, recipient=${data?.recipient}, status=${data?.status}`);
+    // Diagnostic log AMAN: mencetak seluruh payload kecuali secret
+    console.log(`[WEBHOOK_RECEIVED] RAW PAYLOAD:`, JSON.stringify(body));
     
     if (!data || !data.recipient) {
       return NextResponse.json({ ok: false, error: 'Invalid webhook payload' }, { status: 400 });
