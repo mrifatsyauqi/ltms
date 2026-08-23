@@ -3,19 +3,19 @@ import { db } from '@/lib/data/supabase/client';
 
 export async function POST(request: Request) {
   try {
-    const secret = process.env.BABLAST_WEBHOOK_SECRET;
-    const incomingSecret = request.headers.get('X-Webhook-Secret');
+    const rawSecret = process.env.BABLAST_WEBHOOK_SECRET;
+    const secret = rawSecret ? rawSecret.trim() : '';
+    const incomingSecret = request.headers.get('X-Webhook-Secret') || '';
     
-    // Debug logging aman untuk mengecek header apa saja yang masuk dan panjang string secret
-    const headerKeys = Array.from(request.headers.keys());
-    console.log(`[WEBHOOK_AUTH_DEBUG] Headers received: ${headerKeys.join(', ')}`);
-    console.log(`[WEBHOOK_AUTH_DEBUG] Env secret length: ${secret?.length || 0}, Incoming secret length: ${incomingSecret?.length || 0}`);
+    // Diagnostic log AMAN sesuai instruksi
+    console.log(`[WEBHOOK_AUTH_MODE] mode=${secret ? 'SECRET' : 'DISABLED'}, header_present=${!!incomingSecret}, env_present=${!!secret}`);
     
-    // Validate if secret is configured
-    if (secret && incomingSecret !== secret) {
-      console.warn(`[WEBHOOK_AUTH_FAILED] Secret mismatch!`);
-      // Kita return 401 agar Bablast tau ini gagal, tapi kita sudah melog penyebabnya
-      return NextResponse.json({ ok: false, error: 'Invalid webhook secret' }, { status: 401 });
+    // Validate if secret is configured (MODE A vs MODE B)
+    if (secret) {
+      if (incomingSecret !== secret) {
+        console.warn(`[WEBHOOK_AUTH_FAILED] Secret mismatch!`);
+        return NextResponse.json({ ok: false, error: 'Invalid webhook secret' }, { status: 401 });
+      }
     }
     
     const body = await request.json();
