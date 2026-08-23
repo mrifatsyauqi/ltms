@@ -6,8 +6,15 @@ export async function POST(request: Request) {
     const secret = process.env.BABLAST_WEBHOOK_SECRET;
     const incomingSecret = request.headers.get('X-Webhook-Secret');
     
+    // Debug logging aman untuk mengecek header apa saja yang masuk dan panjang string secret
+    const headerKeys = Array.from(request.headers.keys());
+    console.log(`[WEBHOOK_AUTH_DEBUG] Headers received: ${headerKeys.join(', ')}`);
+    console.log(`[WEBHOOK_AUTH_DEBUG] Env secret length: ${secret?.length || 0}, Incoming secret length: ${incomingSecret?.length || 0}`);
+    
     // Validate if secret is configured
     if (secret && incomingSecret !== secret) {
+      console.warn(`[WEBHOOK_AUTH_FAILED] Secret mismatch!`);
+      // Kita return 401 agar Bablast tau ini gagal, tapi kita sudah melog penyebabnya
       return NextResponse.json({ ok: false, error: 'Invalid webhook secret' }, { status: 401 });
     }
     
