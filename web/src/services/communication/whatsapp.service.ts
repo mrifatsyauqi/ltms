@@ -75,34 +75,53 @@ export class WhatsappService {
     }));
 
     try {
-      const response = await bablastService.sendBulk({
-        sender_code: senderCode,
-        message: messageContent,
-        contacts,
-        delay: 3000
-      });
-
-      const logs = validTargets.map(t => ({
-        batch_id: batch.id,
-        sprinter_id: t.sprinter_id,
-        phone_number: t.phone_number!,
-        rendered_message: 'Pesan diteruskan ke provider',
-        status: 'pending' as const
-      }));
-      await createSendLogs(logs);
+      // Fallback from bulk to individual POST /send reusing proven sendTestMessage flow
+      // as bulk endpoint causes 404
+      let successCount = 0;
       
+      for (const t of validTargets) {
+        console.log(`[PUSH_MAS_KURIR] dp_id=${t.drop_point_id} sender_code=${senderCode} recipient=${t.phone_number}`);
+        
+        let messageText = messageContent;
+        const variables = this.buildVariables(t, threshold);
+        for (const v of variables) {
+          messageText = messageText.replace(`{${v.key}}`, v.value);
+        }
+
+        const response = await bablastService.sendTestMessage({
+          phone: t.phone_number!,
+          message: messageText,
+          sender_code: senderCode
+        });
+
+        console.log(`[BABLAST_SEND] endpoint=/send status=${response.ok ? 'SUCCESS' : 'FAILED'} recipient=${t.phone_number}`);
+
+        await createSendLogs([{
+          batch_id: batch.id,
+          sprinter_id: t.sprinter_id,
+          phone_number: t.phone_number!,
+          rendered_message: messageText,
+          status: response.ok ? 'sent' : 'failed'
+        }]);
+
+        if (response.ok) {
+          successCount++;
+        }
+      }
+
       await updateBatch(batch.id, {
         status: 'submitted',
-        submitted_count: validTargets.length
+        submitted_count: successCount
       });
 
       return {
         batchId: batch.id,
-        targetCount: validTargets.length,
-        message: response.message
+        targetCount: successCount,
+        message: 'Pengiriman selesai diproses'
       };
 
     } catch (error: any) {
+      console.error('[PUSH_MAS_KURIR] Fatal error processing blast', error);
       await updateBatch(batch.id, { status: 'failed' });
       throw error;
     }

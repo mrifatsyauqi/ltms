@@ -104,7 +104,7 @@ export function PushMasKurirModal({ isOpen, onClose, data, dpName }: PushMasKuri
 
     try {
       setIsSending(true);
-      const senderId = activeSenders[0].sender_id;
+      const senderCode = activeSenders[0].sender_code;
 
       const res = await fetch('/api/communication/whatsapp/blast', {
         method: 'POST',
@@ -113,7 +113,7 @@ export function PushMasKurirModal({ isOpen, onClose, data, dpName }: PushMasKuri
           targets: readyTargets,
           threshold,
           operator: '<',
-          sender_code: senderId
+          sender_code: senderCode
         })
       });
       

@@ -632,7 +632,7 @@ export function TabSender() {
     <div className="space-y-6">
       
       {/* 1. Bablast API Config Section */}
-      {(!configStatus || configStatus.isSuperAdmin) && (
+      {configStatus?.isSuperAdmin && (
         <section className="space-y-3">
           <h3 className="text-sm font-semibold tracking-tight text-foreground uppercase text-muted-foreground">Konfigurasi Sistem Global</h3>
           
