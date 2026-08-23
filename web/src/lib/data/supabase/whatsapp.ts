@@ -49,14 +49,23 @@ export type WhatsappBatch = {
   id: string;
   module: string;
   monitoring_reference: string;
+  drop_point_id: string;
+  sender_code: string;
+  delay_seconds: number;
   template_id: string;
   filter_operator: string;
   threshold: number;
-  target_count: number;
-  submitted_count: number;
-  status: 'draft' | 'reviewed' | 'sending' | 'submitted' | 'partial' | 'completed' | 'failed';
+  total_messages: number;
+  queued_count: number;
+  success_count: number;
+  failed_count: number;
+  target_count: number; // legacy
+  submitted_count: number; // legacy
+  status: 'draft' | 'reviewed' | 'sending' | 'submitted' | 'QUEUED' | 'PROCESSING' | 'PARTIAL' | 'COMPLETED' | 'FAILED';
   bablast_blast_id?: string;
   created_by: string;
+  started_at?: string;
+  completed_at?: string;
   created_at: string;
   updated_at: string;
 };
@@ -64,11 +73,14 @@ export type WhatsappBatch = {
 export type WhatsappLog = {
   id: string;
   batch_id: string;
+  drop_point_id?: string;
+  sender_code: string;
+  sequence_number: number;
   sprinter_id: string;
   phone_number: string;
   rendered_message: string;
   bablast_message_id?: string;
-  status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
+  status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed' | 'QUEUED' | 'SENDING' | 'SENT' | 'FAILED';
   error_message?: string;
   sent_at?: string;
   delivered_at?: string;
@@ -231,13 +243,22 @@ export async function updateBatch(id: string, updates: Partial<WhatsappBatch>): 
   return data;
 }
 
-export async function getRecentBatches(): Promise<WhatsappBatch[]> {
+export async function getRecentBatches(dropPointId?: string): Promise<any[]> {
   const supabase = db();
-  const { data, error } = await supabase
+  let query = supabase
     .from('whatsapp_send_batches')
-    .select('*')
+    .select(`
+      *,
+      template:whatsapp_message_templates(name)
+    `)
     .order('created_at', { ascending: false })
-    .limit(20);
+    .limit(30);
+    
+  if (dropPointId) {
+    query = query.eq('drop_point_id', dropPointId);
+  }
+  
+  const { data, error } = await query;
   if (error) throw error;
   return data || [];
 }

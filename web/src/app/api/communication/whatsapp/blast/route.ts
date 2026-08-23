@@ -70,10 +70,17 @@ export async function POST(req: NextRequest) {
       operator,
       session.user.email,
       sender_code,
-      delaySeconds
+      delaySeconds,
+      userDp
     );
 
-    return NextResponse.json({ ok: true, data: result });
+    return NextResponse.json({ 
+      ok: true, 
+      success: true,
+      batch_id: result.batchId,
+      status: result.status,
+      total_messages: result.totalMessages
+    });
   } catch (error: any) {
     return errorResponse(error);
   }

@@ -6,7 +6,11 @@ import { auth } from '@/auth';
 export async function fetchRecentBatchesAction() {
   const session = await auth();
   if (!session) throw new Error('Unauthorized');
-  return getRecentBatches();
+  
+  const isSuperAdmin = (session.user as any).role === 'Super Admin';
+  const dpId = isSuperAdmin ? undefined : (session.user as any).dropPoint;
+  
+  return getRecentBatches(dpId);
 }
 
 export async function fetchBatchLogsAction(batchId: string) {

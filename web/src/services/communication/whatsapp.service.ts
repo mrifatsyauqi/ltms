@@ -1,4 +1,5 @@
 import { bablastService, BablastBulkContact } from './providers/whatsapp/bablast.service';
+import { Client } from "@upstash/qstash";
 import { 
   createSendBatch, 
   createSendLogs, 
@@ -50,87 +51,101 @@ export class WhatsappService {
     operator: string,
     userEmail: string,
     senderCode: string,
-    delaySeconds: number = 0
+    delaySeconds: number = 10,
+    dropPointId: string
   ) {
     const validTargets = targets.filter(t => t.phone_number && t.phone_number.trim() !== '');
     if (validTargets.length === 0) {
       throw new Error('Tidak ada kontak dengan nomor WhatsApp yang valid.');
     }
 
+    const totalMessages = validTargets.length;
+    
+    // Create the main Batch record
     const batch = await createSendBatch({
       module: 'monitoring_delivery',
+      drop_point_id: dropPointId,
+      sender_code: senderCode,
+      delay_seconds: delaySeconds,
       template_id: template.id,
       filter_operator: operator,
       threshold,
-      target_count: validTargets.length,
-      submitted_count: 0,
-      status: 'sending',
+      total_messages: totalMessages,
+      queued_count: totalMessages,
+      success_count: 0,
+      failed_count: 0,
+      target_count: totalMessages, // legacy
+      submitted_count: 0, // legacy
+      status: 'QUEUED',
       created_by: userEmail
     });
 
     const messageContent = this.convertTemplateSyntax(template.content);
-    const contacts: BablastBulkContact[] = validTargets.map(t => ({
-      nama: t.name,
-      phone: t.phone_number!,
-      variables: this.buildVariables(t, threshold)
-    }));
 
-    try {
-      // Fallback from bulk to individual POST /send reusing proven sendTestMessage flow
-      // as bulk endpoint causes 404
-      let successCount = 0;
-      
-      for (let i = 0; i < validTargets.length; i++) {
-        const t = validTargets[i];
-        console.log(`[PUSH_MAS_KURIR] dp_id=${t.drop_point_id} sender_code=${senderCode} recipient=${t.phone_number}`);
-        
-        let messageText = messageContent;
-        const variables = this.buildVariables(t, threshold);
-        for (const v of variables) {
-          messageText = messageText.replace(`{${v.key}}`, v.value);
-        }
-
-        const response = await bablastService.sendTestMessage({
-          phone: t.phone_number!,
-          message: messageText,
-          sender_code: senderCode
-        });
-
-        console.log(`[BABLAST_SEND] endpoint=/send status=${response.ok ? 'SUCCESS' : 'FAILED'} recipient=${t.phone_number}`);
-
-        await createSendLogs([{
-          batch_id: batch.id,
-          sprinter_id: t.sprinter_id,
-          phone_number: t.phone_number!,
-          rendered_message: messageText,
-          status: response.ok ? 'sent' : 'failed'
-        }]);
-
-        if (response.ok) {
-          successCount++;
-        }
-
-        // Delay logic (except for the last recipient)
-        if (delaySeconds > 0 && i < validTargets.length - 1) {
-          console.log(`[PUSH_MAS_KURIR] Delaying ${delaySeconds} seconds before next recipient...`);
-          await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
-        }
+    // Prepare all message logs
+    const logEntries = validTargets.map((t, index) => {
+      let messageText = messageContent;
+      const variables = this.buildVariables(t, threshold);
+      for (const v of variables) {
+        messageText = messageText.replace(`{${v.key}}`, v.value);
       }
 
-      await updateBatch(batch.id, {
-        status: 'submitted',
-        submitted_count: successCount
+      return {
+        batch_id: batch.id,
+        drop_point_id: dropPointId,
+        sender_code: senderCode,
+        sequence_number: index + 1,
+        sprinter_id: t.sprinter_id,
+        phone_number: t.phone_number!,
+        rendered_message: messageText,
+        status: 'QUEUED' as any
+      };
+    });
+
+    // Bulk insert logs
+    const createdLogs = await createSendLogs(logEntries);
+    if (!createdLogs || createdLogs.length === 0) {
+      throw new Error('Gagal menyimpan target penerima ke database.');
+    }
+
+    // Publish First Job to QStash
+    try {
+      const qstashClient = new Client({
+        token: process.env.QSTASH_TOKEN || '',
+      });
+      
+      const appUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || '';
+      if (!appUrl) {
+        throw new Error('APP_URL environment variable is not defined.');
+      }
+      
+      const firstLog = createdLogs.find((l: any) => l.sequence_number === 1);
+      if (!firstLog) throw new Error('First log not returned from insert.');
+
+      const publishPayload = {
+        batch_id: batch.id,
+        message_id: firstLog.id,
+        sequence_number: 1
+      };
+
+      await qstashClient.publishJSON({
+        url: `${appUrl}/api/worker/push-mas-kurir`,
+        body: publishPayload,
+        // No delay for the first message
       });
 
+      console.log(`[PUSH_MAS_KURIR] [BATCH_QUEUED] batch_id=${batch.id} total=${totalMessages} first_job_published`);
+
       return {
+        success: true,
         batchId: batch.id,
-        targetCount: successCount,
-        message: 'Pengiriman selesai diproses'
+        status: 'QUEUED',
+        totalMessages
       };
 
     } catch (error: any) {
-      console.error('[PUSH_MAS_KURIR] Fatal error processing blast', error);
-      await updateBatch(batch.id, { status: 'failed' });
+      console.error('[PUSH_MAS_KURIR] Fatal error publishing to QStash', error);
+      await updateBatch(batch.id, { status: 'FAILED' });
       throw error;
     }
   }

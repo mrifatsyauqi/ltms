@@ -122,10 +122,16 @@ export function PushMasKurirModal({ isOpen, onClose, data, dpName }: PushMasKuri
       const responseData = await res.json();
       if (!res.ok) throw new Error(responseData.error || 'Gagal mengirim pesan');
 
-      toast.success('Pengiriman Berhasil', { description: `Berhasil memproses ${responseData.data.targetCount} pesan.` });
+      toast.success('Pengiriman Berhasil Dimulai', { 
+        description: `${responseData.total_messages} pesan sedang diproses.`,
+        action: {
+          label: 'Lihat Riwayat',
+          onClick: () => window.open('/communication/push-mas-kurir?tab=history', '_blank')
+        }
+      });
       onClose();
     } catch (error: any) {
-      toast.error('Gagal Mengirim', { description: error.message || 'Terjadi kesalahan sistem.' });
+      toast.error('Gagal Memulai Pengiriman', { description: error.message || 'Terjadi kesalahan sistem saat membuat antrean.' });
     } finally {
       setIsSending(false);
     }
@@ -326,14 +332,9 @@ export function PushMasKurirModal({ isOpen, onClose, data, dpName }: PushMasKuri
             disabled={isSending || !isReady || activeSenders.length === 0 || readyTargets.length === 0 || !template}
           >
             {isSending ? (
-              <div className="flex flex-col items-center justify-center">
-                <div className="flex items-center">
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Mengirim pesan...
-                </div>
-                {delaySeconds > 0 && (
-                  <span className="text-[10px] opacity-80 mt-1">Sistem sedang mengirim pesan secara bertahap dengan jeda {delaySeconds} detik.</span>
-                )}
+              <div className="flex items-center">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Membuat Pengiriman...
               </div>
             ) : (
               <>
