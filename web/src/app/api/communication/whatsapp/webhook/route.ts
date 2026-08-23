@@ -4,18 +4,18 @@ import { db } from '@/lib/data/supabase/client';
 export async function POST(request: Request) {
   try {
     const secret = process.env.BABLAST_WEBHOOK_SECRET;
-    const authHeader = request.headers.get('Authorization');
+    const incomingSecret = request.headers.get('X-Webhook-Secret');
     
     // Validate if secret is configured
-    if (secret && authHeader !== `Bearer ${secret}`) {
-      return NextResponse.json({ ok: false, error: 'Invalid webhook signature or token' }, { status: 401 });
+    if (secret && incomingSecret !== secret) {
+      return NextResponse.json({ ok: false, error: 'Invalid webhook secret' }, { status: 401 });
     }
     
     const body = await request.json();
-    console.log('[WEBHOOK_RECEIVED] Raw body:', JSON.stringify(body, null, 2));
-
     const { event, blast_id, data } = body;
-    console.log(`[WEBHOOK_PARSED] event=${event}, blast_id=${blast_id}, data=`, data);
+    
+    // Diagnostic log AMAN
+    console.log(`[WEBHOOK_RECEIVED] event=${event}, blast_id=${blast_id}, recipient=${data?.recipient}, status=${data?.status}`);
     
     if (!data || !data.recipient) {
       return NextResponse.json({ ok: false, error: 'Invalid webhook payload' }, { status: 400 });
@@ -26,17 +26,23 @@ export async function POST(request: Request) {
     // 1. Temukan batch berdasarkan blast_id dari Bablast
     let batchIdToUpdate = null;
     if (blast_id) {
+      const incomingBlastId = String(blast_id).trim();
+      // Hanya menghapus prefix "blast_" jika formatnya terbukti demikian
+      const normalizedBlastId = incomingBlastId.replace(/^blast_/i, "");
+      
       const { data: batchData, error: batchError } = await supabase
         .from('whatsapp_send_batches')
         .select('id, blast_id')
-        .eq('blast_id', Number(blast_id))
+        .eq('blast_id', Number(normalizedBlastId))
         .maybeSingle();
+        
       if (batchError) console.error('[WEBHOOK_ERROR] Failed to fetch batch:', batchError);
+      
       if (batchData) {
         batchIdToUpdate = batchData.id;
         console.log(`[WEBHOOK_MAPPING] Found batch.id=${batchIdToUpdate} for blast_id=${blast_id}`);
       } else {
-        console.warn(`[WEBHOOK_MAPPING] No batch found for blast_id=${blast_id}`);
+        console.warn(`[WEBHOOK_BATCH_NOT_FOUND] event=${event}, blast_id=${blast_id}, recipient=${data.recipient}`);
       }
     }
 
@@ -65,19 +71,28 @@ export async function POST(request: Request) {
       .single();
 
     if (fetchError || !latestLog) {
-      console.warn(`[WEBHOOK_MAPPING] No matching log found for phone=${data.recipient} and batch_id=${batchIdToUpdate}`);
+      console.warn(`[WEBHOOK_LOG_NOT_FOUND] batch_id=${batchIdToUpdate}, recipient=${data.recipient}`);
       return NextResponse.json({ ok: true, note: 'No matching log found' });
     }
-    console.log(`[WEBHOOK_MAPPING] Found log.id=${latestLog.id} for phone=${data.recipient}`);
 
     // Map Bablast status to LTMS status
-    // Expected from Bablast: sent, failed, delivered, read
-    let rawStatus = data.status ? data.status.toUpperCase() : 'SENT';
-    let normalizedStatus = rawStatus;
-    if (rawStatus === 'ERROR') normalizedStatus = 'FAILED';
-    if (rawStatus === 'SUCCESS') normalizedStatus = 'SENT';
-    if (rawStatus === 'PROGRESS') normalizedStatus = 'PROCESSING';
-    if (rawStatus === 'PENDING') normalizedStatus = 'QUEUED';
+    // Expected from Bablast: event: message_sent, message_failed, dll
+    let normalizedStatus = 'QUEUED'; // Default safe state
+    
+    if (event === 'message_sent') {
+      normalizedStatus = 'SENT';
+    } else if (event === 'message_failed') {
+      normalizedStatus = 'FAILED';
+    } else {
+      // Fallback mapping based on data.status if event is unknown or not explicitly handled
+      console.log(`[WEBHOOK_UNKNOWN_EVENT] event=${event} - falling back to data.status mapping`);
+      let rawStatus = data.status ? data.status.toUpperCase() : 'SENT';
+      normalizedStatus = rawStatus;
+      if (rawStatus === 'ERROR') normalizedStatus = 'FAILED';
+      if (rawStatus === 'SUCCESS') normalizedStatus = 'SENT';
+      if (rawStatus === 'PROGRESS') normalizedStatus = 'PROCESSING';
+      if (rawStatus === 'PENDING') normalizedStatus = 'QUEUED';
+    }
 
     const { error: updateError } = await supabase
       .from('whatsapp_send_logs')
