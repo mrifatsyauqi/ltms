@@ -83,10 +83,12 @@ export async function GET(
       const actualStatus = data?.data?.status;
       const isConnected = data?.data?.isConnected;
       
-      if (isConnected === true || actualStatus === 'connected' || actualStatus === 'open') {
+      if (isConnected === true || actualStatus === 'connected') {
         mappedStatus = 'connected';
-      } else if (actualStatus === 'connecting' || actualStatus === 'pending' || actualStatus === 'pending_config' || actualStatus === 'close') {
+      } else if (actualStatus === 'open' || actualStatus === 'qr' || actualStatus === 'connecting' || actualStatus === 'pending' || actualStatus === 'pending_config') {
         mappedStatus = 'connecting';
+      } else if (actualStatus === 'close' || actualStatus === 'disconnected') {
+        mappedStatus = 'disconnected';
       }
       
       // Update DB with latest status
