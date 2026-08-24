@@ -18,8 +18,8 @@ const ScopeContext = createContext<ScopeContextValue | null>(null);
  * memuat dropdown-nya) dan Dashboard (yang memakainya untuk query) berbagi
  * state yang sama tanpa prop-drilling.
  */
-export function DashboardScopeProvider({ children }: { children: React.ReactNode }) {
-  const [scope, setScope] = useState<string>(ALL_SCOPE);
+export function DashboardScopeProvider({ children, initialScope = ALL_SCOPE }: { children: React.ReactNode, initialScope?: string }) {
+  const [scope, setScope] = useState<string>(initialScope);
   return <ScopeContext.Provider value={{ scope, setScope }}>{children}</ScopeContext.Provider>;
 }
 

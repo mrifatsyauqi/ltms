@@ -5,12 +5,14 @@ import * as xlsx from 'xlsx';
 import { useQuery } from '@tanstack/react-query';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
-import { Image as ImageIcon, Table2 } from 'lucide-react';
+import { Image as ImageIcon, Table2, PhoneForwarded } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SLOW_STALE_TIME } from '@/lib/query-config';
 import type { DropPointRow } from '@/lib/data/drop-points';
 import { MonitoringRefineTable, RefineRow } from './monitoring-refine-table';
+import { PushMasKurirModal } from './push-mas-kurir-modal';
 
 async function fetchDropPoints(): Promise<DropPointRow[]> {
   const res = await fetch('/api/drop-points');
@@ -36,9 +38,11 @@ export function MonitoringRefineClient() {
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
   const [namaKota, setNamaKota] = useState('');
   const [copying, setCopying] = useState<null | 'img' | 'table'>(null);
+  const [isPushMasKurirOpen, setIsPushMasKurirOpen] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+  const router = useRouter();
   const [dragOver, setDragOver] = useState(false);
 
   const handleFileUpload = async (fileList: FileList | File[]) => {
@@ -234,6 +238,10 @@ export function MonitoringRefineClient() {
     }
   };
 
+  const handlePushMasKurir = () => {
+    setIsPushMasKurirOpen(true);
+  };
+
   return (
     <div className="mt-6 space-y-6">
       {!isGenerated && (
@@ -321,6 +329,13 @@ export function MonitoringRefineClient() {
                 <ImageIcon className="size-4" aria-hidden />
                 {copying === 'img' ? 'Menyalin…' : 'Salin Gambar (Chat)'}
               </Button>
+              <Button
+                onClick={handlePushMasKurir}
+                className="bg-[#25D366] hover:bg-[#1DA851] text-white font-bold gap-1.5 shadow-sm"
+              >
+                <PhoneForwarded className="size-4" />
+                <span>Push Mas Kurir</span>
+              </Button>
             </div>
           </CardHeader>
           <CardContent className="overflow-x-auto">
@@ -330,6 +345,12 @@ export function MonitoringRefineClient() {
           </CardContent>
         </Card>
       )}
+
+      <PushMasKurirModal
+        isOpen={isPushMasKurirOpen}
+        onClose={() => setIsPushMasKurirOpen(false)}
+        data={stagedData}
+      />
     </div>
   );
 }

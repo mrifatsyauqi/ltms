@@ -35,9 +35,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   //    mengembalikan SEMUA false -> menu habis total; biarkan apa adanya spt
   //    perilaku sebelumnya, gating-nya ada di masing-masing page.
   const menuAccess = isGatedRole(user.role ?? '') ? await getMyMenuAccess(user.email ?? '') : null;
+  const initialScope = ['Admin DP', 'SPV DP'].includes(user.role ?? '') ? (user.dropPoint ?? 'ALL') : 'ALL';
 
   return (
-    <DashboardScopeProvider>
+    <DashboardScopeProvider initialScope={initialScope}>
       <div className="flex h-dvh overflow-hidden">
         {/* Sidebar pakai useSearchParams -> perlu Suspense boundary. */}
         <Suspense fallback={<div className="bg-sidebar w-[200px] shrink-0" />}>

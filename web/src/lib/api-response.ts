@@ -18,7 +18,11 @@ export function unauthenticated() {
 
 export function errorResponse(err: unknown) {
   if (err instanceof ApiError) {
-    const status = STATUS_BY_CODE[err.code] ?? 400;
+    let status = STATUS_BY_CODE[err.code] ?? 400;
+    // Allow numeric string codes passed by third-party wrappers
+    if (/^\d{3}$/.test(err.code)) {
+      status = parseInt(err.code, 10);
+    }
     return NextResponse.json(
       { ok: false, error: err.code, message: err.message, data: err.data },
       { status },

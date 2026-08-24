@@ -1,0 +1,332 @@
+import { db } from './client';
+
+export type WhatsappSender = {
+  id: string;
+  sender_id: string;
+  phone: string;
+  display_name: string;
+  status: string;
+  sender_code?: string;
+  channel_type?: string;
+  created_by: string;
+  created_at: string;
+  last_seen: string;
+};
+
+export type WhatsappConfig = {
+  id: string;
+  provider: string;
+  api_key: string;
+  base_url: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WhatsappContact = {
+  id: string;
+  sprinter_id: string;
+  name: string;
+  phone_number: string;
+  drop_point_id: string;
+  is_active: boolean;
+  status: 'active' | 'inactive';
+  created_at: string;
+  updated_at: string;
+};
+
+export type WhatsappTemplate = {
+  id: string;
+  name: string;
+  content: string;
+  status: 'active' | 'inactive';
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WhatsappBatch = {
+  id: string;
+  module: string;
+  monitoring_reference: string;
+  drop_point_id: string;
+  sender_code: string;
+  group_name: string;
+  group_code: string;
+  delay_seconds: number;
+  template_id: string;
+  filter_operator: string;
+  threshold: number;
+  total_messages: number;
+  queued_count: number;
+  success_count: number;
+  failed_count: number;
+  target_count: number; // legacy
+  submitted_count: number; // legacy
+  status: 'draft' | 'reviewed' | 'sending' | 'submitted' | 'QUEUED' | 'PROCESSING' | 'PARTIAL' | 'COMPLETED' | 'FAILED';
+  blast_id?: number;
+  bablast_group_id?: number;
+  bablast_blast_id?: string; // legacy
+  created_by: string;
+  started_at?: string;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WhatsappLog = {
+  id: string;
+  batch_id: string;
+  drop_point_id?: string;
+  sender_code: string;
+  sequence_number: number;
+  sprinter_id: string;
+  phone_number: string;
+  rendered_message: string;
+  bablast_message_id?: string;
+  status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed' | 'QUEUED' | 'SENDING' | 'SENT' | 'FAILED';
+  error_message?: string;
+  sent_at?: string;
+  delivered_at?: string;
+  read_at?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export async function getWhatsappContacts(dropPointIds?: string[], activeOnly: boolean = false): Promise<WhatsappContact[]> {
+  const supabase = db();
+  let query = supabase.from('whatsapp_contacts').select('*');
+  
+  if (activeOnly) {
+    query = query.eq('is_active', true);
+  }
+  
+  if (dropPointIds && dropPointIds.length > 0) {
+    query = query.in('drop_point_id', dropPointIds);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function upsertWhatsappSender(sender: Partial<WhatsappSender>): Promise<WhatsappSender> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_sender_connections')
+    .upsert({
+      sender_id: sender.sender_id,
+      phone: sender.phone,
+      display_name: sender.display_name,
+      status: sender.status,
+      sender_code: sender.sender_code,
+      channel_type: sender.channel_type,
+      created_by: sender.created_by,
+      last_seen: sender.last_seen || new Date().toISOString()
+    }, {
+      onConflict: 'sender_id'
+    })
+    .select()
+    .single();
+    
+  if (error) throw error;
+  return data;
+}
+
+export async function upsertWhatsappContact(contact: Partial<WhatsappContact> & { sprinter_id: string }): Promise<WhatsappContact> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_contacts')
+    .upsert({ ...contact, updated_at: new Date().toISOString() }, { onConflict: 'sprinter_id' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createWhatsappContact(contact: Omit<WhatsappContact, 'id' | 'created_at' | 'updated_at'>): Promise<WhatsappContact> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_contacts')
+    .insert(contact)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateWhatsappContact(id: string, contact: Partial<WhatsappContact>): Promise<WhatsappContact> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_contacts')
+    .update({ ...contact, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getWhatsappContactById(id: string): Promise<WhatsappContact | null> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_contacts')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteWhatsappContact(id: string): Promise<void> {
+  const supabase = db();
+  const { error } = await supabase
+    .from('whatsapp_contacts')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function getActiveTemplate(): Promise<WhatsappTemplate | null> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_message_templates')
+    .select('*')
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+  if (error && error.code !== 'PGRST116') throw error; // PGRST116 is not found
+  return data;
+}
+
+export async function createTemplate(template: Omit<WhatsappTemplate, 'id' | 'created_at' | 'updated_at'>): Promise<WhatsappTemplate> {
+  const supabase = db();
+  
+  // set others to inactive
+  await supabase.from('whatsapp_message_templates').update({ status: 'inactive' }).neq('status', 'placeholder_force_all'); 
+  
+  const { data, error } = await supabase
+    .from('whatsapp_message_templates')
+    .insert(template)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createSendBatch(batch: Partial<WhatsappBatch>): Promise<WhatsappBatch> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_send_batches')
+    .insert(batch)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createSendLogs(logs: Partial<WhatsappLog>[]): Promise<WhatsappLog[]> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_send_logs')
+    .insert(logs)
+    .select();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateBatch(id: string, updates: Partial<WhatsappBatch>): Promise<WhatsappBatch> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_send_batches')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getRecentBatches(dropPointId?: string): Promise<any[]> {
+  const supabase = db();
+  let query = supabase
+    .from('whatsapp_send_batches')
+    .select(`
+      *,
+      template:whatsapp_message_templates(name)
+    `)
+    .order('created_at', { ascending: false })
+    .limit(30);
+    
+  if (dropPointId) {
+    query = query.eq('drop_point_id', dropPointId);
+  }
+  
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getBatchLogs(batchId: string): Promise<WhatsappLog[]> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_send_logs')
+    .select('*')
+    .eq('batch_id', batchId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getRecentLogs(): Promise<any[]> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_send_logs')
+    .select(`
+      *,
+      batch:whatsapp_send_batches(
+        created_by,
+        template:whatsapp_message_templates(name)
+      )
+    `)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getWhatsappConfig(provider: string = 'bablast'): Promise<WhatsappConfig | null> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_configurations')
+    .select('*')
+    .eq('provider', provider)
+    .eq('is_active', true)
+    .maybeSingle();
+    
+  if (error && error.code !== 'PGRST116') {
+    // Ignore no rows found error
+    console.error('Error fetching whatsapp config:', error);
+  }
+  return data || null;
+}
+
+export async function upsertWhatsappConfig(provider: string, apiKey: string, baseUrl: string = 'https://api.bablast.id'): Promise<WhatsappConfig> {
+  const supabase = db();
+  const { data, error } = await supabase
+    .from('whatsapp_configurations')
+    .upsert({
+      provider,
+      api_key: apiKey,
+      base_url: baseUrl,
+      is_active: true,
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'provider'
+    })
+    .select()
+    .single();
+    
+  if (error) throw error;
+  return data;
+}

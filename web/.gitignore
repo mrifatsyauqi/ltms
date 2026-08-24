@@ -40,3 +40,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local development and testing scripts
+legacy_backup.json
+scripts/audit-qstash-migration.mjs
+scripts/audit_senders.mjs
+scripts/check-batch-db.js
+scripts/clean-legacy-qstash.mjs
+scripts/db-audit-legacy.mjs
+scripts/db-audit.mjs
+scripts/test-bulk.js

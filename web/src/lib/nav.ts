@@ -18,6 +18,7 @@ import {
   UserCog,
   UserRound,
   Users,
+  Send,
   type LucideIcon,
 } from 'lucide-react';
 import { hasFullAccess } from '@/lib/roles';
@@ -77,6 +78,7 @@ export function navForRole(role: string | undefined, access: Record<MenuKey, boo
           { label: 'Card Templates', href: '/communication/card-templates', icon: PanelsTopLeft },
           { label: 'Groups', href: '/communication/groups', icon: Users },
           { label: 'Mention Mapping', href: '/communication/mentions', icon: AtSign },
+          { label: 'Push Mas Kurir', href: '/communication/push-mas-kurir', icon: Send, menuKey: 'push_mas_kurir' },
         ],
       },
       {
@@ -116,6 +118,12 @@ export function navForRole(role: string | undefined, access: Record<MenuKey, boo
         { label: 'Feedback Long Tail', href: '/feedback', icon: MessageSquareText, menuKey: 'feedback_longtail_view' },
         { label: 'Riwayat Feedback', href: '/riwayat-feedback', icon: History, menuKey: 'riwayat_feedback' },
         { label: 'Profil Saya', href: '/profil', icon: UserRound },
+      ],
+    },
+    {
+      label: 'Communication Center',
+      items: [
+        { label: 'Push Mas Kurir', href: '/communication/push-mas-kurir', icon: Send, menuKey: 'push_mas_kurir' },
       ],
     },
   ];
