@@ -14,3 +14,6 @@
 .DS_Store
 Thumbs.db
 *.swp
+
+# Supabase temporary files
+supabase/.temp/
